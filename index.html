@@ -3,6 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=yes, viewport-fit=cover">
+    <meta name="format-detection" content="telephone=no">
     <!-- 安全修复：收紧CSP，移除 unsafe-eval -->
     <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; frame-ancestors 'none';">
     <meta http-equiv="X-Frame-Options" content="DENY">
@@ -13,6 +14,11 @@
             padding: 0;
             box-sizing: border-box;
             -webkit-tap-highlight-color: transparent;
+        }
+        /* 移动端文字大小稳定 */
+        html {
+            -webkit-text-size-adjust: 100%;
+            text-size-adjust: 100%;
         }
         :root {
             --bg-gradient-start: #eef2fa;
@@ -63,6 +69,7 @@
             justify-content: center;
             padding: 16px;
             transition: background 0.2s;
+            -webkit-touch-callout: none; /* 避免长按菜单干扰，但复制按钮不受影响 */
         }
         body.modal-open { overflow: hidden; position: fixed; width: 100%; height: 100%; }
         .auth-card {
@@ -86,9 +93,10 @@
             border: 1px solid var(--border-light);
             background: var(--card-bg);
             color: var(--text-primary);
-            font-size: 1rem;
+            font-size: 16px; /* 防止 iOS 自动缩放 */
             margin-bottom: 1rem;
             outline: none;
+            -webkit-appearance: none;
         }
         .btn {
             background: var(--btn-primary);
@@ -102,6 +110,8 @@
             width: 100%;
             transition: 0.2s;
             text-align: center;
+            touch-action: manipulation;
+            min-height: 44px; /* 移动端触控区域 */
         }
         .small-btn {
             background: rgba(255,255,255,0.2);
@@ -116,13 +126,21 @@
             align-items: center;
             justify-content: center;
             gap: 6px;
-            min-height: 36px;
+            min-height: 44px; /* 增大触控区域 (移动端友好) */
             text-align: center;
             line-height: 1;
+            touch-action: manipulation;
         }
-        .small-btn:hover {
-            background: rgba(255,255,255,0.35);
-            transform: scale(0.98);
+        /* 移动端触控反馈 */
+        @media (hover: hover) {
+            .small-btn:hover {
+                background: rgba(255,255,255,0.35);
+                transform: scale(0.98);
+            }
+        }
+        .small-btn:active {
+            transform: scale(0.96);
+            background: rgba(255,255,255,0.45);
         }
         .app-container {
             background: var(--app-bg);
@@ -169,6 +187,7 @@
             padding: 12px 16px;
             border-radius: 100px;
             font-size: 16px;
+            -webkit-appearance: none;
         }
         .search-bar input { flex: 1; min-width: 180px; }
         .search-bar select { flex-shrink: 0; }
@@ -192,6 +211,7 @@
             padding: 12px 16px;
             font-size: 16px;
             color: var(--text-primary);
+            -webkit-appearance: none;
         }
         .optional { display: none; }
         .optional.show { display: block; }
@@ -227,7 +247,7 @@
             background-image: none !important;
         }
         #sortFieldSelect, #sortBtn {
-            height: 40px;
+            height: 44px; /* 增加点击区域 */
             line-height: 1;
             font-size: 0.85rem;
             border-radius: 40px;
@@ -238,6 +258,7 @@
             box-sizing: border-box;
             padding: 0 12px;
             transition: 0.1s;
+            touch-action: manipulation;
         }
         #sortFieldSelect { background-image: none; padding-right: 12px; }
         #sortBtn {
@@ -280,6 +301,7 @@
             align-items: center;
             gap: 10px;
             transition: transform 0.1s, background 0.1s;
+            touch-action: pan-y pinch-zoom; /* 保证垂直滚动顺畅 */
         }
         .password-item:hover {
             transform: translateX(2px);
@@ -332,10 +354,11 @@
             border: 1px solid var(--border-light);
             background: var(--modal-input-bg);
             color: var(--text-primary);
-            font-size: 1rem;
+            font-size: 16px;
             margin: 8px 0 16px;
             outline: none;
             transition: border 0.2s;
+            -webkit-appearance: none;
         }
         .modal-card input:focus {
             border-color: #4f7de8;
@@ -366,6 +389,7 @@
             font-size: 0.85rem;
             transition: all 0.1s;
             backdrop-filter: blur(2px);
+            touch-action: manipulation;
         }
         .cat-tag span { max-width: 180px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
         .cat-tag .cat-count {
@@ -382,11 +406,13 @@
             cursor: pointer;
             font-size: 1.1rem;
             color: var(--text-secondary);
-            padding: 0 4px;
+            padding: 0 8px;
             border-radius: 20px;
             transition: 0.1s;
             display: inline-flex;
             align-items: center;
+            min-height: 44px;
+            touch-action: manipulation;
         }
         .cat-tag button:hover { color: #e8696a; background: rgba(0,0,0,0.05); }
         .cat-add-row {
@@ -403,6 +429,7 @@
             border: 1px solid var(--border-light);
             padding: 10px 14px;
             font-size: 16px;
+            -webkit-appearance: none;
         }
         .info-badge {
             font-size: 0.7rem;
@@ -461,8 +488,9 @@
             gap: 10px;
             justify-content: space-around;
             z-index: 100;
+            flex-wrap: wrap;
         }
-        .checkbox-item { width: 24px; height: 24px; cursor: pointer; margin-right: 8px; }
+        .checkbox-item { width: 24px; height: 24px; cursor: pointer; margin-right: 8px; touch-action: manipulation; }
         .strength-bar {
             height: 4px;
             width: 100%;
@@ -483,6 +511,8 @@
             #sortFieldSelect { flex: 2; }
             .modal-card { padding: 1.2rem; max-height: 85vh; }
             .cat-tag span { max-width: 100px; }
+            .small-btn { min-height: 44px; }
+            .item-actions { justify-content: flex-end; }
         }
         .password-list, .log-view, .cat-manager-grid { -webkit-overflow-scrolling: touch; }
     </style>
@@ -585,7 +615,7 @@
                     const cat = btn.dataset.cat;
                     if (!cat) return;
                     
-                    // 【安全增强】分类删除前验证主密码（可选，但强烈建议）
+                    // 【安全增强】分类删除前验证主密码
                     const verified = await promptCurrentPassword('删除分类');
                     if (!verified) {
                         showToast('验证取消，分类未删除', false);
