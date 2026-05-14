@@ -3,6 +3,9 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=yes, viewport-fit=cover">
+    <!-- 安全修复：收紧CSP，移除 unsafe-eval -->
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; frame-ancestors 'none';">
+    <meta http-equiv="X-Frame-Options" content="DENY">
     <title>🔐 静谧·密钥 | 安全密码本</title>
     <style>
         * {
@@ -115,6 +118,7 @@
             gap: 6px;
             min-height: 36px;
             text-align: center;
+            line-height: 1;
         }
         .small-btn:hover {
             background: rgba(255,255,255,0.35);
@@ -132,6 +136,12 @@
             box-shadow: 0 20px 40px var(--shadow);
             -webkit-overflow-scrolling: touch;
             min-height: 500px;
+            /* 隐藏滚动条但保留滚动功能 */
+            scrollbar-width: none;
+            -ms-overflow-style: none;
+        }
+        .app-container::-webkit-scrollbar {
+            display: none;
         }
         .app-header {
             display: flex;
@@ -253,6 +263,12 @@
             gap: 8px;
             -webkit-overflow-scrolling: touch;
             min-height: 280px;
+            /* 隐藏滚动条但保留滚动功能 */
+            scrollbar-width: none;
+            -ms-overflow-style: none;
+        }
+        .password-list::-webkit-scrollbar {
+            display: none;
         }
         .password-item {
             background: rgba(255,255,255,0.1);
@@ -272,7 +288,7 @@
         .item-info { flex: 2; min-width: 120px; }
         .cat { background: #4f7de8; color: white; display: inline-block; padding: 2px 10px; border-radius: 30px; font-size: 0.7rem; margin-bottom: 4px; }
         .item-pw { font-family: monospace; background: rgba(0,0,0,0.05); padding: 6px 12px; border-radius: 40px; font-size: 0.8rem; word-break: break-all; max-width: 140px; }
-        .item-actions { display: flex; gap: 6px; flex-wrap: wrap; }
+        .item-actions { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
         .modal {
             position: fixed;
             top: 0; left: 0;
@@ -351,7 +367,15 @@
             transition: all 0.1s;
             backdrop-filter: blur(2px);
         }
-        .cat-tag span { max-width: 150px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .cat-tag span { max-width: 180px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .cat-tag .cat-count {
+            font-size: 0.7rem;
+            background: rgba(0,0,0,0.1);
+            border-radius: 30px;
+            padding: 2px 8px;
+            font-weight: normal;
+            margin-left: 6px;
+        }
         .cat-tag button {
             background: transparent;
             border: none;
@@ -478,6 +502,8 @@
         const LAST_EXPORT_KEY = 'serene_last_export';
         const VERIFY_FAIL_KEY = 'serene_verify_fail';
         const VERIFY_LOCK_KEY = 'serene_verify_lock_until';
+        const IMPORT_BRUTE_FAIL_KEY = 'serene_import_brute_fail';
+        const IMPORT_BRUTE_LOCK_KEY = 'serene_import_brute_lock_until';
         const MAX_PASSWORDS = 10000;
         const PASSWORD_MIN_LEN = 6;
         const PASSWORD_MAX_LEN = 256;
@@ -495,13 +521,16 @@
         let batchMode = false;
         let selectedIds = new Set();
         let _sortDirection = true;
+        let activeCategoryManagerModal = null;
+        
+        let memoryBruteFailCount = 0;
+        let memoryBruteLockUntil = 0;
         
         const DEFAULT_CATEGORIES = [
             "E-Mail", "SIS001", "VPN", "密码箱", "视频影音", "其他", "娱乐", "工作", "社交",
             "证券期货", "购物", "购物旅行", "邮箱", "金融保险", "银行"
         ];
         
-        // 保存锁
         let saveLock = null;
         async function saveEncryptedWithLock() {
             if (saveLock) await saveLock;
@@ -513,36 +542,109 @@
                 const encrypted = await encryptData(masterKey, vaultData);
                 localStorage.setItem(STORAGE_VAULT, JSON.stringify(encrypted));
                 localStorage.setItem(STORAGE_INIT, 'true');
-            } catch(e) { showToast('保存失败', true); }
+                refreshActiveCategoryManagerUI();
+            } catch(e) { 
+                console.error("保存加密数据失败", e);
+                showToast('保存失败: ' + (e.message || '未知错误'), true); 
+            }
             finally { resolveLock(); saveLock = null; }
         }
         async function saveEncrypted() { await saveEncryptedWithLock(); }
         
-        // 二次验证
+        function refreshActiveCategoryManagerUI() {
+            if (activeCategoryManagerModal && document.body.contains(activeCategoryManagerModal)) {
+                const container = activeCategoryManagerModal.querySelector('#catListManage');
+                if (container) renderCategoryListWithCount(container);
+            }
+        }
+        
+        // 统计分类计数并渲染分类列表（增加主密码验证可选）
+        function renderCategoryListWithCount(container) {
+            const cats = loadCustomCategoriesFromVault();
+            const countMap = new Map();
+            for (let p of passwords) {
+                if (p.category) countMap.set(p.category, (countMap.get(p.category) || 0) + 1);
+            }
+            container.innerHTML = '';
+            if (cats.length === 0) { 
+                container.innerHTML = '<div style="text-align:center; padding:20px; color:var(--text-secondary);">暂无自定义分类，点击上方添加</div>'; 
+                const countSpan = activeCategoryManagerModal?.querySelector('#catCount');
+                if (countSpan) countSpan.innerText = '0';
+                return; 
+            }
+            cats.forEach(cat => {
+                const cnt = countMap.get(cat) || 0;
+                const tag = document.createElement('div');
+                tag.className = 'cat-tag';
+                tag.innerHTML = `<span>${escapeHtml(cat)} <span class="cat-count">${cnt}</span></span><button class="del-cat-icon" data-cat="${escapeAttr(cat)}" title="删除分类">🗑️</button>`;
+                container.appendChild(tag);
+            });
+            container.querySelectorAll('.del-cat-icon').forEach(btn => {
+                btn.onclick = async (e) => {
+                    e.stopPropagation();
+                    const cat = btn.dataset.cat;
+                    if (!cat) return;
+                    
+                    // 【安全增强】分类删除前验证主密码（可选，但强烈建议）
+                    const verified = await promptCurrentPassword('删除分类');
+                    if (!verified) {
+                        showToast('验证取消，分类未删除', false);
+                        return;
+                    }
+                    
+                    const affectedCount = passwords.filter(p => p.category === cat).length;
+                    if (confirm(`⚠️ 确定删除分类“${cat}”吗？\n此操作将清空 ${affectedCount} 个密码条目的该分类字段，但不会删除密码条目本身。\n输入分类名称确认：`) && prompt(`请输入分类名称以确认删除:`) === cat) {
+                        removeCustomCategory(cat);
+                        for (let p of passwords) if (p.category === cat) p.category = '';
+                        await saveEncrypted();
+                        renderListOnly();
+                        refreshDatalist();
+                        renderCategoryListWithCount(container);
+                        showToast(`已删除分类“${cat}”并清空相关条目分类`);
+                    } else {
+                        showToast('删除已取消或名称不匹配', false);
+                    }
+                };
+            });
+            const countSpan = activeCategoryManagerModal?.querySelector('#catCount');
+            if (countSpan) countSpan.innerText = cats.length;
+        }
+        
         function getVerifyFailCount() { return parseInt(localStorage.getItem(VERIFY_FAIL_KEY) || '0'); }
         function setVerifyFailCount(n) { localStorage.setItem(VERIFY_FAIL_KEY, n); }
         function getVerifyLockUntil() { return parseInt(localStorage.getItem(VERIFY_LOCK_KEY) || '0'); }
         function setVerifyLockUntil(ts) { localStorage.setItem(VERIFY_LOCK_KEY, ts); }
         
         async function verifyWithLock(password) {
+            const now = Date.now();
+            if (memoryBruteLockUntil > now) {
+                const waitSec = Math.ceil((memoryBruteLockUntil - now) / 1000);
+                throw new Error(`验证尝试过于频繁，请等待 ${waitSec} 秒`);
+            }
             const lockUntil = getVerifyLockUntil();
-            if(Date.now() < lockUntil) {
-                const waitSec = Math.ceil((lockUntil - Date.now()) / 1000);
+            if (now < lockUntil) {
+                const waitSec = Math.ceil((lockUntil - now) / 1000);
                 throw new Error(`验证尝试过于频繁，请等待 ${waitSec} 秒`);
             }
             const ok = await verifyMasterPassword(password);
-            if(!ok) {
+            if (!ok) {
                 let fail = getVerifyFailCount() + 1;
                 setVerifyFailCount(fail);
-                if(fail >= 5) {
-                    setVerifyLockUntil(Date.now() + 60 * 60 * 1000);
+                memoryBruteFailCount++;
+                if (memoryBruteFailCount >= 5 || fail >= 5) {
+                    const lockEnd = now + 60 * 60 * 1000;
+                    setVerifyLockUntil(lockEnd);
+                    memoryBruteLockUntil = lockEnd;
                     setVerifyFailCount(0);
+                    memoryBruteFailCount = 0;
                     throw new Error('验证失败次数过多，已锁定1小时');
                 }
                 throw new Error('主密码错误');
             }
             setVerifyFailCount(0);
             setVerifyLockUntil(0);
+            memoryBruteFailCount = 0;
+            memoryBruteLockUntil = 0;
             return true;
         }
         
@@ -582,7 +684,6 @@
             });
         }
         
-        // 分类库操作
         function loadCustomCategoriesFromVault() { return customCategories.length ? customCategories : [...DEFAULT_CATEGORIES]; }
         function getCustomCategoriesSet() { return new Set(loadCustomCategoriesFromVault()); }
         function saveCustomCategoriesToVault(catsArray) { customCategories = [...catsArray]; }
@@ -605,16 +706,21 @@
             }
             return false;
         }
-        function batchAddCustomCategories(newCats) {
+        function batchAddCustomCategories(newCats, replace = false) {
             if (!newCats.length) return false;
-            const currentSet = getCustomCategoriesSet();
-            const toAdd = [...new Set(newCats.filter(c => c && c.trim() !== "" && !currentSet.has(c.trim())))].map(c => c.trim());
-            if (toAdd.length === 0) return false;
-            const current = loadCustomCategoriesFromVault();
-            const updated = [...current, ...toAdd];
-            updated.sort((a,b) => a.localeCompare(b));
-            saveCustomCategoriesToVault(updated);
-            return true;
+            if (replace) {
+                saveCustomCategoriesToVault([...newCats]);
+                return true;
+            } else {
+                const currentSet = getCustomCategoriesSet();
+                const toAdd = [...new Set(newCats.filter(c => c && c.trim() !== "" && !currentSet.has(c.trim())))].map(c => c.trim());
+                if (toAdd.length === 0) return false;
+                const current = loadCustomCategoriesFromVault();
+                const updated = [...current, ...toAdd];
+                updated.sort((a,b) => a.localeCompare(b));
+                saveCustomCategoriesToVault(updated);
+                return true;
+            }
         }
         function syncPasswordsCategoriesToCustom() {
             const catsFromPasswords = new Set();
@@ -622,7 +728,7 @@
             if (catsFromPasswords.size === 0) return;
             const currentSet = getCustomCategoriesSet();
             const newCats = Array.from(catsFromPasswords).filter(c => !currentSet.has(c));
-            if (newCats.length) { batchAddCustomCategories(newCats); refreshDatalist(); }
+            if (newCats.length) { batchAddCustomCategories(newCats, false); refreshDatalist(); }
         }
         function getAllSelectCategories() { return loadCustomCategoriesFromVault(); }
         function refreshDatalist() {
@@ -645,7 +751,6 @@
             }
         }
         
-        // 迁移旧明文分类库
         function migrateOldPlainCategories() {
             const oldKey = 'serene_custom_categories';
             const oldData = localStorage.getItem(oldKey);
@@ -662,7 +767,6 @@
             }
         }
         
-        // ========== 加密/解密基础函数 ==========
         function isVaultInitialized() {
             const salt = localStorage.getItem(STORAGE_SALT);
             const auth = localStorage.getItem(STORAGE_AUTH);
@@ -711,25 +815,45 @@
         }
         
         async function deriveKey(password, salt) {
-            const enc = new TextEncoder();
-            const keyMaterial = await crypto.subtle.importKey('raw', enc.encode(password), 'PBKDF2', false, ['deriveKey']);
-            return crypto.subtle.deriveKey({ name: 'PBKDF2', salt, iterations: PBKDF2_ITERATIONS, hash: 'SHA-256' }, keyMaterial, { name: 'AES-GCM', length: 256 }, false, ['encrypt', 'decrypt']);
+            try {
+                const enc = new TextEncoder();
+                const keyMaterial = await crypto.subtle.importKey('raw', enc.encode(password), 'PBKDF2', false, ['deriveKey']);
+                return await crypto.subtle.deriveKey({ name: 'PBKDF2', salt, iterations: PBKDF2_ITERATIONS, hash: 'SHA-256' }, keyMaterial, { name: 'AES-GCM', length: 256 }, false, ['encrypt', 'decrypt']);
+            } catch(e) {
+                console.error("deriveKey 失败", e);
+                throw new Error("密钥派生失败，请检查浏览器环境或重试");
+            }
         }
         async function encryptData(key, data) {
-            const iv = crypto.getRandomValues(new Uint8Array(12));
-            const ciphertext = await crypto.subtle.encrypt({ name: 'AES-GCM', iv }, key, new TextEncoder().encode(JSON.stringify(data)));
-            return { iv: Array.from(iv), ciphertext: Array.from(new Uint8Array(ciphertext)) };
+            try {
+                const iv = crypto.getRandomValues(new Uint8Array(12));
+                const ciphertext = await crypto.subtle.encrypt({ name: 'AES-GCM', iv }, key, new TextEncoder().encode(JSON.stringify(data)));
+                return { iv: Array.from(iv), ciphertext: Array.from(new Uint8Array(ciphertext)) };
+            } catch(e) {
+                console.error("encryptData 失败", e);
+                throw new Error("数据加密失败");
+            }
         }
         async function decryptData(key, obj) {
-            const decrypted = await crypto.subtle.decrypt({ name: 'AES-GCM', iv: new Uint8Array(obj.iv) }, key, new Uint8Array(obj.ciphertext));
-            return JSON.parse(new TextDecoder().decode(decrypted));
+            try {
+                const decrypted = await crypto.subtle.decrypt({ name: 'AES-GCM', iv: new Uint8Array(obj.iv) }, key, new Uint8Array(obj.ciphertext));
+                return JSON.parse(new TextDecoder().decode(decrypted));
+            } catch(e) {
+                console.error("decryptData 失败", e);
+                throw new Error("数据解密失败，可能是密码错误或数据损坏");
+            }
         }
         async function createAuthVerifier(key) { return await encryptData(key, { test: "serene-vault-verified" }); }
         async function verifyAuth(key, authData) { try { await decryptData(key, authData); return true; } catch(e) { return false; } }
         async function computePlainChecksum(data) {
-            const enc = new TextEncoder();
-            const hash = await crypto.subtle.digest('SHA-256', enc.encode(JSON.stringify(data)));
-            return Array.from(new Uint8Array(hash)).map(b => b.toString(16).padStart(2,'0')).join('');
+            try {
+                const enc = new TextEncoder();
+                const hash = await crypto.subtle.digest('SHA-256', enc.encode(JSON.stringify(data)));
+                return Array.from(new Uint8Array(hash)).map(b => b.toString(16).padStart(2,'0')).join('');
+            } catch(e) {
+                console.error("computePlainChecksum 失败", e);
+                throw new Error("校验和计算失败");
+            }
         }
         
         function showToast(msg, isError = false, duration = 2800) {
@@ -754,8 +878,14 @@
         }
         
         function normalizeItem(item) {
+            let id;
+            try {
+                id = item.id || (crypto.randomUUID ? crypto.randomUUID() : Date.now() + '-' + Math.random());
+            } catch(e) {
+                id = Date.now() + '-' + Math.random();
+            }
             return {
-                id: item.id || (crypto.randomUUID ? crypto.randomUUID() : Date.now() + '-' + Math.random()),
+                id: id,
                 createdAt: item.createdAt || Date.now(),
                 name: item.name || '',
                 username: item.username || '',
@@ -774,53 +904,65 @@
                 const decrypted = await decryptData(key, JSON.parse(vault));
                 if (Array.isArray(decrypted)) return { passwords: decrypted, customCategories: [] };
                 return { passwords: decrypted.passwords || [], customCategories: decrypted.customCategories || [] };
-            } catch(e) { return { passwords: [], customCategories: [] }; }
+            } catch(e) { 
+                console.error("加载解密失败", e);
+                return { passwords: [], customCategories: [] }; 
+            }
         }
         
         async function initNewVault(password) {
             if (!isStrongPassword(password)) throw new Error('主密码需至少8位且包含大写、小写、数字、特殊字符中的至少三类');
-            const salt = crypto.getRandomValues(new Uint8Array(16));
-            const key = await deriveKey(password, salt);
-            const authData = await createAuthVerifier(key);
-            localStorage.setItem(STORAGE_SALT, JSON.stringify(Array.from(salt)));
-            localStorage.setItem(STORAGE_AUTH, JSON.stringify(authData));
-            localStorage.setItem(STORAGE_INIT, 'true');
-            masterKey = key;
-            passwords = [];
-            customCategories = [...DEFAULT_CATEGORIES];
-            await saveEncrypted();
-            addLog('初始化', '创建新保险库');
-            return true;
+            try {
+                const salt = crypto.getRandomValues(new Uint8Array(16));
+                const key = await deriveKey(password, salt);
+                const authData = await createAuthVerifier(key);
+                localStorage.setItem(STORAGE_SALT, JSON.stringify(Array.from(salt)));
+                localStorage.setItem(STORAGE_AUTH, JSON.stringify(authData));
+                localStorage.setItem(STORAGE_INIT, 'true');
+                masterKey = key;
+                passwords = [];
+                customCategories = [...DEFAULT_CATEGORIES];
+                await saveEncrypted();
+                addLog('初始化', '创建新保险库');
+                return true;
+            } catch(e) {
+                console.error("初始化失败", e);
+                throw new Error("初始化保险库失败: " + e.message);
+            }
         }
         
         async function unlockVault(password) {
-            const lockUntil = getBruteLockUntil();
-            if(Date.now() < lockUntil) throw new Error(`尝试过于频繁，请等待 ${Math.ceil((lockUntil - Date.now()) / 1000)} 秒`);
-            const saltArr = JSON.parse(localStorage.getItem(STORAGE_SALT));
-            const authData = JSON.parse(localStorage.getItem(STORAGE_AUTH));
-            if(!saltArr || !authData) throw new Error('未初始化');
-            const salt = new Uint8Array(saltArr);
-            const key = await deriveKey(password, salt);
-            const ok = await verifyAuth(key, authData);
-            if(!ok) {
-                let fail = getBruteFailCount() + 1;
-                setBruteFailCount(fail);
-                if(fail >= 5) { setBruteLockUntil(Date.now() + 60 * 60 * 1000); setBruteFailCount(0); throw new Error('密码错误次数过多，已锁定1小时'); }
-                throw new Error('主密码错误');
+            try {
+                const lockUntil = getBruteLockUntil();
+                if(Date.now() < lockUntil) throw new Error(`尝试过于频繁，请等待 ${Math.ceil((lockUntil - Date.now()) / 1000)} 秒`);
+                const saltArr = JSON.parse(localStorage.getItem(STORAGE_SALT));
+                const authData = JSON.parse(localStorage.getItem(STORAGE_AUTH));
+                if(!saltArr || !authData) throw new Error('未初始化');
+                const salt = new Uint8Array(saltArr);
+                const key = await deriveKey(password, salt);
+                const ok = await verifyAuth(key, authData);
+                if(!ok) {
+                    let fail = getBruteFailCount() + 1;
+                    setBruteFailCount(fail);
+                    if(fail >= 5) { setBruteLockUntil(Date.now() + 60 * 60 * 1000); setBruteFailCount(0); throw new Error('密码错误次数过多，已锁定1小时'); }
+                    throw new Error('主密码错误');
+                }
+                setBruteFailCount(0); setBruteLockUntil(0);
+                masterKey = key;
+                const vaultData = await loadAndDecrypt(key);
+                passwords = vaultData.passwords;
+                customCategories = vaultData.customCategories.length ? vaultData.customCategories : [...DEFAULT_CATEGORIES];
+                migrateOldPlainCategories();
+                syncPasswordsCategoriesToCustom();
+                repairInitFlagIfNeeded();
+                addLog('登录', '成功解锁保险库');
+                const lastExport = localStorage.getItem(LAST_EXPORT_KEY);
+                if(lastExport && (Date.now() - parseInt(lastExport) > 7*24*60*60*1000)) setTimeout(() => showToast('📦 已7天未导出备份，建议立即导出保存', false, 5000), 1000);
+                checkStorageQuota();
+                return true;
+            } catch(e) {
+                throw e;
             }
-            setBruteFailCount(0); setBruteLockUntil(0);
-            masterKey = key;
-            const vaultData = await loadAndDecrypt(key);
-            passwords = vaultData.passwords;
-            customCategories = vaultData.customCategories.length ? vaultData.customCategories : [...DEFAULT_CATEGORIES];
-            migrateOldPlainCategories();
-            syncPasswordsCategoriesToCustom();
-            repairInitFlagIfNeeded();
-            addLog('登录', '成功解锁保险库');
-            const lastExport = localStorage.getItem(LAST_EXPORT_KEY);
-            if(lastExport && (Date.now() - parseInt(lastExport) > 7*24*60*60*1000)) setTimeout(() => showToast('📦 已7天未导出备份，建议立即导出保存', false, 5000), 1000);
-            checkStorageQuota();
-            return true;
         }
         
         async function verifyMasterPassword(password) {
@@ -840,14 +982,26 @@
             const saltNew = crypto.getRandomValues(new Uint8Array(16));
             const newKey = await deriveKey(newPw, saltNew);
             const newAuth = await createAuthVerifier(newKey);
-            localStorage.setItem(STORAGE_SALT, JSON.stringify(Array.from(saltNew)));
-            localStorage.setItem(STORAGE_AUTH, JSON.stringify(newAuth));
-            masterKey = newKey;
-            passwords = oldData.passwords;
-            customCategories = oldData.customCategories;
-            await saveEncrypted();
-            addLog('修改主密码', '主密码已更新');
-            showToast('✅ 主密码修改成功');
+            const encryptedNew = await encryptData(newKey, oldData);
+            const tempKey = 'serene_temp_migration';
+            localStorage.setItem(tempKey, JSON.stringify({ salt: Array.from(saltNew), auth: newAuth, vault: encryptedNew, timestamp: Date.now() }));
+            try {
+                const testKey = await deriveKey(newPw, saltNew);
+                const testDecrypt = await decryptData(testKey, encryptedNew);
+                if (!testDecrypt || !testDecrypt.passwords) throw new Error('加密验证失败');
+                localStorage.setItem(STORAGE_SALT, JSON.stringify(Array.from(saltNew)));
+                localStorage.setItem(STORAGE_AUTH, JSON.stringify(newAuth));
+                localStorage.setItem(STORAGE_VAULT, JSON.stringify(encryptedNew));
+                localStorage.removeItem(tempKey);
+                masterKey = newKey;
+                passwords = oldData.passwords;
+                customCategories = oldData.customCategories;
+                addLog('修改主密码', '主密码已更新（原子操作）');
+                showToast('✅ 主密码修改成功');
+            } catch(e) {
+                localStorage.removeItem(tempKey);
+                throw new Error('主密码修改失败，数据未变更：' + e.message);
+            }
         }
         
         function checkDuplicatePassword(newPw, currentId = null) {
@@ -888,8 +1042,14 @@
                 function processBatch() {
                     const end = Math.min(index + BATCH_SIZE, importedItems.length);
                     const batch = importedItems.slice(index, end);
-                    if (isOverwrite) { if (index === 0) passwords = []; passwords.push(...batch); }
-                    else { const newItems = batch.filter(it => !passwords.some(p => p.name === it.name)); passwords.push(...newItems); }
+                    if (isOverwrite) { 
+                        if (index === 0) passwords = []; 
+                        passwords.push(...batch); 
+                    } else { 
+                        const existingNames = new Set(passwords.map(p => p.name));
+                        const newItems = batch.filter(it => !existingNames.has(it.name));
+                        passwords.push(...newItems); 
+                    }
                     index = end;
                     if (index < importedItems.length) setTimeout(processBatch, 0);
                     else resolve();
@@ -911,26 +1071,29 @@
                 if(lines.length < 2) { showToast('空文件', true); return; }
                 const headers = lines[0].map(h => h.trim().toLowerCase());
                 const idx = {
-                    name: headers.findIndex(h => ['name','标题','title','条目名称'].includes(h)),
-                    username: headers.findIndex(h => ['username','用户名','login_username'].includes(h)),
-                    email: headers.findIndex(h => ['email','邮箱','电子邮件'].includes(h)),
-                    password: headers.findIndex(h => ['password','密码','login_password'].includes(h)),
-                    category: headers.findIndex(h => ['category','分类','folder','文件夹'].includes(h)),
-                    phone: headers.findIndex(h => ['phone','手机','mobile'].includes(h)),
-                    note: headers.findIndex(h => ['note','备注','notes','注释'].includes(h))
+                    name: headers.findIndex(h => ['name','标题','title','条目名称','名称'].includes(h)),
+                    username: headers.findIndex(h => ['username','用户名','login_username','账号'].includes(h)),
+                    email: headers.findIndex(h => ['email','邮箱','电子邮件','mail'].includes(h)),
+                    password: headers.findIndex(h => ['password','密码','login_password','pass'].includes(h)),
+                    category: headers.findIndex(h => ['category','分类','folder','文件夹','类别'].includes(h)),
+                    phone: headers.findIndex(h => ['phone','手机','mobile','电话'].includes(h)),
+                    note: headers.findIndex(h => ['note','备注','notes','注释','说明'].includes(h))
                 };
+                if (idx.name === -1 || idx.password === -1) {
+                    if (!confirm(`CSV文件缺少“名称”或“密码”列，继续导入可能导致数据错位。是否仍要尝试导入？`)) return;
+                }
                 const importedRaw = [];
                 for(let i=1; i<lines.length; i++) {
                     if(lines[i].length === 0 || (lines[i].length === 1 && lines[i][0] === '')) continue;
                     const row = lines[i];
                     const item = {
-                        name: idx.name >=0 ? row[idx.name] || '' : '',
-                        username: idx.username >=0 ? row[idx.username] || '' : '',
-                        email: idx.email >=0 ? row[idx.email] || '' : '',
-                        password: idx.password >=0 ? row[idx.password] || '' : '',
-                        category: idx.category >=0 ? row[idx.category] || '' : '',
-                        phone: idx.phone >=0 ? row[idx.phone] || '' : '',
-                        note: idx.note >=0 ? row[idx.note] || '' : '',
+                        name: idx.name >=0 ? (row[idx.name] || '').trim() : '',
+                        username: idx.username >=0 ? (row[idx.username] || '').trim() : '',
+                        email: idx.email >=0 ? (row[idx.email] || '').trim() : '',
+                        password: idx.password >=0 ? (row[idx.password] || '').trim() : '',
+                        category: idx.category >=0 ? (row[idx.category] || '').trim() : '',
+                        phone: idx.phone >=0 ? (row[idx.phone] || '').trim() : '',
+                        note: idx.note >=0 ? (row[idx.note] || '').trim() : '',
                     };
                     if(item.name && item.password) importedRaw.push(item);
                 }
@@ -953,6 +1116,76 @@
             reader.readAsText(file, 'UTF-8');
         }
         
+        async function applyImportWithCategories(importedPasswords, importedCats, replaceCategories = false) {
+            importedPasswords = importedPasswords.slice(0, MAX_PASSWORDS).filter(i => i && i.name && i.password);
+            importedPasswords = importedPasswords.map(i => normalizeItem(i));
+            if(importedPasswords.length === 0) { showToast('无有效密码数据', true); return; }
+            const isOverwrite = confirm(`覆盖当前数据？\n确定=覆盖，取消=合并（跳过名称重复）`);
+            if (isOverwrite && importedPasswords.length > MAX_PASSWORDS) { showToast(`导入超过上限`, true); return; }
+            if (!isOverwrite && !checkCapacity(importedPasswords.length)) return;
+            showToast('正在导入，请稍候...', false, 1500);
+            if (isOverwrite) {
+                passwords = [];
+                for (let i = 0; i < importedPasswords.length; i += 500) {
+                    const batch = importedPasswords.slice(i, i+500);
+                    passwords.push(...batch);
+                    await new Promise(r => setTimeout(r, 0));
+                }
+            } else {
+                const existingNames = new Set(passwords.map(p => p.name));
+                const uniqueNewItems = [];
+                for (const item of importedPasswords) {
+                    if (!existingNames.has(item.name)) {
+                        uniqueNewItems.push(item);
+                        existingNames.add(item.name);
+                    }
+                }
+                for (let i = 0; i < uniqueNewItems.length; i += 500) {
+                    const batch = uniqueNewItems.slice(i, i+500);
+                    passwords.push(...batch);
+                    await new Promise(r => setTimeout(r, 0));
+                }
+            }
+            if (replaceCategories) {
+                saveCustomCategoriesToVault(importedCats.length ? [...importedCats] : []);
+            } else if (importedCats.length) {
+                batchAddCustomCategories(importedCats, false);
+            }
+            syncPasswordsCategoriesToCustom();
+            await saveEncrypted();
+            renderListOnly();
+            refreshDatalist();
+            addLog('导入', `完成，共 ${importedPasswords.length} 条密码，分类库${replaceCategories ? '替换' : '合并'}`);
+            showToast('导入完成');
+        }
+        
+        function getImportBruteFailCount() { return parseInt(localStorage.getItem(IMPORT_BRUTE_FAIL_KEY) || '0'); }
+        function setImportBruteFailCount(n) { localStorage.setItem(IMPORT_BRUTE_FAIL_KEY, n); }
+        function getImportBruteLockUntil() { return parseInt(localStorage.getItem(IMPORT_BRUTE_LOCK_KEY) || '0'); }
+        function setImportBruteLockUntil(ts) { localStorage.setItem(IMPORT_BRUTE_LOCK_KEY, ts); }
+        
+        async function checkImportBruteForce() {
+            const now = Date.now();
+            const lockUntil = getImportBruteLockUntil();
+            if (now < lockUntil) {
+                const waitSec = Math.ceil((lockUntil - now) / 1000);
+                throw new Error(`导入尝试过于频繁，请等待 ${waitSec} 秒`);
+            }
+        }
+        function recordImportFailure() {
+            let fail = getImportBruteFailCount() + 1;
+            setImportBruteFailCount(fail);
+            if (fail >= 5) {
+                setImportBruteLockUntil(Date.now() + 60 * 60 * 1000);
+                setImportBruteFailCount(0);
+                throw new Error('导入解密失败次数过多，已锁定1小时');
+            }
+        }
+        function resetImportBruteForce() {
+            setImportBruteFailCount(0);
+            setImportBruteLockUntil(0);
+        }
+        
         async function importFromFile(file, trustPlaintext) {
             if (file.size > MAX_CSV_SIZE_MB * 1024 * 1024) {
                 showToast(`文件过大，请选择不超过 ${MAX_CSV_SIZE_MB} MB 的文件`, true);
@@ -961,19 +1194,20 @@
             const text = await file.text();
             let parsed;
             try { parsed = JSON.parse(text); } catch(e) { showToast('无效JSON', true); return; }
-            // 处理加密 JSON (支持 version 5,4,3,2)
             if (parsed && parsed.encrypted === true && parsed.salt && parsed.data) {
                 const version = parsed.version || 0;
                 if (![2,3,4,5].includes(version)) {
                     showToast('不支持的加密版本', true);
                     return;
                 }
+                try {
+                    await checkImportBruteForce();
+                } catch(e) { showToast(e.message, true); return; }
                 const pw = await promptPassword('输入备份的主密码');
                 if(!pw) return;
                 try {
                     const key = await deriveKey(pw, new Uint8Array(parsed.salt));
                     const decrypted = await decryptData(key, parsed.data);
-                    // 校验和检查（version 4+）
                     if (version >= 4 && parsed.plainChecksum) {
                         const calc = await computePlainChecksum(decrypted);
                         if (calc !== parsed.plainChecksum && !confirm('校验和不匹配，数据可能损坏，是否仍要导入？')) return;
@@ -987,64 +1221,43 @@
                         importedPasswords = decrypted.passwords || [];
                         importedCats = decrypted.customCategories || [];
                     }
-                    await applyImportWithCategories(importedPasswords, importedCats);
-                } catch(e) { showToast('解密失败，密码错误或文件损坏', true); }
-            }
-            // 处理明文 JSON: 新版对象结构（含分类）或旧版数组
-            else if (trustPlaintext) {
-                if (Array.isArray(parsed)) {
-                    // 旧版纯数组
-                    if(parsed.length === 0) { showToast('文件无数据', true); return; }
-                    const safeImported = parsed.filter(item => item && typeof item === 'object' && !item.__proto__ && !item.constructor && !item.prototype);
-                    const preview = safeImported.slice(0,5);
-                    if(confirm(`预览前5条：\n${preview.map(p=>`${p.name} | ${p.password}`).join('\n')}\n\n是否导入？`)) {
-                        await applyImportWithCategories(safeImported, []);
-                    }
-                } 
-                else if (parsed && typeof parsed === 'object' && 'passwords' in parsed && Array.isArray(parsed.passwords)) {
-                    // 新版明文JSON格式（含分类库）
-                    const preview = parsed.passwords.slice(0,5);
-                    if(confirm(`预览前5条：\n${preview.map(p=>`${p.name} | ${p.password}`).join('\n')}\n\n同时导入分类库 (${parsed.customCategories?.length || 0}个分类)？\n确定=覆盖，取消=合并（跳过名称重复）`)) {
-                        await applyImportWithCategories(parsed.passwords, parsed.customCategories || []);
+                    let replace = false;
+                    if (importedCats.length > 0) {
+                        replace = confirm('检测到导入文件中包含分类库。是否清空当前分类库并使用文件中的分类？\n“确定”=清空替换，“取消”=合并保留原有分类');
                     } else {
-                        await applyImportWithCategories(parsed.passwords, []);
+                        replace = confirm('导入的文件不包含分类库，是否清空现有分类库？\n“确定”=清空，“取消”=保留原有分类');
                     }
+                    await applyImportWithCategories(importedPasswords, importedCats, replace);
+                    resetImportBruteForce();
+                } catch(e) {
+                    recordImportFailure();
+                    showToast('解密失败，密码错误或文件损坏', true);
+                }
+            }
+            else if (trustPlaintext && parsed && typeof parsed === 'object' && 'passwords' in parsed && Array.isArray(parsed.passwords)) {
+                let replace = false;
+                if (parsed.customCategories && parsed.customCategories.length) {
+                    replace = confirm('导入明文JSON包含分类库，是否清空当前分类库并替换？\n确定=替换，取消=合并');
                 } else {
-                    showToast('格式不支持', true);
+                    replace = confirm('导入的明文文件不包含分类库，是否清空现有分类库？\n确定=清空，取消=保留');
+                }
+                await applyImportWithCategories(parsed.passwords, parsed.customCategories || [], replace);
+            } 
+            else if (trustPlaintext && Array.isArray(parsed)) {
+                if(parsed.length === 0) { showToast('文件无数据', true); return; }
+                const safeImported = parsed.filter(item => item && typeof item === 'object');
+                if(confirm(`预览前5条：\n${safeImported.slice(0,5).map(p=>`${p.name} | ${p.password}`).join('\n')}\n\n是否导入？`)) {
+                    await applyImportWithCategories(safeImported, [], false);
                 }
             } else {
                 showToast('格式不支持', true);
             }
         }
         
-        async function applyImportWithCategories(importedPasswords, importedCats) {
-            importedPasswords = importedPasswords.slice(0, MAX_PASSWORDS).filter(i => i && i.name && i.password);
-            importedPasswords = importedPasswords.map(i => normalizeItem(i));
-            if(importedPasswords.length === 0) { showToast('无有效密码数据', true); return; }
-            const isOverwrite = confirm(`覆盖当前数据？\n确定=覆盖，取消=合并（跳过名称重复）`);
-            if (isOverwrite && importedPasswords.length > MAX_PASSWORDS) { showToast(`导入超过上限`, true); return; }
-            if (!isOverwrite && !checkCapacity(importedPasswords.length)) return;
-            showToast('正在导入，请稍候...', false, 1500);
-            await importCSVChunked(importedPasswords, isOverwrite);
-            if (importedCats && importedCats.length) {
-                batchAddCustomCategories(importedCats);
-            }
-            syncPasswordsCategoriesToCustom();
-            await saveEncrypted();
-            renderListOnly();
-            refreshDatalist();
-            addLog('导入', `完成，共 ${importedPasswords.length} 条密码，分类库已合并`);
-            showToast('导入完成');
-        }
-        
-        async function applyImportChunked(imported) {
-            await applyImportWithCategories(imported, []);
-        }
-        
         function promptPassword(msg) {
             return new Promise(resolve=>{ 
                 const modal=document.createElement('div'); modal.className='modal';
-                modal.innerHTML=`<div class="modal-card"><input type="password" id="modalPw" placeholder="主密码"><button id="modalOk">确认</button></div>`;
+                modal.innerHTML=`<div class="modal-card"><p>${escapeHtml(msg)}</p><input type="password" id="modalPw" placeholder="主密码"><button id="modalOk" class="btn">确认</button></div>`;
                 document.body.appendChild(modal);
                 document.body.classList.add('modal-open');
                 modal.querySelector('#modalOk').onclick=()=>{ const val=modal.querySelector('#modalPw').value; modal.remove(); document.body.classList.remove('modal-open'); resolve(val); };
@@ -1065,13 +1278,53 @@
             }, 5000);
         }
         
+        window.addEventListener('beforeunload', function() {
+            if (clipboardTimer) clearTimeout(clipboardTimer);
+            try { navigator.clipboard.writeText('').catch(()=>{}); } catch(e) {}
+        });
+        
         function resetIdleTimer() { if(!masterKey) return; lastActivity=Date.now(); if(idleTimer) clearTimeout(idleTimer); idleTimer=setTimeout(()=>{ if(masterKey) lockAndLogout(); }, IDLE_TIMEOUT); }
+        
         function lockAndLogout() { 
-            clearTimeout(idleTimer); masterKey = null; passwords = []; customCategories = []; visiblePasswords.clear(); selectedIds.clear(); batchMode = false; searchQuery = ''; searchField = 'all'; _sortDirection = true;
-            showToast('⏰ 空闲锁定'); showAuth(); 
+            clearTimeout(idleTimer); 
+            const allModals = document.querySelectorAll('.modal');
+            allModals.forEach(modal => modal.remove());
+            document.body.classList.remove('modal-open');
+            activeCategoryManagerModal = null;
+            masterKey = null; 
+            passwords = []; 
+            customCategories = []; 
+            visiblePasswords.clear(); 
+            selectedIds.clear(); 
+            batchMode = false; 
+            searchQuery = ''; 
+            searchField = 'all'; 
+            _sortDirection = true;
+            if (clipboardTimer) clearTimeout(clipboardTimer);
+            try { 
+                navigator.clipboard.writeText('').catch(()=>{});
+                navigator.clipboard.writeText('cleared_'+Date.now()).catch(()=>{});
+            } catch(e) {}
+            showToast('⏰ 空闲锁定'); 
+            showAuth(); 
         }
         function manualLock() { lockAndLogout(); showToast('🔒 已手动锁定'); }
-        async function wipeAllPasswords() { if(!masterKey) return; if(confirm('清空全部密码？')){ if(prompt('输入"清空全部"确认')==='清空全部'){ passwords=[]; await saveEncrypted(); renderListOnly(); showToast('已清空'); refreshDatalist(); } } }
+        
+        // 【安全增强】清空全部密码前验证主密码
+        async function wipeAllPasswords() { 
+            if(!masterKey) { showToast('未解锁', true); return; }
+            const verified = await promptCurrentPassword('清空全部密码');
+            if(!verified) { showToast('验证取消，操作已中止', false); return; }
+            if(confirm('清空全部密码？')){ 
+                if(prompt('输入"清空全部"确认')==='清空全部'){ 
+                    passwords=[]; 
+                    await saveEncrypted(); 
+                    renderListOnly(); 
+                    showToast('已清空'); 
+                    refreshDatalist(); 
+                } 
+            } 
+        }
         
         async function checkStorageQuota() {
             if ('storage' in navigator && 'estimate' in navigator.storage) {
@@ -1083,68 +1336,52 @@
             }
         }
         
+        // 批量操作增加主密码验证
+        async function batchDelete() {
+            if(selectedIds.size === 0) return;
+            const verified = await promptCurrentPassword('批量删除密码');
+            if(!verified) { showToast('验证取消，操作已中止', false); return; }
+            if(confirm(`确定删除 ${selectedIds.size} 个密码吗？`)) {
+                const idsToDelete = Array.from(selectedIds);
+                passwords = passwords.filter(p => !idsToDelete.includes(p.id));
+                selectedIds.clear(); batchMode = false;
+                await saveEncrypted();
+                renderListOnly(); 
+                showToast('批量删除完成'); 
+                addLog('批量删除', `删除 ${idsToDelete.length} 条`); 
+                refreshDatalist();
+                const batchBar = document.getElementById('batchBar');
+                if(batchBar) batchBar.style.display = 'none';
+            }
+        }
+        
+        async function batchMoveCategory(targetCat) {
+            if(selectedIds.size === 0) return;
+            const verified = await promptCurrentPassword('批量移动分类');
+            if(!verified) { showToast('验证取消，操作已中止', false); return; }
+            for(let p of passwords) if(selectedIds.has(p.id)) p.category = targetCat;
+            await saveEncrypted();
+            renderListOnly(); 
+            showToast(`已移动 ${selectedIds.size} 条到分类 ${targetCat}`); 
+            addLog('批量移动分类', `${selectedIds.size} 条 -> ${targetCat}`); 
+            refreshDatalist();
+        }
+        
         function openCategoryManager() {
-            let currentCats = loadCustomCategoriesFromVault();
             const modal = document.createElement('div'); modal.className='modal';
-            modal.innerHTML = `
-                <div class="modal-card">
-                    <h3 style="margin-bottom: 6px;">📂 自定义分类库</h3>
-                    <div class="info-badge">✨ 共 <span id="catCount">${currentCats.length}</span> 个分类 | 删除分类会清空密码条目的该分类值</div>
-                    <div id="catListManage" class="cat-manager-grid"></div>
-                    <div class="cat-add-row">
-                        <input type="text" id="newCatName" placeholder="新分类名称" autocomplete="off">
-                        <button class="small-btn" id="addCatBtn">➕ 添加</button>
-                    </div>
-                    <div class="button-group">
-                        <button id="closeCat" class="btn">关闭</button>
-                    </div>
-                </div>
-            `;
-            document.body.appendChild(modal);
-            document.body.classList.add('modal-open');
-            const renderGrid = () => {
-                const cats = loadCustomCategoriesFromVault();
-                const container = modal.querySelector('#catListManage');
-                const countSpan = modal.querySelector('#catCount');
-                if (countSpan) countSpan.innerText = cats.length;
-                if (!container) return;
-                container.innerHTML = '';
-                if (cats.length === 0) { container.innerHTML = '<div style="text-align:center; padding:20px; color:var(--text-secondary);">暂无自定义分类，点击上方添加</div>'; return; }
-                cats.forEach(cat => {
-                    const tag = document.createElement('div');
-                    tag.className = 'cat-tag';
-                    tag.innerHTML = `<span>${escapeHtml(cat)}</span><button class="del-cat-icon" data-cat="${escapeAttr(cat)}" title="删除分类">🗑️</button>`;
-                    container.appendChild(tag);
-                });
-                container.querySelectorAll('.del-cat-icon').forEach(btn => {
-                    btn.onclick = async (e) => {
-                        e.stopPropagation();
-                        const cat = btn.dataset.cat;
-                        if (!cat) return;
-                        if (confirm(`删除分类“${cat}”？\n所有密码条目中的该分类将被清空（不会删除密码条目）。`)) {
-                            removeCustomCategory(cat);
-                            for (let p of passwords) if (p.category === cat) p.category = '';
-                            await saveEncrypted();
-                            renderListOnly();
-                            refreshDatalist();
-                            renderGrid();
-                            showToast(`已删除分类“${cat}”并清空相关条目分类`);
-                        }
-                    };
-                });
-            };
+            modal.innerHTML = `<div class="modal-card"><h3 style="margin-bottom: 6px;">📂 自定义分类库</h3><div class="info-badge">✨ 共 <span id="catCount">0</span> 个分类 | 每个分类后方数字为密码条目数量</div><div id="catListManage" class="cat-manager-grid"></div><div class="cat-add-row"><input type="text" id="newCatName" placeholder="新分类名称" autocomplete="off"><button class="small-btn" id="addCatBtn">➕ 添加</button></div><div class="button-group"><button id="closeCat" class="btn">关闭</button></div></div>`;
+            document.body.appendChild(modal); document.body.classList.add('modal-open');
+            activeCategoryManagerModal = modal;
+            const container = modal.querySelector('#catListManage');
+            const refresh = () => renderCategoryListWithCount(container);
+            refresh();
             modal.querySelector('#addCatBtn').onclick = () => {
                 const newCat = modal.querySelector('#newCatName').value.trim();
                 if (!newCat) { showToast('请输入分类名称', true); return; }
-                if (addCustomCategory(newCat)) {
-                    renderGrid();
-                    refreshDatalist();
-                    modal.querySelector('#newCatName').value = '';
-                    showToast(`✅ 添加分类 “${newCat}”`);
-                } else showToast('分类已存在或无效', true);
+                if (addCustomCategory(newCat)) { refresh(); refreshDatalist(); modal.querySelector('#newCatName').value = ''; showToast(`✅ 添加分类 “${newCat}”`); }
+                else showToast('分类已存在或无效', true);
             };
-            modal.querySelector('#closeCat').onclick = () => { modal.remove(); document.body.classList.remove('modal-open'); };
-            renderGrid();
+            modal.querySelector('#closeCat').onclick = () => { modal.remove(); document.body.classList.remove('modal-open'); activeCategoryManagerModal = null; };
         }
         
         function openEditModal(item) {
@@ -1289,6 +1526,8 @@
         
         async function exportPlaintextJSON() {
             if(!masterKey) { showToast('未解锁', true); return; }
+            const warningMsg = '⚠️ 警告：导出明文JSON会将所有密码以明文形式保存到文件中，任何人打开该文件即可看到您的所有密码。\n\n请确保导出的文件保存在安全位置，使用后立即删除。\n\n是否继续导出？';
+            if (!confirm(warningMsg)) return;
             const ok = await promptCurrentPassword('导出明文数据');
             if(!ok) { showToast('验证取消或失败', true); return; }
             const exportData = {
@@ -1304,10 +1543,37 @@
             a.click();
             URL.revokeObjectURL(a.href);
             addLog('导出明文JSON', `导出 ${passwords.length} 条记录，${exportData.customCategories.length} 个分类`);
-            showToast('📄 明文JSON已导出（含分类库）');
+            showToast('📄 明文JSON已导出（请注意保管）');
         }
         
-        function renderApp() { 
+        function showLogs() {
+            let logs = JSON.parse(localStorage.getItem(LOG_STORAGE) || '[]');
+            const modal = document.createElement('div'); modal.className='modal';
+            modal.innerHTML = `<div class="modal-card"><h3>📜 操作日志</h3><div class="log-view" id="logViewContainer">${logs.map(l => `<div>${l.time} | ${l.action} | ${l.details}</div>`).join('') || '无记录'}</div><div class="button-group" style="margin-top:16px;"><button class="small-btn" id="clearLogBtn">🗑️ 清空日志</button><button class="small-btn" id="exportLogBtn">📎 导出日志</button><button class="btn" id="closeLog">关闭</button></div></div>`;
+            document.body.appendChild(modal); document.body.classList.add('modal-open');
+            const refreshLogView = () => {
+                const newLogs = JSON.parse(localStorage.getItem(LOG_STORAGE) || '[]');
+                const container = modal.querySelector('#logViewContainer');
+                if (container) container.innerHTML = newLogs.map(l => `<div>${l.time} | ${l.action} | ${l.details}</div>`).join('') || '无记录';
+            };
+            modal.querySelector('#closeLog').onclick = () => { modal.remove(); document.body.classList.remove('modal-open'); };
+            modal.querySelector('#exportLogBtn').onclick = () => {
+                const logsData = JSON.parse(localStorage.getItem(LOG_STORAGE) || '[]');
+                const blob = new Blob([JSON.stringify(logsData, null, 2)], {type: 'application/json'});
+                const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = `静谧密钥_日志_${new Date().toISOString().slice(0,19)}.json`; a.click(); URL.revokeObjectURL(a.href);
+                showToast('日志已导出');
+            };
+            modal.querySelector('#clearLogBtn').onclick = () => {
+                if (confirm('确定清空所有操作日志吗？此操作不可撤销。')) {
+                    localStorage.setItem(LOG_STORAGE, '[]');
+                    refreshLogView();
+                    showToast('日志已清空');
+                    addLog('清空日志', '用户手动清空操作日志');
+                }
+            };
+        }
+        
+        function renderApp() {
             const rootEl = document.getElementById('root');
             if(!rootEl) return;
             rootEl.innerHTML = `<div class="app-container" id="appContainer">
@@ -1412,7 +1678,7 @@
                 if(!checkCapacity(1)) return;
                 const categoryVal = document.getElementById('inpCategory').value;
                 checkDuplicatePassword(pw);
-                const newId = crypto.randomUUID();
+                const newId = crypto.randomUUID ? crypto.randomUUID() : (Date.now() + '-' + Math.random());
                 passwords.unshift({ 
                     id: newId, 
                     name, 
@@ -1449,7 +1715,7 @@
             document.getElementById('importBtn').onclick = () => {
                 if(!confirm('导入加密JSON或CSV，需信任来源')) return;
                 const modalDiv = document.createElement('div'); modalDiv.className='modal';
-                modalDiv.innerHTML = `<div class="modal-card"><h3>导入选项</h3><label><input type="checkbox" id="trustPlainCheck"> 我信任此来源，允许导入明文</label><button id="importFileBtn">选择文件</button></div>`;
+                modalDiv.innerHTML = `<div class="modal-card"><h3>导入选项</h3><label><input type="checkbox" id="trustPlainCheck"> 我信任此来源，允许导入明文</label><button class="btn" id="importFileBtn" style="margin-top:12px;">选择文件</button></div>`;
                 document.body.appendChild(modalDiv);
                 document.body.classList.add('modal-open');
                 modalDiv.querySelector('#importFileBtn').onclick = () => {
@@ -1472,25 +1738,12 @@
         }
         
         function toggleBatchMode() { batchMode = !batchMode; if(!batchMode) selectedIds.clear(); renderListOnly(); const batchBar = document.getElementById('batchBar'); if(batchBar) batchBar.style.display = batchMode ? 'flex' : 'none'; }
-        function batchDelete() {
-            if(selectedIds.size === 0) return;
-            if(confirm(`确定删除 ${selectedIds.size} 个密码吗？`)) {
-                passwords = passwords.filter(p => !selectedIds.has(p.id));
-                selectedIds.clear(); batchMode = false;
-                saveEncrypted().then(() => { renderListOnly(); showToast('批量删除完成'); addLog('批量删除', `删除 ${selectedIds.size} 条`); refreshDatalist(); });
-            }
-        }
-        function batchMoveCategory(targetCat) {
-            if(selectedIds.size === 0) return;
-            for(let p of passwords) if(selectedIds.has(p.id)) p.category = targetCat;
-            saveEncrypted().then(() => { renderListOnly(); showToast(`已移动 ${selectedIds.size} 条到分类 ${targetCat}`); addLog('批量移动分类', `${selectedIds.size} 条 -> ${targetCat}`); refreshDatalist(); });
-        }
         
         async function showChangePwModal() {
             const oldPw = await promptCurrentPassword('修改主密码', true);
             if (!oldPw) { showToast('验证取消', true); return; }
             const modal=document.createElement('div'); modal.className='modal';
-            modal.innerHTML=`<div class="modal-card"><h3>修改主密码</h3><input type="password" id="newPw" placeholder="新密码(≥8位，含三类字符)"><div class="strength-bar"><div class="strength-fill" id="strengthFill"></div></div><div class="strength-text" id="strengthText"></div><input type="password" id="confirmPw" placeholder="确认新密码"><button id="doChange">修改</button></div>`;
+            modal.innerHTML=`<div class="modal-card"><h3>修改主密码</h3><input type="password" id="newPw" placeholder="新密码(≥8位，含三类字符)"><div class="strength-bar"><div class="strength-fill" id="strengthFill"></div></div><div class="strength-text" id="strengthText"></div><input type="password" id="confirmPw" placeholder="确认新密码"><button class="btn" id="doChange">修改</button></div>`;
             document.body.appendChild(modal);
             document.body.classList.add('modal-open');
             const newPwInput = modal.querySelector('#newPw');
@@ -1514,15 +1767,6 @@
             };
         }
         
-        function showLogs() {
-            const logs = JSON.parse(localStorage.getItem(LOG_STORAGE) || '[]');
-            const modal = document.createElement('div'); modal.className='modal';
-            modal.innerHTML = `<div class="modal-card"><h3>📜 操作日志</h3><div class="log-view">${logs.map(l => `<div>${l.time} | ${l.action} | ${l.details}</div>`).join('') || '无记录'}</div><button class="btn" id="closeLog">关闭</button></div>`;
-            document.body.appendChild(modal);
-            document.body.classList.add('modal-open');
-            modal.querySelector('#closeLog').onclick = () => { modal.remove(); document.body.classList.remove('modal-open'); };
-        }
-        
         function showAuth() { 
             const root = document.getElementById('root');
             if(!root) return;
@@ -1532,7 +1776,7 @@
                 root.innerHTML = `<div class="auth-card"><div class="auth-icon">🔐</div><h2>静谧·密钥</h2><p>首次使用，请设置主密码</p><button class="btn" id="setupBtn">设置主密码</button></div>`;
                 document.getElementById('setupBtn').onclick = () => {
                     const modal = document.createElement('div'); modal.className='modal';
-                    modal.innerHTML = `<div class="modal-card"><h3>设置主密码</h3><div class="warning-box">⚠️ 密码需至少8位，且包含大写、小写、数字、特殊字符中的至少三类</div><input type="password" id="newPw1" placeholder="至少8位，含三类字符"><div class="strength-bar"><div class="strength-fill" id="setupStrengthFill"></div></div><div class="strength-text" id="setupStrengthText"></div><input type="password" id="newPw2" placeholder="确认密码"><button id="confirmSetup">创建</button></div>`;
+                    modal.innerHTML = `<div class="modal-card"><h3>设置主密码</h3><div class="warning-box">⚠️ 密码需至少8位，且包含大写、小写、数字、特殊字符中的至少三类</div><input type="password" id="newPw1" placeholder="至少8位，含三类字符"><div class="strength-bar"><div class="strength-fill" id="setupStrengthFill"></div></div><div class="strength-text" id="setupStrengthText"></div><input type="password" id="newPw2" placeholder="确认密码"><button class="btn" id="confirmSetup">创建</button></div>`;
                     document.body.appendChild(modal);
                     document.body.classList.add('modal-open');
                     const pw1 = modal.querySelector('#newPw1');
