@@ -1,15 +1,14 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="zh-CN">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=yes, viewport-fit=cover">
     <meta name="format-detection" content="telephone=no">
-    <!-- 生产级安全策略：收紧CSP，仅允许同源脚本和内联脚本（因架构保留），但通过严格的转义防止XSS -->
     <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; frame-ancestors 'none'; connect-src 'self'; form-action 'none';">
     <meta http-equiv="X-Frame-Options" content="DENY">
     <meta http-equiv="X-Content-Type-Options" content="nosniff">
     <meta http-equiv="Referrer-Policy" content="strict-origin-when-cross-origin">
-    <title>🔐 静谧·密钥 | 安全密码本</title>
+    <title>🔐 静谧·密钥 | 安全密码本 v2.0.1</title>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
         html { -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }
@@ -21,6 +20,7 @@
             --strength-weak: #e8696a; --strength-medium: #f5a623; --strength-strong: #4caf50;
             --cat-tag-bg: rgba(79,125,232,0.12); --cat-tag-hover: rgba(79,125,232,0.25);
             --modal-input-bg: rgba(255,255,255,0.9); --warning-bg: #fff3e0; --warning-border: #f5a623;
+            --transition-base: all 0.2s ease;
         }
         @media (prefers-color-scheme: dark) {
             :root {
@@ -34,26 +34,30 @@
         }
         body { font-family: system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', sans-serif; background: linear-gradient(145deg, var(--bg-gradient-start) 0%, var(--bg-gradient-end) 100%); min-height: 100vh; display: flex; align-items: center; justify-content: center; padding: 16px; transition: background 0.2s; -webkit-touch-callout: none; }
         body.modal-open { overflow: hidden; position: fixed; width: 100%; height: 100%; }
-        .auth-card { background: var(--card-bg); backdrop-filter: blur(16px); border-radius: 48px; padding: 2rem 1.5rem; width: 100%; max-width: 400px; text-align: center; box-shadow: 0 20px 40px var(--shadow); border: 1px solid rgba(255,255,255,0.2); }
-        .auth-icon { font-size: 3.8rem; margin-bottom: 0.5rem; }
-        .auth-card h2 { font-size: 1.8rem; margin-bottom: 0.5rem; color: var(--text-primary); }
+        .auth-card { background: var(--card-bg); backdrop-filter: blur(16px); border-radius: 48px; padding: 2rem 1.5rem; width: 100%; max-width: 400px; text-align: center; box-shadow: 0 20px 40px var(--shadow); border: 1px solid rgba(255,255,255,0.2); transition: var(--transition-base); }
+        .auth-icon { font-size: 3.8rem; margin-bottom: 0.5rem; filter: drop-shadow(0 4px 6px rgba(0,0,0,0.1)); }
+        .auth-card h2 { font-size: 1.8rem; margin-bottom: 0.5rem; color: var(--text-primary); letter-spacing: -0.3px; }
         .auth-card p { color: var(--text-secondary); margin-bottom: 1.5rem; }
-        .auth-card input { width: 100%; padding: 14px 18px; border-radius: 60px; border: 1px solid var(--border-light); background: var(--card-bg); color: var(--text-primary); font-size: 16px; margin-bottom: 1rem; outline: none; -webkit-appearance: none; }
-        .btn { background: var(--btn-primary); border: none; padding: 12px 20px; border-radius: 60px; color: white; font-weight: 600; font-size: 1rem; cursor: pointer; width: 100%; transition: 0.2s; text-align: center; touch-action: manipulation; min-height: 44px; }
-        .small-btn { background: rgba(255,255,255,0.2); border: 1px solid var(--border-light); padding: 8px 14px; border-radius: 40px; font-size: 0.85rem; cursor: pointer; color: var(--text-primary); transition: 0.1s; display: inline-flex; align-items: center; justify-content: center; gap: 6px; min-height: 44px; text-align: center; line-height: 1; touch-action: manipulation; }
+        .auth-card input { width: 100%; padding: 14px 18px; border-radius: 60px; border: 1px solid var(--border-light); background: var(--card-bg); color: var(--text-primary); font-size: 16px; margin-bottom: 1rem; outline: none; -webkit-appearance: none; transition: var(--transition-base); }
+        .auth-card input:focus { border-color: #4f7de8; box-shadow: 0 0 0 3px rgba(79,125,232,0.2); }
+        .btn { background: var(--btn-primary); border: none; padding: 12px 20px; border-radius: 60px; color: white; font-weight: 600; font-size: 1rem; cursor: pointer; width: 100%; transition: 0.2s; text-align: center; touch-action: manipulation; min-height: 44px; box-shadow: 0 2px 6px rgba(0,0,0,0.1); }
+        .btn:active { transform: scale(0.97); }
+        .small-btn { background: rgba(255,255,255,0.2); backdrop-filter: blur(4px); border: 1px solid var(--border-light); padding: 8px 14px; border-radius: 40px; font-size: 0.85rem; cursor: pointer; color: var(--text-primary); transition: 0.15s; display: inline-flex; align-items: center; justify-content: center; gap: 6px; min-height: 44px; text-align: center; line-height: 1; touch-action: manipulation; box-shadow: 0 1px 2px rgba(0,0,0,0.05); }
         .small-btn:active { transform: scale(0.96); background: rgba(255,255,255,0.45); }
-        .app-container { background: var(--app-bg); backdrop-filter: blur(20px); border-radius: 40px; padding: 1.5rem; width: 100%; max-width: 1200px; max-height: 90vh; overflow-y: auto; box-shadow: 0 20px 40px var(--shadow); -webkit-overflow-scrolling: touch; min-height: 500px; scrollbar-width: none; -ms-overflow-style: none; }
+        .app-container { background: var(--app-bg); backdrop-filter: blur(20px); border-radius: 40px; padding: 1.5rem; width: 100%; max-width: 1200px; max-height: 90vh; overflow-y: auto; box-shadow: 0 20px 40px var(--shadow); -webkit-overflow-scrolling: touch; min-height: 500px; scrollbar-width: none; -ms-overflow-style: none; transition: var(--transition-base); }
         .app-container::-webkit-scrollbar { display: none; }
         .app-header { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 10px; margin-bottom: 1.2rem; }
         .logo { display: flex; align-items: center; gap: 8px; font-size: 1.4rem; font-weight: bold; color: var(--text-primary); }
         .logo span { font-size: 2rem; }
-        .badge { background: var(--card-bg); padding: 4px 14px; border-radius: 40px; font-size: 0.75rem; font-weight: 500; color: var(--text-primary); }
+        .badge { background: var(--card-bg); padding: 4px 14px; border-radius: 40px; font-size: 0.75rem; font-weight: 500; color: var(--text-primary); backdrop-filter: blur(4px); }
         .search-bar { display: flex; gap: 10px; margin-bottom: 1rem; flex-wrap: wrap; justify-content: flex-end; }
-        .search-bar input, .search-bar select { background: var(--card-bg); border: 1px solid var(--border-light); color: var(--text-primary); padding: 12px 16px; border-radius: 100px; font-size: 16px; -webkit-appearance: none; }
+        .search-bar input, .search-bar select { background: var(--card-bg); border: 1px solid var(--border-light); color: var(--text-primary); padding: 12px 16px; border-radius: 100px; font-size: 16px; -webkit-appearance: none; transition: var(--transition-base); }
+        .search-bar input:focus, .search-bar select:focus { border-color: #4f7de8; outline: none; box-shadow: 0 0 0 2px rgba(79,125,232,0.2); }
         .search-bar input { flex: 1; min-width: 180px; }
-        .add-card { background: rgba(255,255,255,0.3); border-radius: 28px; padding: 1rem; margin-bottom: 1rem; }
+        .add-card { background: rgba(255,255,255,0.3); backdrop-filter: blur(8px); border-radius: 28px; padding: 1rem; margin-bottom: 1rem; transition: var(--transition-base); }
         .form-row { display: flex; flex-wrap: wrap; gap: 10px; margin-bottom: 10px; }
-        .form-row input, .form-row textarea, .form-row select { flex: 1; border-radius: 28px; background: var(--card-bg); border: 1px solid var(--border-light); padding: 12px 16px; font-size: 16px; color: var(--text-primary); -webkit-appearance: none; }
+        .form-row input, .form-row textarea, .form-row select { flex: 1; border-radius: 28px; background: var(--card-bg); border: 1px solid var(--border-light); padding: 12px 16px; font-size: 16px; color: var(--text-primary); -webkit-appearance: none; transition: var(--transition-base); }
+        .form-row input:focus, .form-row textarea:focus, .form-row select:focus { border-color: #4f7de8; outline: none; box-shadow: 0 0 0 2px rgba(79,125,232,0.2); }
         .optional { display: none; }
         .optional.show { display: block; }
         .button-row { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; }
@@ -61,36 +65,40 @@
         .toolbar { display: flex; flex-wrap: wrap; gap: 16px; justify-content: space-between; align-items: center; margin: 1rem 0; }
         .sort-group { display: flex; align-items: center; gap: 12px; }
         select { -webkit-appearance: none; -moz-appearance: none; appearance: none; text-align: center; text-align-last: center; padding-left: 12px; padding-right: 12px; background-image: none !important; }
-        #sortFieldSelect, #sortBtn { height: 44px; line-height: 1; font-size: 0.85rem; border-radius: 40px; border: 1px solid var(--border-light); background-color: var(--card-bg); color: var(--text-primary); cursor: pointer; padding: 0 12px; }
+        #sortFieldSelect, #sortBtn { height: 44px; line-height: 1; font-size: 0.85rem; border-radius: 40px; border: 1px solid var(--border-light); background-color: var(--card-bg); color: var(--text-primary); cursor: pointer; padding: 0 12px; transition: var(--transition-base); }
         .password-list { max-height: 55vh; overflow-y: auto; display: flex; flex-direction: column; gap: 8px; -webkit-overflow-scrolling: touch; min-height: 280px; scrollbar-width: none; }
         .password-list::-webkit-scrollbar { display: none; }
-        .password-item { background: rgba(255,255,255,0.1); backdrop-filter: blur(4px); border-radius: 24px; padding: 12px; display: flex; flex-wrap: wrap; align-items: center; gap: 10px; transition: 0.1s; }
+        .password-item { background: rgba(255,255,255,0.1); backdrop-filter: blur(4px); border-radius: 24px; padding: 12px; display: flex; flex-wrap: wrap; align-items: center; gap: 10px; transition: 0.1s; border: 1px solid rgba(255,255,255,0.2); }
         .item-info { flex: 2; min-width: 120px; }
-        .cat { background: #4f7de8; color: white; display: inline-block; padding: 2px 10px; border-radius: 30px; font-size: 0.7rem; margin-bottom: 4px; }
-        .item-pw { font-family: monospace; background: rgba(0,0,0,0.05); padding: 6px 12px; border-radius: 40px; font-size: 0.8rem; word-break: break-all; max-width: 140px; }
+        .cat { background: linear-gradient(135deg, #4f7de8, #6c8fef); color: white; display: inline-block; padding: 2px 10px; border-radius: 30px; font-size: 0.7rem; margin-bottom: 4px; font-weight: 500; }
+        .item-pw { font-family: 'SF Mono', 'Fira Code', monospace; background: rgba(0,0,0,0.05); padding: 6px 12px; border-radius: 40px; font-size: 0.8rem; word-break: break-all; max-width: 140px; }
         .item-actions { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
         .modal { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); backdrop-filter: blur(8px); display: flex; align-items: center; justify-content: center; z-index: 2000; }
-        .modal-card { background: var(--card-bg); border-radius: 36px; padding: 1.8rem; width: 90%; max-width: 460px; color: var(--text-primary); max-height: 80vh; overflow-y: auto; box-shadow: 0 30px 50px rgba(0,0,0,0.3); }
+        .modal-card { background: var(--card-bg); border-radius: 36px; padding: 1.8rem; width: 90%; max-width: 460px; color: var(--text-primary); max-height: 80vh; overflow-y: auto; box-shadow: 0 30px 50px rgba(0,0,0,0.3); transition: var(--transition-base); }
         .modal-card .button-group { display: flex; gap: 14px; justify-content: space-between; margin-top: 24px; }
         .modal-card .button-group button { flex: 1; margin: 0; padding: 10px 0; }
         .modal-card input[type="password"], .modal-card input[type="text"] { width: 100%; padding: 14px 18px; border-radius: 60px; border: 1px solid var(--border-light); background: var(--modal-input-bg); color: var(--text-primary); font-size: 16px; margin: 8px 0 16px; outline: none; }
         .cat-manager-grid { display: flex; flex-wrap: wrap; gap: 12px; margin-bottom: 24px; max-height: 280px; overflow-y: auto; padding: 6px 2px; }
-        .cat-tag { background: var(--cat-tag-bg); border: 1px solid var(--border-light); border-radius: 40px; padding: 8px 14px; display: inline-flex; align-items: center; gap: 10px; font-size: 0.85rem; }
+        .cat-tag { background: var(--cat-tag-bg); border: 1px solid var(--border-light); border-radius: 40px; padding: 8px 14px; display: inline-flex; align-items: center; gap: 10px; font-size: 0.85rem; transition: var(--transition-base); }
         .cat-tag .cat-count { font-size: 0.7rem; background: rgba(0,0,0,0.1); border-radius: 30px; padding: 2px 8px; margin-left: 6px; }
-        .cat-tag button { background: transparent; border: none; cursor: pointer; font-size: 1.1rem; color: var(--text-secondary); padding: 0 8px; min-height: 44px; }
+        .cat-tag button { background: transparent; border: none; cursor: pointer; font-size: 1.1rem; color: var(--text-secondary); padding: 0 8px; min-height: 44px; transition: 0.1s; }
+        .cat-tag button:active { transform: scale(0.9); }
         .cat-add-row { display: flex; gap: 12px; margin-top: 8px; margin-bottom: 16px; align-items: center; }
         .cat-add-row input { flex: 1; border-radius: 40px; background: var(--card-bg); border: 1px solid var(--border-light); padding: 10px 14px; }
         .info-badge { font-size: 0.7rem; color: var(--text-secondary); margin-bottom: 16px; text-align: center; background: rgba(0,0,0,0.05); padding: 6px; border-radius: 30px; }
         .log-view { max-height: 300px; overflow-y: auto; font-size: 0.8rem; font-family: monospace; }
-        .toast { position: fixed; bottom: 30px; left: 50%; transform: translateX(-50%); background: #1f2a3e; color: white; padding: 10px 24px; border-radius: 60px; font-size: 0.85rem; z-index: 3000; max-width: 90vw; text-align: center; box-shadow: 0 5px 15px rgba(0,0,0,0.2); }
+        .toast { position: fixed; bottom: 30px; left: 50%; transform: translateX(-50%); background: #1f2a3e; color: white; padding: 10px 24px; border-radius: 60px; font-size: 0.85rem; z-index: 3000; max-width: 90vw; text-align: center; box-shadow: 0 5px 15px rgba(0,0,0,0.2); animation: fadeInUp 0.2s ease; }
+        @keyframes fadeInUp { from { opacity: 0; transform: translateX(-50%) translateY(10px); } to { opacity: 1; transform: translateX(-50%) translateY(0); } }
         .warning-box { background: var(--warning-bg); border-left: 4px solid var(--warning-border); padding: 10px; border-radius: 16px; margin: 10px 0; font-size: 0.8rem; }
         .highlight { background-color: var(--highlight-bg); color: var(--highlight-text); border-radius: 4px; padding: 0 2px; }
-        .batch-bar { position: sticky; bottom: 0; background: var(--card-bg); border-radius: 32px; padding: 10px; margin-top: 12px; display: flex; gap: 10px; justify-content: space-around; flex-wrap: wrap; }
-        .checkbox-item { width: 24px; height: 24px; cursor: pointer; margin-right: 8px; }
+        .batch-bar { position: sticky; bottom: 0; background: var(--card-bg); border-radius: 32px; padding: 10px; margin-top: 12px; display: flex; gap: 10px; justify-content: space-around; flex-wrap: wrap; backdrop-filter: blur(16px); }
+        .checkbox-item { width: 24px; height: 24px; cursor: pointer; margin-right: 8px; accent-color: #4f7de8; }
         .strength-bar { height: 4px; width: 100%; background: var(--border-light); border-radius: 2px; margin-top: 4px; overflow: hidden; }
         .strength-fill { height: 100%; width: 0%; transition: width 0.2s; }
         .strength-text { font-size: 0.7rem; margin-top: 4px; text-align: left; }
-        .gen-pw-btn { background: transparent; border: 1px solid var(--border-light); border-radius: 30px; padding: 8px 12px; cursor: pointer; font-size: 0.75rem; }
+        .gen-pw-btn { background: transparent; border: 1px solid var(--border-light); border-radius: 30px; padding: 8px 12px; cursor: pointer; font-size: 0.75rem; transition: var(--transition-base); }
+        .gen-pw-btn:active { transform: scale(0.96); }
+        .version-badge { font-size: 0.65rem; opacity: 0.7; margin-left: 8px; font-weight: normal; }
         @media (max-width: 600px) { .app-container { padding: 1rem; } .form-row { flex-direction: column; } .item-pw { max-width: 100px; } .toolbar { flex-direction: column; align-items: stretch; } .modal-card { padding: 1.2rem; } }
     </style>
 </head>
@@ -98,7 +106,8 @@
 <div id="root"></div>
 <script>
 (function(){
-    // ======================= 安全增强常量 =======================
+    // ======================= 版本号与安全常量 =======================
+    const APP_VERSION = "2.0.1";          // 增强导入兼容性
     const STORAGE_VAULT = 'serene_vault_encrypted';
     const STORAGE_SALT = 'serene_vault_salt';
     const STORAGE_AUTH = 'serene_vault_auth';
@@ -109,17 +118,14 @@
     const LAST_EXPORT_KEY = 'serene_last_export';
     const VERIFY_FAIL_KEY = 'serene_verify_fail';
     const VERIFY_LOCK_KEY = 'serene_verify_lock_until';
-    const IMPORT_BRUTE_FAIL_KEY = 'serene_import_brute_fail';
-    const IMPORT_BRUTE_LOCK_KEY = 'serene_import_brute_lock_until';
     const MAX_PASSWORDS = 10000;
     const PASSWORD_MIN_LEN = 6;
     const PASSWORD_MAX_LEN = 256;
     const MAX_CSV_SIZE_MB = 20;
-    // 提升迭代次数至 600,000 (OWASP 2023推荐)
     const PBKDF2_ITERATIONS = 600000;
-    // 敏感操作二次验证缓存 (5分钟)
+    // 二次验证有效期30秒
     let lastReauthTime = 0;
-    const REAUTH_VALIDITY_MS = 5 * 60 * 1000;
+    const REAUTH_VALIDITY_MS = 30 * 1000;
     
     let masterKey = null;
     let passwords = [];
@@ -127,7 +133,7 @@
     let visiblePasswords = new Set();
     let searchQuery = '';
     let searchField = 'all';
-    let idleTimer = null;
+    let idleTimerInterval = null;
     let lastActivity = Date.now();
     const IDLE_TIMEOUT = 5 * 60 * 1000;
     let batchMode = false;
@@ -158,8 +164,30 @@
     function isStrongPassword(pw) { if(pw.length<8) return false; let s=0; if(/[A-Z]/.test(pw)) s++; if(/[a-z]/.test(pw)) s++; if(/[0-9]/.test(pw)) s++; if(/[^A-Za-z0-9]/.test(pw)) s++; return s>=3; }
     function getStrengthText(level) { if(level===0) return '❌ 太弱'; if(level===1) return '⚠️ 弱'; if(level===2) return '📈 中等'; if(level===3) return '✅ 强'; return '💪 非常强'; }
     function getStrengthColor(level) { if(level<=1) return 'var(--strength-weak)'; if(level===2) return 'var(--strength-medium)'; return 'var(--strength-strong)'; }
-    function generateStrongPassword(length=16) { const lower='abcdefghijklmnopqrstuvwxyz', upper='ABCDEFGHIJKLMNOPQRSTUVWXYZ', digits='0123456789', symbols='!@#$%^&*()_+-=[]{}|;:,.<>?'; const all=lower+upper+digits+symbols; let pw=''; pw+=lower[Math.floor(crypto.getRandomValues(new Uint8Array(1))[0]%lower.length)]; pw+=upper[Math.floor(crypto.getRandomValues(new Uint8Array(1))[0]%upper.length)]; pw+=digits[Math.floor(crypto.getRandomValues(new Uint8Array(1))[0]%digits.length)]; pw+=symbols[Math.floor(crypto.getRandomValues(new Uint8Array(1))[0]%symbols.length)]; for(let i=pw.length;i<length;i++) pw+=all[Math.floor(crypto.getRandomValues(new Uint8Array(1))[0]%all.length)]; return pw.split('').sort(()=>crypto.getRandomValues(new Uint8Array(1))[0]-128).join(''); }
     
+    // 安全的强密码生成器 (消除模偏差)
+    function generateStrongPassword(length=16) {
+        const lower='abcdefghijklmnopqrstuvwxyz', upper='ABCDEFGHIJKLMNOPQRSTUVWXYZ', digits='0123456789', symbols='!@#$%^&*()_+-=[]{}|;:,.<>?';
+        const all=lower+upper+digits+symbols;
+        const getRandomIndex = (max) => {
+            const range = 256 - (256 % max);
+            let val;
+            do { val = crypto.getRandomValues(new Uint8Array(1))[0]; } while (val >= range);
+            return val % max;
+        };
+        let pw = '';
+        pw += lower[getRandomIndex(lower.length)];
+        pw += upper[getRandomIndex(upper.length)];
+        pw += digits[getRandomIndex(digits.length)];
+        pw += symbols[getRandomIndex(symbols.length)];
+        for(let i=pw.length; i<length; i++) pw += all[getRandomIndex(all.length)];
+        const arr = pw.split('');
+        for (let i = arr.length - 1; i > 0; i--) {
+            const j = getRandomIndex(i + 1);
+            [arr[i], arr[j]] = [arr[j], arr[i]];
+        }
+        return arr.join('');
+    }
     // 加密核心
     async function deriveKey(password, salt) { const enc = new TextEncoder(); const keyMaterial = await crypto.subtle.importKey('raw', enc.encode(password), 'PBKDF2', false, ['deriveKey']); return await crypto.subtle.deriveKey({ name: 'PBKDF2', salt, iterations: PBKDF2_ITERATIONS, hash: 'SHA-256' }, keyMaterial, { name: 'AES-GCM', length: 256 }, false, ['encrypt', 'decrypt']); }
     async function encryptData(key, data) { const iv = crypto.getRandomValues(new Uint8Array(12)); const ciphertext = await crypto.subtle.encrypt({ name: 'AES-GCM', iv }, key, new TextEncoder().encode(JSON.stringify(data))); return { iv: Array.from(iv), ciphertext: Array.from(new Uint8Array(ciphertext)) }; }
@@ -190,11 +218,26 @@
     function getVerifyLockUntil(){ return parseInt(localStorage.getItem(VERIFY_LOCK_KEY)||'0'); }
     function setVerifyLockUntil(ts){ localStorage.setItem(VERIFY_LOCK_KEY,ts); }
     async function verifyWithLock(password){ const now=Date.now(); if(memoryBruteLockUntil>now){ const waitSec=Math.ceil((memoryBruteLockUntil-now)/1000); throw new Error(`验证尝试过于频繁，请等待 ${waitSec} 秒`); } const lockUntil=getVerifyLockUntil(); if(now<lockUntil){ const waitSec=Math.ceil((lockUntil-now)/1000); throw new Error(`验证尝试过于频繁，请等待 ${waitSec} 秒`); } const ok=await verifyMasterPassword(password); if(!ok){ let fail=getVerifyFailCount()+1; setVerifyFailCount(fail); memoryBruteFailCount++; if(memoryBruteFailCount>=5||fail>=5){ const lockEnd=now+60*60*1000; setVerifyLockUntil(lockEnd); memoryBruteLockUntil=lockEnd; setVerifyFailCount(0); memoryBruteFailCount=0; throw new Error('验证失败次数过多，已锁定1小时'); } throw new Error('主密码错误'); } setVerifyFailCount(0); setVerifyLockUntil(0); memoryBruteFailCount=0; memoryBruteLockUntil=0; return true; }
+    
+    async function requireReauth(actionDesc, force = false) {
+        if(!masterKey) throw new Error('未解锁');
+        const now = Date.now();
+        if(!force && lastReauthTime && (now - lastReauthTime) < REAUTH_VALIDITY_MS) return true;
+        const verified = await promptCurrentPassword(actionDesc, false);
+        if(verified){
+            lastReauthTime = Date.now();
+            return true;
+        }
+        throw new Error('验证取消');
+    }
+    
     async function promptCurrentPassword(actionName, returnPw=false){ return new Promise((resolve)=>{ const modal=document.createElement('div'); modal.className='modal'; modal.innerHTML=`<div class="modal-card"><h3>🔐 验证主密码</h3><p>执行「${escapeHtml(actionName)}」需要验证身份</p><input type="password" id="verifyPw" placeholder="请输入当前主密码" autocomplete="off" autofocus><div class="button-group"><button id="cancelVerify" class="small-btn">✖️ 取消</button><button id="confirmVerify" class="btn">✔️ 确认</button></div></div>`; document.body.appendChild(modal); document.body.classList.add('modal-open'); const input=modal.querySelector('#verifyPw'); const confirmBtn=modal.querySelector('#confirmVerify'); const cancelBtn=modal.querySelector('#cancelVerify'); const cleanup=()=>{ modal.remove(); document.body.classList.remove('modal-open'); }; confirmBtn.onclick=async()=>{ const pw=input.value; if(!pw){ showToast('请输入主密码',true); return; } try{ await verifyWithLock(pw); cleanup(); if(returnPw) resolve(pw); else resolve(true); }catch(e){ showToast(e.message,true); input.value=''; input.focus(); } }; cancelBtn.onclick=()=>{ cleanup(); resolve(returnPw?null:false); }; input.addEventListener('keypress',(e)=>{ if(e.key==='Enter') confirmBtn.click(); }); input.focus(); }); }
     async function verifyMasterPassword(password){ const saltArr=JSON.parse(localStorage.getItem(STORAGE_SALT)); const authData=JSON.parse(localStorage.getItem(STORAGE_AUTH)); if(!saltArr||!authData) throw new Error('未初始化'); const salt=new Uint8Array(saltArr); const key=await deriveKey(password,salt); return await verifyAuth(key,authData); }
-    async function requireReauth(actionDesc){ if(!masterKey) throw new Error('未解锁'); const now=Date.now(); if(lastReauthTime && (now-lastReauthTime)<REAUTH_VALIDITY_MS) return true; const verified=await promptCurrentPassword(actionDesc,false); if(verified){ lastReauthTime=Date.now(); return true; } throw new Error('验证取消'); }
     
-    async function unlockVault(password){ try{ const lockUntil=getBruteLockUntil(); if(Date.now()<lockUntil) throw new Error(`尝试过于频繁，请等待 ${Math.ceil((lockUntil-Date.now())/1000)} 秒`); const saltArr=JSON.parse(localStorage.getItem(STORAGE_SALT)); const authData=JSON.parse(localStorage.getItem(STORAGE_AUTH)); if(!saltArr||!authData) throw new Error('未初始化'); const salt=new Uint8Array(saltArr); const key=await deriveKey(password,salt); const ok=await verifyAuth(key,authData); if(!ok){ let fail=getBruteFailCount()+1; setBruteFailCount(fail); if(fail>=5){ setBruteLockUntil(Date.now()+60*60*1000); setBruteFailCount(0); throw new Error('密码错误次数过多，已锁定1小时'); } throw new Error('主密码错误'); } setBruteFailCount(0); setBruteLockUntil(0); masterKey=key; const vault=localStorage.getItem(STORAGE_VAULT); const decrypted=await decryptData(masterKey,JSON.parse(vault)); if(Array.isArray(decrypted)){ passwords=decrypted; customCategories=[]; }else{ passwords=decrypted.passwords||[]; customCategories=decrypted.customCategories||[]; } if(!customCategories.length) customCategories=[...DEFAULT_CATEGORIES]; if(!decrypted.version || decrypted.version<2){ const vaultData={ passwords, customCategories, version:2, lastUpdated:Date.now() }; const newEnc=await encryptData(masterKey,vaultData); localStorage.setItem(STORAGE_VAULT,JSON.stringify(newEnc)); } addLog('登录','成功解锁保险库'); const lastExport=localStorage.getItem(LAST_EXPORT_KEY); if(lastExport && (Date.now()-parseInt(lastExport)>7*24*60*60*1000)) setTimeout(()=>showToast('📦 已7天未导出备份，建议立即导出保存',false,5000),1000); checkStorageQuota(); return true; }catch(e){ throw e; } }
+    async function unlockVault(password){ try{ const lockUntil=getBruteLockUntil(); if(Date.now()<lockUntil) throw new Error(`尝试过于频繁，请等待 ${Math.ceil((lockUntil-Date.now())/1000)} 秒`); const saltArr=JSON.parse(localStorage.getItem(STORAGE_SALT)); const authData=JSON.parse(localStorage.getItem(STORAGE_AUTH)); if(!saltArr||!authData) throw new Error('未初始化'); const salt=new Uint8Array(saltArr); const key=await deriveKey(password,salt); const ok=await verifyAuth(key,authData); if(!ok){ let fail=getBruteFailCount()+1; setBruteFailCount(fail); if(fail>=5){ setBruteLockUntil(Date.now()+60*60*1000); setBruteFailCount(0); throw new Error('密码错误次数过多，已锁定1小时'); } throw new Error('主密码错误'); } setBruteFailCount(0); setBruteLockUntil(0); masterKey=key; const vault=localStorage.getItem(STORAGE_VAULT); const decrypted=await decryptData(masterKey,JSON.parse(vault)); if(Array.isArray(decrypted)){ passwords=decrypted; customCategories=[]; }else{ passwords=decrypted.passwords||[]; customCategories=decrypted.customCategories||[]; } if(!customCategories.length) customCategories=[...DEFAULT_CATEGORIES]; if(!decrypted.version || decrypted.version<2){ const vaultData={ passwords, customCategories, version:2, lastUpdated:Date.now() }; const newEnc=await encryptData(masterKey,vaultData); localStorage.setItem(STORAGE_VAULT,JSON.stringify(newEnc)); } addLog('登录','成功解锁保险库'); const lastExport=localStorage.getItem(LAST_EXPORT_KEY); if(lastExport && (Date.now()-parseInt(lastExport)>7*24*60*60*1000)) setTimeout(()=>showToast('📦 已7天未导出备份，建议立即导出保存',false,5000),1000); checkStorageQuota();
+        startIdleMonitor();
+        return true;
+    }catch(e){ throw e; } }
     
     function getBruteFailCount(){ return parseInt(localStorage.getItem(BRUTE_FAIL_KEY)||'0'); }
     function setBruteFailCount(n){ localStorage.setItem(BRUTE_FAIL_KEY,n); }
@@ -208,15 +251,17 @@
     
     function normalizeItem(item){ return { id: item.id || generateSecureId(), createdAt: item.createdAt || Date.now(), name: item.name || '', username: item.username || '', password: item.password || '', email: item.email || '', phone: item.phone || '', category: item.category || '', note: item.note || '' }; }
     
-    async function copyAndClear(pw){ if(clipboardTimer) clearTimeout(clipboardTimer); try{ await navigator.clipboard.writeText(pw); showToast('📋 已复制，5秒后自动清除'); clipboardTimer=setTimeout(async ()=>{ try{ await navigator.clipboard.writeText('cleared_'+Date.now()); showToast('🧹 剪贴板已清除'); }catch(e){ showToast('自动清除失败',true); } clipboardTimer=null; },5000); }catch(e){ showToast('复制失败',true); } }
+    async function copyAndClear(pw){ if(clipboardTimer) clearTimeout(clipboardTimer); try{ await navigator.clipboard.writeText(pw); showToast('📋 已复制，3秒后自动清除剪贴板'); clipboardTimer=setTimeout(async ()=>{ try{ await navigator.clipboard.writeText(''); showToast('🧹 剪贴板已清除'); }catch(e){ showToast('自动清除失败',true); } clipboardTimer=null; },3000); }catch(e){ showToast('复制失败',true); } }
     
-    function resetIdleTimer(){ if(!masterKey) return; lastActivity=Date.now(); if(idleTimer) clearTimeout(idleTimer); idleTimer=setTimeout(()=>{ if(masterKey) lockAndLogout(); }, IDLE_TIMEOUT); }
-    function lockAndLogout(){ clearTimeout(idleTimer); document.querySelectorAll('.modal').forEach(m=>m.remove()); document.body.classList.remove('modal-open'); activeCategoryManagerModal=null; masterKey=null; passwords=[]; customCategories=[]; visiblePasswords.clear(); selectedIds.clear(); batchMode=false; searchQuery=''; searchField='all'; _sortDirection=true; if(clipboardTimer) clearTimeout(clipboardTimer); try{ navigator.clipboard.writeText('').catch(()=>{}); }catch(e){} showToast('⏰ 空闲锁定'); showAuth(); }
+    function resetIdleTimer(){ if(!masterKey) return; lastActivity = Date.now(); }
+    function startIdleMonitor(){ if(idleTimerInterval) clearInterval(idleTimerInterval); idleTimerInterval = setInterval(()=>{ if(masterKey && (Date.now() - lastActivity) >= IDLE_TIMEOUT){ lockAndLogout(); } }, 30000); }
+    function stopIdleMonitor(){ if(idleTimerInterval) { clearInterval(idleTimerInterval); idleTimerInterval = null; } }
+    function lockAndLogout(){ stopIdleMonitor(); document.querySelectorAll('.modal').forEach(m=>m.remove()); document.body.classList.remove('modal-open'); activeCategoryManagerModal=null; masterKey=null; passwords=[]; customCategories=[]; visiblePasswords.clear(); selectedIds.clear(); batchMode=false; searchQuery=''; searchField='all'; _sortDirection=true; if(clipboardTimer) clearTimeout(clipboardTimer); try{ navigator.clipboard.writeText('').catch(()=>{}); }catch(e){} showToast('⏰ 空闲锁定'); showAuth(); }
     function manualLock(){ lockAndLogout(); showToast('🔒 已手动锁定'); }
     
-    async function wipeAllPasswords(){ if(!masterKey){ showToast('未解锁',true); return; } await requireReauth('清空全部密码'); if(confirm('清空全部密码？')){ if(prompt('输入"清空全部"确认')==='清空全部'){ passwords=[]; await saveEncrypted(); renderListOnly(); showToast('已清空'); refreshDatalist(); } } }
-    async function batchDelete(){ if(selectedIds.size===0) return; await requireReauth('批量删除密码'); if(confirm(`确定删除 ${selectedIds.size} 个密码吗？`)){ const idsToDelete=Array.from(selectedIds); passwords=passwords.filter(p=>!idsToDelete.includes(p.id)); selectedIds.clear(); batchMode=false; await saveEncrypted(); renderListOnly(); showToast('批量删除完成'); addLog('批量删除',`删除 ${idsToDelete.length} 条`); refreshDatalist(); document.getElementById('batchBar').style.display='none'; } }
-    async function batchMoveCategory(targetCat){ if(selectedIds.size===0) return; await requireReauth('批量移动分类'); for(let p of passwords) if(selectedIds.has(p.id)) p.category=targetCat; await saveEncrypted(); renderListOnly(); showToast(`已移动 ${selectedIds.size} 条到分类 ${targetCat}`); addLog('批量移动分类',`${selectedIds.size} 条 -> ${targetCat}`); refreshDatalist(); }
+    async function wipeAllPasswords(){ if(!masterKey){ showToast('未解锁',true); return; } await requireReauth('清空全部密码', true); if(confirm('清空全部密码？')){ if(prompt('输入"清空全部"确认')==='清空全部'){ passwords=[]; await saveEncrypted(); renderListOnly(); showToast('已清空'); refreshDatalist(); } } }
+    async function batchDelete(){ if(selectedIds.size===0) return; await requireReauth('批量删除密码', true); if(confirm(`确定删除 ${selectedIds.size} 个密码吗？`)){ const idsToDelete=Array.from(selectedIds); passwords=passwords.filter(p=>!idsToDelete.includes(p.id)); selectedIds.clear(); batchMode=false; await saveEncrypted(); renderListOnly(); showToast('批量删除完成'); addLog('批量删除',`删除 ${idsToDelete.length} 条`); refreshDatalist(); document.getElementById('batchBar').style.display='none'; } }
+    async function batchMoveCategory(targetCat){ if(selectedIds.size===0) return; await requireReauth('批量移动分类', true); for(let p of passwords) if(selectedIds.has(p.id)) p.category=targetCat; await saveEncrypted(); renderListOnly(); showToast(`已移动 ${selectedIds.size} 条到分类 ${targetCat}`); addLog('批量移动分类',`${selectedIds.size} 条 -> ${targetCat}`); refreshDatalist(); }
     
     function openCategoryManager(){ const modal=document.createElement('div'); modal.className='modal'; modal.innerHTML=`<div class="modal-card"><h3>📂 自定义分类库</h3><div class="info-badge">✨ 共 <span id="catCount">0</span> 个分类 | 每个分类后方数字为密码条目数量</div><div id="catListManage" class="cat-manager-grid"></div><div class="cat-add-row"><input type="text" id="newCatName" placeholder="新分类名称" autocomplete="off"><button class="small-btn" id="addCatBtn">➕ 添加</button></div><div class="button-group"><button id="closeCat" class="btn">关闭</button></div></div>`; document.body.appendChild(modal); document.body.classList.add('modal-open'); activeCategoryManagerModal=modal; const container=modal.querySelector('#catListManage'); const refresh=()=>renderCategoryListWithCount(container); refresh(); modal.querySelector('#addCatBtn').onclick=()=>{ const newCat=modal.querySelector('#newCatName').value.trim(); if(!newCat){ showToast('请输入分类名称',true); return; } if(addCustomCategory(newCat)){ refresh(); refreshDatalist(); modal.querySelector('#newCatName').value=''; showToast(`✅ 添加分类 “${newCat}”`); } else showToast('分类已存在或无效',true); }; modal.querySelector('#closeCat').onclick=()=>{ modal.remove(); document.body.classList.remove('modal-open'); activeCategoryManagerModal=null; }; }
     
@@ -225,24 +270,250 @@
     function highlightText(text, keyword){ if(!keyword||!text) return escapeHtml(text); const regex=new RegExp(`(${escapeRegex(keyword)})`,'gi'); return escapeHtml(text).replace(regex,`<span class="highlight">$1</span>`); }
     function renderListOnly(){ const listContainer=document.getElementById('listContainer'); if(!listContainer) return; let filtered=[...passwords]; if(searchQuery.trim()){ const q=searchQuery.toLowerCase(); filtered=filtered.filter(p=>{ if(searchField==='name') return p.name.toLowerCase().includes(q); if(searchField==='username') return (p.username||'').toLowerCase().includes(q); if(searchField==='category') return (p.category||'').toLowerCase().includes(q); if(searchField==='email') return (p.email||'').toLowerCase().includes(q); if(searchField==='phone') return (p.phone||'').toLowerCase().includes(q); if(searchField==='note') return (p.note||'').toLowerCase().includes(q); return p.name.toLowerCase().includes(q)||(p.username||'').toLowerCase().includes(q)||(p.category||'').toLowerCase().includes(q)||(p.email||'').toLowerCase().includes(q)||(p.phone||'').toLowerCase().includes(q)||(p.note||'').toLowerCase().includes(q); }); } const sortFieldVal=document.getElementById('sortFieldSelect')?.value||'name'; filtered.sort((a,b)=>{ let x=(a[sortFieldVal]||'').toLowerCase(); let y=(b[sortFieldVal]||'').toLowerCase(); return _sortDirection ? (x<y?-1:x>y?1:0) : (x<y?1:x>y?-1:0); }); const keyword=searchQuery.trim(); let listHtml=filtered.map(p=>{ const visible=visiblePasswords.has(p.id); const nameHtml=keyword?highlightText(p.name,keyword):escapeHtml(p.name); const usernameHtml=keyword&&p.username?highlightText(p.username,keyword):escapeHtml(p.username||''); const emailHtml=keyword&&p.email?highlightText(p.email,keyword):escapeHtml(p.email||''); return `<div class="password-item" style="display: flex; align-items: center;">${batchMode?`<input type="checkbox" class="checkbox-item batch-check" data-id="${escapeAttr(p.id)}" ${selectedIds.has(p.id)?'checked':''}>`:''}<div class="item-info">${p.category?`<span class="cat">📂 ${escapeHtml(p.category)}</span>`:''}<div><strong>${nameHtml}</strong></div><div style="font-size:0.7rem;">${usernameHtml?`👤 ${usernameHtml} `:''}${emailHtml?`📧 ${emailHtml} `:''}${p.phone?`📱 ${escapeHtml(p.phone)} `:''}📅 ${formatDate(p.createdAt)}</div>${p.note?`<div style="font-size:0.7rem;">📝 ${escapeHtml(p.note)}</div>`:''}</div><span class="item-pw">${escapeHtml(visible?p.password:'•'.repeat(Math.min(p.password.length,12)))}</span><div class="item-actions"><button class="small-btn toggle-vis" data-id="${escapeAttr(p.id)}">${visible?'🙈':'👁️'}</button><button class="small-btn copy-btn" data-pw="${escapeAttr(p.password)}">📋</button><button class="small-btn edit-btn" data-id="${escapeAttr(p.id)}">✏️</button><button class="small-btn del-btn" data-id="${escapeAttr(p.id)}">🗑️</button></div></div>`; }).join(''); if(filtered.length===0) listHtml='<div style="text-align:center; padding:40px;">✨ 暂无密码，点击上方添加</div>'; listContainer.innerHTML=listHtml; const countSpan=document.getElementById('countSpan'); if(countSpan) countSpan.innerText=passwords.length; if(passwords.length>9500) showToast(`⚠️ 密码数量接近上限 ${passwords.length}/${MAX_PASSWORDS}`,false,4000); if(batchMode){ document.querySelectorAll('.batch-check').forEach(cb=>{ cb.addEventListener('change',(e)=>{ const id=cb.dataset.id; if(cb.checked) selectedIds.add(id); else selectedIds.delete(id); const batchCountSpan=document.getElementById('batchCount'); if(batchCountSpan) batchCountSpan.innerText=selectedIds.size; }); }); } }
     
-    async function exportCSV(){ await requireReauth('导出CSV文件'); const headers=['name','username','password','category','email','phone','note']; const rows=passwords.map(p=>[p.name,p.username||'',p.password,p.category||'',p.email||'',p.phone||'',p.note||''].map(cell=>`"${String(cell).replace(/"/g,'""')}"`).join(',')); const csv=[headers.join(','),...rows].join('\n'); const blob=new Blob(["\uFEFF"+csv],{type:'text/csv;charset=utf-8;'}); const a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download=`静谧密钥_导出_${new Date().toISOString().slice(0,19)}.csv`; a.click(); URL.revokeObjectURL(a.href); addLog('导出CSV',`导出 ${passwords.length} 条记录`); showToast('📎 CSV已导出'); }
-    async function exportBackupEnhanced(){ await requireReauth('导出加密备份'); const salt=new Uint8Array(JSON.parse(localStorage.getItem(STORAGE_SALT))); const vaultData={ passwords, customCategories }; const exportData=await encryptData(masterKey, vaultData); const plainChecksum=await computePlainChecksum(vaultData); const exportObj={ version:5, encrypted:true, salt:Array.from(salt), data:exportData, plainChecksum }; const blob=new Blob([JSON.stringify(exportObj)],{type:'application/json'}); const a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download=`静谧密钥_备份_${new Date().toISOString().slice(0,19)}.json`; a.click(); URL.revokeObjectURL(a.href); localStorage.setItem(LAST_EXPORT_KEY,Date.now().toString()); addLog('导出加密','已导出备份'); showToast('🔒 已导出加密备份'); }
-    async function exportPlaintextJSON(){ if(!confirm('⚠️ 警告：导出明文JSON会将所有密码以明文形式保存，任何人打开即可看到。\n\n是否继续？')) return; await requireReauth('导出明文数据'); const exportData={ version:2, exportedAt:new Date().toISOString(), passwords:passwords.map(p=>({...p})), customCategories:loadCustomCategoriesFromVault() }; const blob=new Blob([JSON.stringify(exportData,null,2)],{type:'application/json'}); const a=document.createElement('a'); a.download=`静谧密钥_明文导出_${new Date().toISOString().slice(0,19)}.json`; a.href=URL.createObjectURL(blob); a.click(); URL.revokeObjectURL(a.href); addLog('导出明文JSON',`导出 ${passwords.length} 条记录`); showToast('📄 明文JSON已导出（请注意保管）'); }
+    function escapeCsvField(field) { let str = String(field); if(str.startsWith('=') || str.startsWith('+') || str.startsWith('-') || str.startsWith('@')) { str = "'" + str; } return `"${str.replace(/"/g, '""')}"`; }
+    async function exportCSV(){ await requireReauth('导出CSV文件', true); const headers=['name','username','password','category','email','phone','note']; const rows=passwords.map(p=>[p.name,p.username||'',p.password,p.category||'',p.email||'',p.phone||'',p.note||''].map(escapeCsvField).join(',')); const csv=[headers.join(','),...rows].join('\n'); const blob=new Blob(["\uFEFF"+csv],{type:'text/csv;charset=utf-8;'}); const a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download=`静谧密钥_导出_${new Date().toISOString().slice(0,19)}.csv`; a.click(); URL.revokeObjectURL(a.href); addLog('导出CSV',`导出 ${passwords.length} 条记录`); showToast('📎 CSV已导出'); }
+    async function exportBackupEnhanced(){ await requireReauth('导出加密备份', true); const salt=new Uint8Array(JSON.parse(localStorage.getItem(STORAGE_SALT))); const vaultData={ passwords, customCategories }; const exportData=await encryptData(masterKey, vaultData); const plainChecksum=await computePlainChecksum(vaultData); const exportObj={ version:5, encrypted:true, salt:Array.from(salt), data:exportData, plainChecksum }; const blob=new Blob([JSON.stringify(exportObj)],{type:'application/json'}); const a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download=`静谧密钥_备份_${new Date().toISOString().slice(0,19)}.json`; a.click(); URL.revokeObjectURL(a.href); localStorage.setItem(LAST_EXPORT_KEY,Date.now().toString()); addLog('导出加密','已导出备份'); showToast('🔒 已导出加密备份'); }
+    async function exportPlaintextJSON(){ if(!confirm('⚠️ 警告：导出明文JSON会将所有密码以明文形式保存，任何人打开即可看到。\n\n是否继续？')) return; await requireReauth('导出明文数据', true); const exportData={ version:2, exportedAt:new Date().toISOString(), passwords:passwords.map(p=>({...p})), customCategories:loadCustomCategoriesFromVault() }; const blob=new Blob([JSON.stringify(exportData,null,2)],{type:'application/json'}); const a=document.createElement('a'); a.download=`静谧密钥_明文导出_${new Date().toISOString().slice(0,19)}.json`; a.href=URL.createObjectURL(blob); a.click(); URL.revokeObjectURL(a.href); addLog('导出明文JSON',`导出 ${passwords.length} 条记录`); showToast('📄 明文JSON已导出（请注意保管）'); }
     function showLogs(){ let logs=JSON.parse(localStorage.getItem(LOG_STORAGE)||'[]'); const modal=document.createElement('div'); modal.className='modal'; modal.innerHTML=`<div class="modal-card"><h3>📜 操作日志</h3><div class="log-view" id="logViewContainer">${logs.map(l=>`<div>${l.time} | ${l.action} | ${l.details}</div>`).join('')||'无记录'}</div><div class="button-group"><button class="small-btn" id="clearLogBtn">🗑️ 清空日志</button><button class="small-btn" id="exportLogBtn">📎 导出日志</button><button class="btn" id="closeLog">关闭</button></div></div>`; document.body.appendChild(modal); document.body.classList.add('modal-open'); const refreshLogView=()=>{ const newLogs=JSON.parse(localStorage.getItem(LOG_STORAGE)||'[]'); const container=modal.querySelector('#logViewContainer'); if(container) container.innerHTML=newLogs.map(l=>`<div>${l.time} | ${l.action} | ${l.details}</div>`).join('')||'无记录'; }; modal.querySelector('#closeLog').onclick=()=>{ modal.remove(); document.body.classList.remove('modal-open'); }; modal.querySelector('#exportLogBtn').onclick=()=>{ const logsData=JSON.parse(localStorage.getItem(LOG_STORAGE)||'[]'); const blob=new Blob([JSON.stringify(logsData,null,2)],{type:'application/json'}); const a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download=`静谧密钥_日志_${new Date().toISOString().slice(0,19)}.json`; a.click(); URL.revokeObjectURL(a.href); showToast('日志已导出'); }; modal.querySelector('#clearLogBtn').onclick=()=>{ if(confirm('确定清空所有操作日志吗？')){ localStorage.setItem(LOG_STORAGE,'[]'); refreshLogView(); showToast('日志已清空'); addLog('清空日志','用户手动清空操作日志'); } }; }
     function toggleBatchMode(){ batchMode=!batchMode; if(!batchMode) selectedIds.clear(); renderListOnly(); const batchBar=document.getElementById('batchBar'); if(batchBar) batchBar.style.display=batchMode?'flex':'none'; }
     async function showChangePwModal(){ const oldPw=await promptCurrentPassword('修改主密码',true); if(!oldPw){ showToast('验证取消',true); return; } const modal=document.createElement('div'); modal.className='modal'; modal.innerHTML=`<div class="modal-card"><h3>修改主密码</h3><input type="password" id="newPw" placeholder="新密码(≥8位，含三类字符)"><div class="strength-bar"><div class="strength-fill" id="strengthFill"></div></div><div class="strength-text" id="strengthText"></div><input type="password" id="confirmPw" placeholder="确认新密码"><button class="btn" id="doChange">修改</button></div>`; document.body.appendChild(modal); document.body.classList.add('modal-open'); const newPwInput=modal.querySelector('#newPw'); const strengthFill=modal.querySelector('#strengthFill'); const strengthText=modal.querySelector('#strengthText'); newPwInput.addEventListener('input',()=>{ const val=newPwInput.value; const level=getPasswordStrength(val); strengthFill.style.width=(level/4)*100+'%'; strengthFill.style.backgroundColor=getStrengthColor(level); strengthText.textContent=getStrengthText(level); strengthText.style.color=getStrengthColor(level); }); modal.querySelector('#doChange').onclick=async()=>{ const newP=newPwInput.value, confirm=modal.querySelector('#confirmPw').value; if(!newP) return showToast('请填写新密码',true); if(!isStrongPassword(newP)) return showToast('密码需≥8位且包含大写、小写、数字、特殊字符中的三类',true); if(newP!==confirm) return showToast('两次不一致',true); try{ await changeMasterPassword(oldPw,newP); modal.remove(); document.body.classList.remove('modal-open'); }catch(e){ showToast(e.message,true); } }; }
     async function changeMasterPassword(oldPw,newPw){ if(oldPw===newPw) throw new Error('新旧密码相同'); if(!isStrongPassword(newPw)) throw new Error('新密码需至少8位且包含大写、小写、数字、特殊字符中的至少三类'); await unlockVault(oldPw); const oldData={ passwords:[...passwords], customCategories:[...customCategories] }; const saltNew=crypto.getRandomValues(new Uint8Array(16)); const newKey=await deriveKey(newPw,saltNew); const newAuth=await createAuthVerifier(newKey); const encryptedNew=await encryptData(newKey,oldData); localStorage.setItem(STORAGE_SALT,JSON.stringify(Array.from(saltNew))); localStorage.setItem(STORAGE_AUTH,JSON.stringify(newAuth)); localStorage.setItem(STORAGE_VAULT,JSON.stringify(encryptedNew)); masterKey=newKey; passwords=oldData.passwords; customCategories=oldData.customCategories; addLog('修改主密码','主密码已更新'); showToast('✅ 主密码修改成功'); }
+    // ========== 增强导入兼容性（核心修复） ==========
+    async function importCSV(file, trust){ 
+        if(!trust){ showToast('请勾选信任来源',true); return; } 
+        await requireReauth('导入CSV文件', true); 
+        if(file.size>MAX_CSV_SIZE_MB*1024*1024){ showToast(`CSV 文件过大，请选择不超过 ${MAX_CSV_SIZE_MB} MB 的文件`,true); return; } 
+        const text = await file.text();
+        // 去除 UTF-8 BOM 头
+        const cleanText = text.charCodeAt(0) === 0xFEFF ? text.slice(1) : text;
+        
+        // 增强 CSV 解析（支持引号内换行和逗号）
+        function parseCSVAdvanced(csvText) {
+            const rows = [];
+            let currentRow = [];
+            let currentField = '';
+            let inQuotes = false;
+            let i = 0;
+            while (i < csvText.length) {
+                const ch = csvText[i];
+                if (ch === '"') {
+                    if (inQuotes && csvText[i+1] === '"') {
+                        currentField += '"';
+                        i++;
+                    } else {
+                        inQuotes = !inQuotes;
+                    }
+                } else if (ch === ',' && !inQuotes) {
+                    currentRow.push(currentField);
+                    currentField = '';
+                } else if ((ch === '\n' || (ch === '\r' && csvText[i+1] === '\n')) && !inQuotes) {
+                    if (ch === '\r') i++;
+                    currentRow.push(currentField);
+                    rows.push(currentRow);
+                    currentRow = [];
+                    currentField = '';
+                } else {
+                    currentField += ch;
+                }
+                i++;
+            }
+            if (currentField !== '' || currentRow.length > 0) {
+                currentRow.push(currentField);
+                rows.push(currentRow);
+            }
+            return rows;
+        }
+        
+        const lines = parseCSVAdvanced(cleanText);
+        if(lines.length < 2){ showToast('空文件或格式无效',true); return; }
+        
+        const headers = lines[0].map(h => h.trim().toLowerCase().replace(/^\uFEFF/, ''));
+        // 扩展列名匹配（中英文常见变体）
+        const idx = {
+            name: headers.findIndex(h => ['name','标题','title','条目名称','名称','account','账户名'].includes(h)),
+            username: headers.findIndex(h => ['username','用户名','login_username','账号','user','login'].includes(h)),
+            email: headers.findIndex(h => ['email','邮箱','电子邮件','mail','e-mail'].includes(h)),
+            password: headers.findIndex(h => ['password','密码','login_password','pass','pwd'].includes(h)),
+            category: headers.findIndex(h => ['category','分类','folder','文件夹','类别','group'].includes(h)),
+            phone: headers.findIndex(h => ['phone','手机','mobile','电话','tel'].includes(h)),
+            note: headers.findIndex(h => ['note','备注','notes','注释','说明','desc'].includes(h))
+        };
+        
+        if(idx.name === -1 || idx.password === -1){
+            if(!confirm(`CSV文件缺少“名称”或“密码”列，继续导入可能导致数据错位。是否仍要尝试导入？`)) return;
+        }
+        
+        const importedRaw = [];
+        for(let i=1; i<lines.length; i++){
+            const row = lines[i];
+            if(row.length === 0 || (row.length === 1 && row[0] === '')) continue;
+            const item = {
+                name: idx.name>=0 ? (row[idx.name]||'').trim() : '',
+                username: idx.username>=0 ? (row[idx.username]||'').trim() : '',
+                email: idx.email>=0 ? (row[idx.email]||'').trim() : '',
+                password: idx.password>=0 ? (row[idx.password]||'').trim() : '',
+                category: idx.category>=0 ? (row[idx.category]||'').trim() : '',
+                phone: idx.phone>=0 ? (row[idx.phone]||'').trim() : '',
+                note: idx.note>=0 ? (row[idx.note]||'').trim() : ''
+            };
+            if(item.name && item.password) importedRaw.push(item);
+        }
+        if(importedRaw.length === 0){ showToast('无有效数据',true); return; }
+        const imported = importedRaw.map(i => normalizeItem(i));
+        const conflictNames = imported.filter(i => passwords.some(p => p.name === i.name));
+        if(conflictNames.length > 0 && !confirm(`检测到 ${conflictNames.length} 个名称与现有条目重复，继续导入会覆盖同名条目。是否继续？`)) return;
+        const isOverwrite = confirm(`导入 ${imported.length} 条，覆盖当前？\n确定=覆盖，取消=合并（跳过名称重复）`);
+        if(isOverwrite && imported.length > MAX_PASSWORDS){ showToast(`导入数量超过上限${MAX_PASSWORDS}`,true); return; }
+        if(!isOverwrite && passwords.length + imported.length > MAX_PASSWORDS){ showToast(`超过上限`,true); return; }
+        if(isOverwrite){
+            passwords = imported.slice(0, MAX_PASSWORDS);
+        } else {
+            const existingNames = new Set(passwords.map(p => p.name));
+            const newItems = imported.filter(it => !existingNames.has(it.name));
+            passwords.push(...newItems.slice(0, MAX_PASSWORDS - passwords.length));
+        }
+        syncPasswordsCategoriesToCustom();
+        await saveEncrypted();
+        renderListOnly();
+        refreshDatalist();
+        showToast('CSV导入完成');
+        addLog('导入CSV',`导入 ${imported.length} 条`);
+    }
     
-    function renderApp(){ const rootEl=document.getElementById('root'); if(!rootEl) return; rootEl.innerHTML=`<div class="app-container" id="appContainer"><div class="app-header"><div class="logo"><span>🔐</span> 静谧·密钥</div><div class="badge">📋 已存 <span id="countSpan">${passwords.length}</span> / ${MAX_PASSWORDS}</div><div style="display:flex; gap:8px;"><button class="small-btn" id="lockBtn">🔒 锁定</button><button class="small-btn" id="changeMasterPwBtn">🔐 改主密码</button><button class="small-btn" id="categoryManagerBtn">📂 分类</button><button class="small-btn" id="logBtn">📋 日志</button></div></div><div class="search-bar"><input type="text" id="searchInput" placeholder="🔍 搜索名称/账号/分类..." autocomplete="off"><select id="searchFieldSelect"><option value="all">全部字段</option><option value="name">名称</option><option value="username">用户名</option><option value="category">分类</option><option value="email">邮箱地址</option><option value="phone">手机号</option><option value="note">备注</option></select></div><div class="add-card"><div class="form-row"><input id="inpName" placeholder="名称 (必填)" maxlength="50"><input id="inpUsername" placeholder="用户名"><input id="inpPassword" placeholder="密码 (6-256字符)" maxlength="${PASSWORD_MAX_LEN}"><button class="gen-pw-btn" id="genPwBtn" type="button">🔀 生成</button></div><div class="optional" id="optionalFields"><div class="form-row"><input id="inpEmail" placeholder="邮箱地址" type="email"><input id="inpPhone" placeholder="手机号"><select id="inpCategory"><option value="">(无分类)</option></select></div><div class="form-row"><textarea id="inpNote" rows="2" placeholder="备注" maxlength="500"></textarea></div></div><div class="button-row"><button class="small-btn" id="toggleOptional">➕ 更多信息</button><div class="right-buttons"><button class="small-btn" id="clearForm">🗑️ 清空</button><button class="small-btn" id="addBtn">➕ 添加</button></div></div></div><div class="toolbar"><div class="sort-group"><select id="sortFieldSelect"><option value="name">排序:名称</option><option value="username">用户名</option><option value="category">分类</option></select><button class="small-btn" id="sortBtn">排序 ↕️</button></div><div class="action-group"><button class="small-btn" id="exportEncryptBtn">📤 导出(加密)</button><button class="small-btn" id="exportPlainBtn">📄 导出明文JSON</button><button class="small-btn" id="exportCsvBtn">📄 导出CSV</button><button class="small-btn" id="importBtn">📥 导入</button><button class="small-btn" id="batchBtn">☑️ 批量</button><button class="small-btn" id="wipeBtn" style="color:#d9534f;">⚠️ 清空全部</button><input type="file" id="fileInput" style="display:none" accept=".json,.csv"></div></div><div class="password-list" id="listContainer"></div><div id="batchBar" style="display:none;" class="batch-bar"><span>已选 <span id="batchCount">0</span> 项</span><button class="small-btn" id="batchDeleteBtn">🗑️ 删除</button><select id="batchCategorySelect"><option value="">移动分类</option></select><button class="small-btn" id="batchMoveBtn">移动</button><button class="small-btn" id="cancelBatchBtn">取消</button></div></div>`; const container=document.getElementById('appContainer'); container.addEventListener('click',async(e)=>{ const t=e.target; if(t.classList.contains('toggle-vis')){ const id=t.dataset.id; if(visiblePasswords.has(id)) visiblePasswords.delete(id); else visiblePasswords.add(id); renderListOnly(); } else if(t.classList.contains('copy-btn')) copyAndClear(t.dataset.pw); else if(t.classList.contains('edit-btn')){ const item=passwords.find(p=>p.id===t.dataset.id); if(item) openEditModal(item); } else if(t.classList.contains('del-btn')){ const item=passwords.find(p=>p.id===t.dataset.id); if(item && confirm(`删除“${item.name}”?`)){ passwords=passwords.filter(p=>p.id!==item.id); await saveEncrypted(); renderListOnly(); refreshDatalist(); showToast('已删除'); } } }); document.getElementById('searchInput').addEventListener('input',(e)=>{ searchQuery=e.target.value; renderListOnly(); resetIdleTimer(); }); document.getElementById('searchFieldSelect').addEventListener('change',(e)=>{ searchField=e.target.value; renderListOnly(); }); document.getElementById('addBtn').addEventListener('click',async()=>{ const name=document.getElementById('inpName').value.trim(); const pw=document.getElementById('inpPassword').value.trim(); if(!name||!pw) return showToast('名称和密码不能为空',true); if(pw.length<PASSWORD_MIN_LEN||pw.length>PASSWORD_MAX_LEN) return showToast(`密码需${PASSWORD_MIN_LEN}-${PASSWORD_MAX_LEN}个字符`,true); if(passwords.some(p=>p.name===name) && !confirm(`名称“${name}”已存在，是否继续保存？`)) return; if(passwords.length>=MAX_PASSWORDS) return showToast(`已达上限${MAX_PASSWORDS}`,true); const categoryVal=document.getElementById('inpCategory').value; passwords.unshift({ id:generateSecureId(), name, username:document.getElementById('inpUsername').value.trim(), email:document.getElementById('inpEmail').value.trim(), password:pw, phone:document.getElementById('inpPhone').value.trim(), category:categoryVal||'', note:document.getElementById('inpNote').value.trim(), createdAt:Date.now() }); await saveEncrypted(); renderListOnly(); refreshDatalist(); showToast(`✅ 已添加 ${name}`); resetIdleTimer(); }); document.getElementById('clearForm').onclick=()=>{ ['inpName','inpUsername','inpPassword','inpEmail','inpPhone','inpCategory','inpNote'].forEach(id=>{ let el=document.getElementById(id); if(el) el.value=''; }); document.getElementById('inpCategory').value=''; }; document.getElementById('toggleOptional').onclick=()=>document.getElementById('optionalFields').classList.toggle('show'); document.getElementById('sortBtn').onclick=()=>{ _sortDirection=!_sortDirection; renderListOnly(); }; document.getElementById('exportEncryptBtn').onclick=exportBackupEnhanced; document.getElementById('exportPlainBtn').onclick=exportPlaintextJSON; document.getElementById('exportCsvBtn').onclick=exportCSV; document.getElementById('batchBtn').onclick=toggleBatchMode; document.getElementById('cancelBatchBtn').onclick=toggleBatchMode; document.getElementById('batchDeleteBtn').onclick=batchDelete; document.getElementById('batchMoveBtn').onclick=()=>{ const cat=document.getElementById('batchCategorySelect').value; if(cat) batchMoveCategory(cat); }; document.getElementById('lockBtn').onclick=manualLock; document.getElementById('changeMasterPwBtn').onclick=showChangePwModal; document.getElementById('categoryManagerBtn').onclick=openCategoryManager; document.getElementById('logBtn').onclick=showLogs; document.getElementById('wipeBtn').onclick=wipeAllPasswords; document.getElementById('genPwBtn').onclick=()=>{ const newPw=generateStrongPassword(16); document.getElementById('inpPassword').value=newPw; showToast('已生成强密码'); }; const fileInput=document.getElementById('fileInput'); document.getElementById('importBtn').onclick=()=>{ if(!confirm('导入加密JSON或CSV，需信任来源')) return; const modalDiv=document.createElement('div'); modalDiv.className='modal'; modalDiv.innerHTML=`<div class="modal-card"><h3>导入选项</h3><label><input type="checkbox" id="trustPlainCheck"> 我信任此来源，允许导入明文</label><button class="btn" id="importFileBtn" style="margin-top:12px;">选择文件</button></div>`; document.body.appendChild(modalDiv); document.body.classList.add('modal-open'); modalDiv.querySelector('#importFileBtn').onclick=()=>{ const trustPlain=modalDiv.querySelector('#trustPlainCheck').checked; modalDiv.remove(); document.body.classList.remove('modal-open'); const inp=document.createElement('input'); inp.type='file'; inp.accept='.json,.csv'; inp.onchange=async(e)=>{ const file=e.target.files[0]; if(file.name.endsWith('.csv')){ if(!trustPlain){ showToast('CSV导入需信任来源',true); return; } importCSV(file,trustPlain); } else importFromFile(file,trustPlain); inp.remove(); }; inp.click(); }; }; refreshDatalist(); renderListOnly(); resetIdleTimer(); checkStorageQuota(); }
-    
-    async function importCSV(file, trust){ if(!trust){ showToast('请勾选信任来源',true); return; } if(file.size>MAX_CSV_SIZE_MB*1024*1024){ showToast(`CSV 文件过大，请选择不超过 ${MAX_CSV_SIZE_MB} MB 的文件`,true); return; } const text=await file.text(); const parseCSV=(txt)=>{ const rows=[]; let inQuote=false, currentRow=[], currentField=''; for(let i=0;i<txt.length;i++){ const ch=txt[i]; if(ch==='"'){ if(inQuote && txt[i+1]==='"'){ currentField+='"'; i++; } else inQuote=!inQuote; } else if(ch===',' && !inQuote){ currentRow.push(currentField); currentField=''; } else if(ch==='\n' && !inQuote){ currentRow.push(currentField); rows.push(currentRow); currentRow=[]; currentField=''; } else currentField+=ch; } if(currentField!==''||currentRow.length>0){ currentRow.push(currentField); rows.push(currentRow); } return rows; }; const lines=parseCSV(text); if(lines.length<2){ showToast('空文件',true); return; } const headers=lines[0].map(h=>h.trim().toLowerCase()); const idx={ name:headers.findIndex(h=>['name','标题','title','条目名称','名称'].includes(h)), username:headers.findIndex(h=>['username','用户名','login_username','账号'].includes(h)), email:headers.findIndex(h=>['email','邮箱','电子邮件','mail'].includes(h)), password:headers.findIndex(h=>['password','密码','login_password','pass'].includes(h)), category:headers.findIndex(h=>['category','分类','folder','文件夹','类别'].includes(h)), phone:headers.findIndex(h=>['phone','手机','mobile','电话'].includes(h)), note:headers.findIndex(h=>['note','备注','notes','注释','说明'].includes(h)) }; if(idx.name===-1||idx.password===-1){ if(!confirm(`CSV文件缺少“名称”或“密码”列，继续导入可能导致数据错位。是否仍要尝试导入？`)) return; } const importedRaw=[]; for(let i=1;i<lines.length;i++){ if(lines[i].length===0||(lines[i].length===1&&lines[i][0]==='')) continue; const row=lines[i]; const item={ name:idx.name>=0?(row[idx.name]||'').trim():'', username:idx.username>=0?(row[idx.username]||'').trim():'', email:idx.email>=0?(row[idx.email]||'').trim():'', password:idx.password>=0?(row[idx.password]||'').trim():'', category:idx.category>=0?(row[idx.category]||'').trim():'', phone:idx.phone>=0?(row[idx.phone]||'').trim():'', note:idx.note>=0?(row[idx.note]||'').trim():'' }; if(item.name && item.password) importedRaw.push(item); } if(importedRaw.length===0){ showToast('无有效数据',true); return; } const imported=importedRaw.map(i=>normalizeItem(i)); const conflictNames=imported.filter(i=>passwords.some(p=>p.name===i.name)); if(conflictNames.length>0 && !confirm(`检测到 ${conflictNames.length} 个名称与现有条目重复，继续导入会覆盖同名条目。是否继续？`)) return; const isOverwrite=confirm(`导入 ${imported.length} 条，覆盖当前？\n确定=覆盖，取消=合并（跳过名称重复）`); if(isOverwrite && imported.length>MAX_PASSWORDS){ showToast(`导入数量超过上限${MAX_PASSWORDS}`,true); return; } if(!isOverwrite && passwords.length+imported.length>MAX_PASSWORDS){ showToast(`超过上限`,true); return; } if(isOverwrite){ passwords=imported.slice(0,MAX_PASSWORDS); }else{ const existingNames=new Set(passwords.map(p=>p.name)); const newItems=imported.filter(it=>!existingNames.has(it.name)); passwords.push(...newItems.slice(0,MAX_PASSWORDS-passwords.length)); } syncPasswordsCategoriesToCustom(); await saveEncrypted(); renderListOnly(); refreshDatalist(); showToast('CSV导入完成'); addLog('导入CSV',`导入 ${imported.length} 条`); }
     function syncPasswordsCategoriesToCustom(){ const catsFromPasswords=new Set(); for(let p of passwords) if(p.category && p.category.trim()!=="") catsFromPasswords.add(p.category.trim()); if(catsFromPasswords.size===0) return; const currentSet=getCustomCategoriesSet(); const newCats=Array.from(catsFromPasswords).filter(c=>!currentSet.has(c)); if(newCats.length) batchAddCustomCategories(newCats,false); refreshDatalist(); }
-    async function importFromFile(file, trustPlaintext){ if(file.size>MAX_CSV_SIZE_MB*1024*1024){ showToast(`文件过大`,true); return; } const text=await file.text(); let parsed; try{ parsed=JSON.parse(text); }catch(e){ showToast('无效JSON',true); return; } if(parsed && parsed.encrypted===true && parsed.salt && parsed.data){ const version=parsed.version||0; if(![2,3,4,5].includes(version)){ showToast('不支持的加密版本',true); return; } const pw=await promptPassword('输入备份的主密码'); if(!pw) return; try{ const key=await deriveKey(pw,new Uint8Array(parsed.salt)); const decrypted=await decryptData(key,parsed.data); if(version>=4 && parsed.plainChecksum){ const calc=await computePlainChecksum(decrypted); if(calc!==parsed.plainChecksum && !confirm('校验和不匹配，数据可能损坏，是否仍要导入？')) return; } let importedPasswords=[], importedCats=[]; if(Array.isArray(decrypted)){ importedPasswords=decrypted; }else{ importedPasswords=decrypted.passwords||[]; importedCats=decrypted.customCategories||[]; } let replace=false; if(importedCats.length>0) replace=confirm('检测到导入文件中包含分类库。是否清空当前分类库并使用文件中的分类？'); else replace=confirm('导入的文件不包含分类库，是否清空现有分类库？'); await applyImportWithCategories(importedPasswords,importedCats,replace); }catch(e){ showToast('解密失败，密码错误或文件损坏',true); } } else if(trustPlaintext && parsed && typeof parsed==='object' && 'passwords' in parsed && Array.isArray(parsed.passwords)){ let replace=false; if(parsed.customCategories && parsed.customCategories.length) replace=confirm('导入明文JSON包含分类库，是否清空当前分类库并替换？'); else replace=confirm('导入的明文文件不包含分类库，是否清空现有分类库？'); await applyImportWithCategories(parsed.passwords,parsed.customCategories||[],replace); } else if(trustPlaintext && Array.isArray(parsed)){ if(parsed.length===0){ showToast('文件无数据',true); return; } if(confirm(`预览前5条：\n${parsed.slice(0,5).map(p=>`${p.name} | ${p.password}`).join('\n')}\n\n是否导入？`)){ await applyImportWithCategories(parsed,[],false); } } else { showToast('格式不支持',true); } }
-    async function applyImportWithCategories(importedPasswords,importedCats,replaceCategories){ importedPasswords=importedPasswords.slice(0,MAX_PASSWORDS).filter(i=>i&&i.name&&i.password); importedPasswords=importedPasswords.map(i=>normalizeItem(i)); if(importedPasswords.length===0){ showToast('无有效密码数据',true); return; } const isOverwrite=confirm(`覆盖当前数据？\n确定=覆盖，取消=合并（跳过名称重复）`); if(isOverwrite && importedPasswords.length>MAX_PASSWORDS){ showToast(`导入超过上限`,true); return; } if(!isOverwrite && passwords.length+importedPasswords.length>MAX_PASSWORDS){ showToast(`超过上限`,true); return; } if(isOverwrite){ passwords=importedPasswords; }else{ const existingNames=new Set(passwords.map(p=>p.name)); const newItems=importedPasswords.filter(it=>!existingNames.has(it.name)); passwords.push(...newItems.slice(0,MAX_PASSWORDS-passwords.length)); } if(replaceCategories){ saveCustomCategoriesToVault(importedCats.length?[...importedCats]:[]); }else if(importedCats.length){ batchAddCustomCategories(importedCats,false); } syncPasswordsCategoriesToCustom(); await saveEncrypted(); renderListOnly(); refreshDatalist(); addLog('导入',`完成，共 ${importedPasswords.length} 条密码`); showToast('导入完成'); }
+    
+    async function importFromFile(file, trustPlaintext){ 
+        if(file.size > MAX_CSV_SIZE_MB*1024*1024){ showToast(`文件过大`,true); return; } 
+        const text = await file.text();
+        let parsed;
+        try{ parsed = JSON.parse(text); }catch(e){ showToast('无效JSON',true); return; }
+        
+        // 情况1: 加密备份（新格式或旧格式）
+        if(parsed && parsed.encrypted === true && parsed.salt && parsed.data){
+            const version = parsed.version || 1;  // 旧版无version字段则视为1
+            if(![1,2,3,4,5].includes(version)){
+                showToast('不支持的加密版本',true);
+                return;
+            }
+            const pw = await promptPassword('输入备份的主密码');
+            if(!pw) return;
+            try{
+                const key = await deriveKey(pw, new Uint8Array(parsed.salt));
+                let decrypted;
+                try{
+                    decrypted = await decryptData(key, parsed.data);
+                }catch(e){
+                    // 兼容旧版可能使用不同的加密参数（如 iv 存储位置）
+                    if(version === 1 && parsed.data && typeof parsed.data === 'object' && parsed.data.iv && parsed.data.ciphertext){
+                        decrypted = await decryptData(key, parsed.data);
+                    } else {
+                        throw e;
+                    }
+                }
+                // 校验和检查（仅当存在时）
+                if(version >= 4 && parsed.plainChecksum){
+                    const calc = await computePlainChecksum(decrypted);
+                    if(calc !== parsed.plainChecksum && !confirm('校验和不匹配，数据可能损坏，是否仍要导入？')) return;
+                }
+                let importedPasswords = [], importedCats = [];
+                if(Array.isArray(decrypted)){
+                    importedPasswords = decrypted;
+                } else {
+                    importedPasswords = decrypted.passwords || [];
+                    importedCats = decrypted.customCategories || [];
+                }
+                let replace = false;
+                if(importedCats.length > 0){
+                    replace = confirm('检测到导入文件中包含分类库。是否清空当前分类库并使用文件中的分类？');
+                } else {
+                    replace = confirm('导入的文件不包含分类库，是否清空现有分类库？');
+                }
+                await applyImportWithCategories(importedPasswords, importedCats, replace);
+            }catch(e){
+                showToast('解密失败，密码错误或文件损坏', true);
+            }
+        }
+        // 情况2: 明文JSON对象 { passwords: [...], customCategories: [...] }
+        else if(trustPlaintext && parsed && typeof parsed === 'object' && 'passwords' in parsed && Array.isArray(parsed.passwords)){
+            await requireReauth('导入明文JSON', true);
+            let replace = false;
+            if(parsed.customCategories && parsed.customCategories.length){
+                replace = confirm('导入明文JSON包含分类库，是否清空当前分类库并替换？');
+            } else {
+                replace = confirm('导入的明文文件不包含分类库，是否清空现有分类库？');
+            }
+            await applyImportWithCategories(parsed.passwords, parsed.customCategories || [], replace);
+        }
+        // 情况3: 明文JSON直接数组（旧版格式）
+        else if(trustPlaintext && Array.isArray(parsed)){
+            if(parsed.length === 0){ showToast('文件无数据',true); return; }
+            await requireReauth('导入明文数组', true);
+            if(confirm(`预览前5条：\n${parsed.slice(0,5).map(p => `${p.name} | ${p.password}`).join('\n')}\n\n是否导入？`)){
+                await applyImportWithCategories(parsed, [], false);
+            }
+        }
+        else {
+            showToast('格式不支持或不信任的明文文件，请勾选“信任来源”', true);
+        }
+    }
+    
+    async function applyImportWithCategories(importedPasswords, importedCats, replaceCategories){
+        importedPasswords = importedPasswords.slice(0, MAX_PASSWORDS).filter(i => i && i.name && i.password);
+        importedPasswords = importedPasswords.map(i => normalizeItem(i));
+        if(importedPasswords.length === 0){ showToast('无有效密码数据',true); return; }
+        const isOverwrite = confirm(`覆盖当前数据？\n确定=覆盖，取消=合并（跳过名称重复）`);
+        if(isOverwrite && importedPasswords.length > MAX_PASSWORDS){ showToast(`导入超过上限`,true); return; }
+        if(!isOverwrite && passwords.length + importedPasswords.length > MAX_PASSWORDS){ showToast(`超过上限`,true); return; }
+        if(isOverwrite){
+            passwords = importedPasswords;
+        }else{
+            const existingNames = new Set(passwords.map(p => p.name));
+            const newItems = importedPasswords.filter(it => !existingNames.has(it.name));
+            passwords.push(...newItems.slice(0, MAX_PASSWORDS - passwords.length));
+        }
+        if(replaceCategories){
+            saveCustomCategoriesToVault(importedCats.length ? [...importedCats] : []);
+        }else if(importedCats.length){
+            batchAddCustomCategories(importedCats, false);
+        }
+        syncPasswordsCategoriesToCustom();
+        await saveEncrypted();
+        renderListOnly();
+        refreshDatalist();
+        addLog('导入',`完成，共 ${importedPasswords.length} 条密码`);
+        showToast('导入完成');
+    }
+    
     async function promptPassword(msg){ return new Promise(resolve=>{ const modal=document.createElement('div'); modal.className='modal'; modal.innerHTML=`<div class="modal-card"><p>${escapeHtml(msg)}</p><input type="password" id="modalPw" placeholder="主密码"><button id="modalOk" class="btn">确认</button></div>`; document.body.appendChild(modal); document.body.classList.add('modal-open'); modal.querySelector('#modalOk').onclick=()=>{ const val=modal.querySelector('#modalPw').value; modal.remove(); document.body.classList.remove('modal-open'); resolve(val); }; }); }
     
+    function renderApp(){ const rootEl=document.getElementById('root'); if(!rootEl) return; rootEl.innerHTML=`<div class="app-container" id="appContainer"><div class="app-header"><div class="logo"><span>🔐</span> 静谧·密钥<span class="version-badge">v${APP_VERSION}</span></div><div class="badge">📋 已存 <span id="countSpan">${passwords.length}</span> / ${MAX_PASSWORDS}</div><div style="display:flex; gap:8px; flex-wrap:wrap;"><button class="small-btn" id="lockBtn">🔒 锁定</button><button class="small-btn" id="changeMasterPwBtn">🔐 改主密码</button><button class="small-btn" id="categoryManagerBtn">📂 分类</button><button class="small-btn" id="logBtn">📋 日志</button></div></div><div class="search-bar"><input type="text" id="searchInput" placeholder="🔍 搜索名称/账号/分类..." autocomplete="off"><select id="searchFieldSelect"><option value="all">全部字段</option><option value="name">名称</option><option value="username">用户名</option><option value="category">分类</option><option value="email">邮箱地址</option><option value="phone">手机号</option><option value="note">备注</option></select></div><div class="add-card"><div class="form-row"><input id="inpName" placeholder="名称 (必填)" maxlength="50"><input id="inpUsername" placeholder="用户名"><input id="inpPassword" placeholder="密码 (6-256字符)" maxlength="${PASSWORD_MAX_LEN}"><button class="gen-pw-btn" id="genPwBtn" type="button">🔀 生成</button></div><div class="optional" id="optionalFields"><div class="form-row"><input id="inpEmail" placeholder="邮箱地址" type="email"><input id="inpPhone" placeholder="手机号"><select id="inpCategory"><option value="">(无分类)</option></select></div><div class="form-row"><textarea id="inpNote" rows="2" placeholder="备注" maxlength="500"></textarea></div></div><div class="button-row"><button class="small-btn" id="toggleOptional">➕ 更多信息</button><div class="right-buttons"><button class="small-btn" id="clearForm">🗑️ 清空</button><button class="small-btn" id="addBtn">➕ 添加</button></div></div></div><div class="toolbar"><div class="sort-group"><select id="sortFieldSelect"><option value="name">排序:名称</option><option value="username">用户名</option><option value="category">分类</option></select><button class="small-btn" id="sortBtn">排序 ↕️</button></div><div class="action-group"><button class="small-btn" id="exportEncryptBtn">📤 导出(加密)</button><button class="small-btn" id="exportPlainBtn">📄 导出明文JSON</button><button class="small-btn" id="exportCsvBtn">📄 导出CSV</button><button class="small-btn" id="importBtn">📥 导入</button><button class="small-btn" id="batchBtn">☑️ 批量</button><button class="small-btn" id="wipeBtn" style="color:#d9534f;">⚠️ 清空全部</button><input type="file" id="fileInput" style="display:none" accept=".json,.csv"></div></div><div class="password-list" id="listContainer"></div><div id="batchBar" style="display:none;" class="batch-bar"><span>已选 <span id="batchCount">0</span> 项</span><button class="small-btn" id="batchDeleteBtn">🗑️ 删除</button><select id="batchCategorySelect"><option value="">移动分类</option></select><button class="small-btn" id="batchMoveBtn">移动</button><button class="small-btn" id="cancelBatchBtn">取消</button></div></div>`; 
+        const container=document.getElementById('appContainer'); 
+        container.addEventListener('click',async(e)=>{ const t=e.target; if(t.classList.contains('toggle-vis')){ const id=t.dataset.id; if(visiblePasswords.has(id)) visiblePasswords.delete(id); else visiblePasswords.add(id); renderListOnly(); } else if(t.classList.contains('copy-btn')) copyAndClear(t.dataset.pw); else if(t.classList.contains('edit-btn')){ const item=passwords.find(p=>p.id===t.dataset.id); if(item) openEditModal(item); } else if(t.classList.contains('del-btn')){ const item=passwords.find(p=>p.id===t.dataset.id); if(item && confirm(`删除“${item.name}”?`)){ passwords=passwords.filter(p=>p.id!==item.id); await saveEncrypted(); renderListOnly(); refreshDatalist(); showToast('已删除'); } } }); 
+        document.getElementById('searchInput').addEventListener('input',(e)=>{ searchQuery=e.target.value; renderListOnly(); resetIdleTimer(); }); 
+        document.getElementById('searchFieldSelect').addEventListener('change',(e)=>{ searchField=e.target.value; renderListOnly(); }); 
+        document.getElementById('addBtn').addEventListener('click',async()=>{ const name=document.getElementById('inpName').value.trim(); const pw=document.getElementById('inpPassword').value.trim(); if(!name||!pw) return showToast('名称和密码不能为空',true); if(pw.length<PASSWORD_MIN_LEN||pw.length>PASSWORD_MAX_LEN) return showToast(`密码需${PASSWORD_MIN_LEN}-${PASSWORD_MAX_LEN}个字符`,true); if(passwords.some(p=>p.name===name) && !confirm(`名称“${name}”已存在，是否继续保存？`)) return; if(passwords.length>=MAX_PASSWORDS) return showToast(`已达上限${MAX_PASSWORDS}`,true); const categoryVal=document.getElementById('inpCategory').value; passwords.unshift({ id:generateSecureId(), name, username:document.getElementById('inpUsername').value.trim(), email:document.getElementById('inpEmail').value.trim(), password:pw, phone:document.getElementById('inpPhone').value.trim(), category:categoryVal||'', note:document.getElementById('inpNote').value.trim(), createdAt:Date.now() }); await saveEncrypted(); renderListOnly(); refreshDatalist(); showToast(`✅ 已添加 ${name}`); resetIdleTimer(); }); 
+        document.getElementById('clearForm').onclick=()=>{ ['inpName','inpUsername','inpPassword','inpEmail','inpPhone','inpCategory','inpNote'].forEach(id=>{ let el=document.getElementById(id); if(el) el.value=''; }); document.getElementById('inpCategory').value=''; }; 
+        document.getElementById('toggleOptional').onclick=()=>document.getElementById('optionalFields').classList.toggle('show'); 
+        document.getElementById('sortBtn').onclick=()=>{ _sortDirection=!_sortDirection; renderListOnly(); }; 
+        document.getElementById('exportEncryptBtn').onclick=exportBackupEnhanced; 
+        document.getElementById('exportPlainBtn').onclick=exportPlaintextJSON; 
+        document.getElementById('exportCsvBtn').onclick=exportCSV; 
+        document.getElementById('batchBtn').onclick=toggleBatchMode; 
+        document.getElementById('cancelBatchBtn').onclick=toggleBatchMode; 
+        document.getElementById('batchDeleteBtn').onclick=batchDelete; 
+        document.getElementById('batchMoveBtn').onclick=()=>{ const cat=document.getElementById('batchCategorySelect').value; if(cat) batchMoveCategory(cat); }; 
+        document.getElementById('lockBtn').onclick=manualLock; 
+        document.getElementById('changeMasterPwBtn').onclick=showChangePwModal; 
+        document.getElementById('categoryManagerBtn').onclick=openCategoryManager; 
+        document.getElementById('logBtn').onclick=showLogs; 
+        document.getElementById('wipeBtn').onclick=wipeAllPasswords; 
+        document.getElementById('genPwBtn').onclick=()=>{ const newPw=generateStrongPassword(16); document.getElementById('inpPassword').value=newPw; showToast('已生成强密码'); }; 
+        const fileInput=document.getElementById('fileInput'); 
+        document.getElementById('importBtn').onclick=()=>{ if(!confirm('导入加密JSON或CSV，需信任来源')) return; const modalDiv=document.createElement('div'); modalDiv.className='modal'; modalDiv.innerHTML=`<div class="modal-card"><h3>导入选项</h3><label><input type="checkbox" id="trustPlainCheck"> 我信任此来源，允许导入明文</label><button class="btn" id="importFileBtn" style="margin-top:12px;">选择文件</button></div>`; document.body.appendChild(modalDiv); document.body.classList.add('modal-open'); modalDiv.querySelector('#importFileBtn').onclick=()=>{ const trustPlain=modalDiv.querySelector('#trustPlainCheck').checked; modalDiv.remove(); document.body.classList.remove('modal-open'); const inp=document.createElement('input'); inp.type='file'; inp.accept='.json,.csv'; inp.onchange=async(e)=>{ const file=e.target.files[0]; if(file.name.endsWith('.csv')){ if(!trustPlain){ showToast('CSV导入需信任来源',true); return; } importCSV(file,trustPlain); } else importFromFile(file,trustPlain); inp.remove(); }; inp.click(); }; }; 
+        refreshDatalist(); renderListOnly(); resetIdleTimer(); checkStorageQuota(); 
+    }
     function showAuth(){ const root=document.getElementById('root'); if(!root) return; const initialized=localStorage.getItem(STORAGE_INIT)==='true' && localStorage.getItem(STORAGE_SALT) && localStorage.getItem(STORAGE_AUTH) && localStorage.getItem(STORAGE_VAULT); if(!initialized){ root.innerHTML=`<div class="auth-card"><div class="auth-icon">🔐</div><h2>静谧·密钥</h2><p>首次使用，请设置主密码</p><button class="btn" id="setupBtn">设置主密码</button></div>`; document.getElementById('setupBtn').onclick=()=>{ const modal=document.createElement('div'); modal.className='modal'; modal.innerHTML=`<div class="modal-card"><h3>设置主密码</h3><div class="warning-box">⚠️ 密码需至少8位，且包含大写、小写、数字、特殊字符中的至少三类</div><input type="password" id="newPw1" placeholder="至少8位，含三类字符"><div class="strength-bar"><div class="strength-fill" id="setupStrengthFill"></div></div><div class="strength-text" id="setupStrengthText"></div><input type="password" id="newPw2" placeholder="确认密码"><button class="btn" id="confirmSetup">创建</button></div>`; document.body.appendChild(modal); document.body.classList.add('modal-open'); const pw1=modal.querySelector('#newPw1'); const strengthFill=modal.querySelector('#setupStrengthFill'); const strengthText=modal.querySelector('#setupStrengthText'); pw1.addEventListener('input',()=>{ const val=pw1.value; const level=getPasswordStrength(val); strengthFill.style.width=(level/4)*100+'%'; strengthFill.style.backgroundColor=getStrengthColor(level); strengthText.textContent=getStrengthText(level); strengthText.style.color=getStrengthColor(level); }); modal.querySelector('#confirmSetup').onclick=async()=>{ const p1=pw1.value; const p2=modal.querySelector('#newPw2').value; if(!isStrongPassword(p1)) return showToast('密码需≥8位且包含三类字符',true); if(p1!==p2) return showToast('密码不一致',true); try{ await initNewVault(p1); modal.remove(); document.body.classList.remove('modal-open'); showAuth(); showToast('✅ 设置成功'); }catch(e){ showToast(e.message,true); } }; }; } else { root.innerHTML=`<div class="auth-card"><div class="auth-icon">🔐</div><h2>静谧·密钥</h2><p>请输入主密码以解锁</p><input type="password" id="loginPw" placeholder="主密码" autofocus><button class="btn" id="loginBtn">验证进入</button><div class="error-msg" id="errorMsg"></div></div>`; const loginPw=document.getElementById('loginPw'); const loginBtn=document.getElementById('loginBtn'); const errorDiv=document.getElementById('errorMsg'); const doLogin=async()=>{ try{ await unlockVault(loginPw.value); renderApp(); }catch(e){ errorDiv.innerText=e.message; loginPw.value=''; loginPw.focus(); } }; loginBtn.onclick=doLogin; loginPw.addEventListener('keypress',e=>{ if(e.key==='Enter') doLogin(); }); loginPw.focus(); } }
-    function bindIdleEvents(){ ['click','keydown','touchstart'].forEach(ev=>window.addEventListener(ev,resetIdleTimer)); }
+    function bindIdleEvents(){ ['click','keydown','touchstart','scroll'].forEach(ev=>window.addEventListener(ev,resetIdleTimer)); }
     if(typeof crypto !== 'undefined' && crypto.subtle && (location.protocol==='https:' || location.hostname==='localhost' || location.hostname==='127.0.0.1')){ bindIdleEvents(); showAuth(); } else { document.getElementById('root').innerHTML=`<div class="auth-card"><h2>⚠️ 环境不安全</h2><p>请使用 HTTPS 或 localhost 访问以保证 Web Crypto API 正常工作。</p><p>当前协议：${location.protocol}</p></div>`; }
 })();
 </script>
