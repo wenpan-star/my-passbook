@@ -310,9 +310,20 @@
             margin-bottom: 12px;
             align-items: center;
         }
-        .form-row input,
-        .form-row textarea,
-        .form-row select { flex: 1; min-width: 130px; }
+       .form-row input,
+       .form-row textarea,
+       .form-row select {
+           flex: 1;
+           min-width: 130px;
+           height: 48px;                 /* 新增 */
+           line-height: 1.2;            /* 新增 */
+           font-family: inherit;        /* 新增 */
+           letter-spacing: normal;      /* 新增 */
+           padding: 0 16px;             /* 新增 */
+           box-sizing: border-box;      /* 新增 */
+           -webkit-appearance: none;
+           appearance: none;
+       }
         .optional-fields { display: none; }
         .optional-fields.show { display: block; }
         .form-actions {
@@ -1491,7 +1502,7 @@
                 rootEl.innerHTML = `
                 <div class="app-container card" id="appContainer">
                     <div class="app-header">
-                        <div class="logo"><span>🔐</span> 静谧·密钥<span class="pro-badge">PRO</span><span class="version-badge">v${APP_VERSION}</span></div>
+                        <div class="logo"><span>🔐</span> 静谧·密钥</div>
                         <div class="badge">📋 已存 <strong id="countSpan">${passwords.length}</strong> / ${MAX_PASSWORDS}</div>
                         <div class="header-actions">
                             <button class="btn btn-outline btn-sm" id="lockBtn">🔒 锁定</button>
