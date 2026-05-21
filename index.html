@@ -1,0 +1,1677 @@
+﻿<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=yes, viewport-fit=cover, shrink-to-fit=no">
+    <meta name="format-detection" content="telephone=no">
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; frame-ancestors 'none'; connect-src 'self'; form-action 'none';">
+    <meta http-equiv="X-Frame-Options" content="DENY">
+    <meta http-equiv="X-Content-Type-Options" content="nosniff">
+    <meta http-equiv="Referrer-Policy" content="strict-origin-when-cross-origin">
+    <title>🔐 静谧·密钥 | 安全密码本 v2.6.0</title>
+    <style>
+        :root {
+            --bg-gradient: linear-gradient(135deg, #f2f5fa 0%, #e0e7f0 100%);
+            --glass-bg: rgba(255,255,255,0.72);
+            --glass-border: rgba(255,255,255,0.55);
+            --surface: #ffffff;
+            --surface-alt: #f7f9fc;
+            --text: #0b1a2f;
+            --text-secondary: #44556b;
+            --border: #dce3eb;
+            --primary: #2962FF;
+            --primary-hover: #1A4BD1;
+            --primary-light: rgba(41, 98, 255, 0.12);
+            --danger: #d9263c;
+            --danger-hover: #b51f32;
+            --warning: #c77600;
+            --success: #0e8a5e;
+            --shadow-xs: 0 1px 3px rgba(0,0,0,0.04);
+            --shadow-sm: 0 2px 6px rgba(0,0,0,0.06), 0 1px 3px rgba(0,0,0,0.04);
+            --shadow-md: 0 6px 16px rgba(0,0,0,0.08), 0 2px 8px rgba(0,0,0,0.05);
+            --shadow-lg: 0 20px 40px -12px rgba(0,0,0,0.15), 0 0 0 1px rgba(0,0,0,0.03);
+            --shadow-xl: 0 28px 64px rgba(0,0,0,0.14);
+            --radius-sm: 12px;
+            --radius: 16px;
+            --radius-lg: 24px;
+            --radius-xl: 32px;
+            --transition: 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+            --input-height: 48px;
+            --input-padding-x: 16px;
+            --input-font-size: 15px;
+        }
+        @media (prefers-color-scheme: dark) {
+            :root {
+                --bg-gradient: linear-gradient(135deg, #0F172A 0%, #1E293B 100%);
+                --glass-bg: rgba(30,41,59,0.75);
+                --glass-border: rgba(255,255,255,0.08);
+                --surface: #1e293b;
+                --surface-alt: #17212e;
+                --text: #f0f4ff;
+                --text-secondary: #8b99b3;
+                --border: #2d3b4f;
+                --primary: #4b8eff;
+                --primary-hover: #3a7be8;
+                --primary-light: rgba(75, 142, 255, 0.15);
+                --danger: #f7566b;
+                --danger-hover: #d94458;
+                --warning: #e6a617;
+                --success: #2ea87a;
+                --shadow-xs: 0 1px 3px rgba(0,0,0,0.25);
+                --shadow-sm: 0 2px 6px rgba(0,0,0,0.35), 0 1px 3px rgba(0,0,0,0.2);
+                --shadow-md: 0 6px 16px rgba(0,0,0,0.4), 0 2px 8px rgba(0,0,0,0.3);
+                --shadow-lg: 0 20px 40px -12px rgba(0,0,0,0.5), 0 0 0 1px rgba(255,255,255,0.03);
+                --shadow-xl: 0 28px 64px rgba(0,0,0,0.6);
+            }
+        }
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            -webkit-tap-highlight-color: transparent;
+        }
+        html {
+            -webkit-text-size-adjust: 100%;
+            text-size-adjust: 100%;
+        }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Inter', Roboto, 'Helvetica Neue', Arial, 'Noto Sans', sans-serif;
+            background: var(--bg-gradient);
+            background-attachment: fixed;
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 16px;
+            color: var(--text);
+            transition: background 0.3s;
+            line-height: 1.5;
+            -webkit-font-smoothing: antialiased;
+            font-weight: 400;
+        }
+        body.modal-open {
+            overflow: hidden;
+            position: fixed;
+            width: 100%;
+            height: 100%;
+        }
+
+        .card {
+            background: var(--glass-bg);
+            backdrop-filter: blur(24px);
+            -webkit-backdrop-filter: blur(24px);
+            border-radius: 28px;
+            padding: 2.5rem;
+            width: 100%;
+            box-shadow: var(--shadow-lg);
+            border: 1px solid var(--glass-border);
+            transition: all var(--transition);
+        }
+        .auth-card {
+            max-width: 460px;
+            text-align: center;
+            padding: 3.5rem 2.8rem;
+        }
+        .auth-icon {
+            font-size: 4rem;
+            margin-bottom: 1.2rem;
+            filter: drop-shadow(0 6px 12px rgba(0,0,0,0.1));
+            transition: transform 0.2s;
+        }
+        .auth-card h2 {
+            font-size: 2.2rem;
+            margin-bottom: 0.6rem;
+            font-weight: 700;
+            letter-spacing: -0.5px;
+        }
+        .auth-card p {
+            color: var(--text-secondary);
+            margin-bottom: 1.6rem;
+            font-size: 1rem;
+            line-height: 1.7;
+        }
+
+        input, select, textarea,
+        .app-container input, .app-container select, .app-container textarea {
+            width: 100%;
+            height: var(--input-height);
+            padding: 0 var(--input-padding-x);
+            font-size: var(--input-font-size);
+            font-family: inherit;
+            border: 1px solid rgba(0,0,0,0.08);
+            border-radius: 14px;
+            background: rgba(255,255,255,0.8);
+            color: var(--text);
+            outline: none;
+            transition: all 0.2s ease;
+            box-sizing: border-box;
+            -webkit-appearance: none;
+        }
+        textarea {
+            height: auto;
+            min-height: 90px;
+            padding: 14px var(--input-padding-x);
+            line-height: 1.5;
+            resize: vertical;
+        }
+        select {
+            background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='14' height='14' viewBox='0 0 24 24' fill='none' stroke='%2344556b' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'%3E%3C/polyline%3E%3C/svg%3E");
+            background-repeat: no-repeat;
+            background-position: right 16px center;
+            background-size: 16px;
+            padding-right: 40px;
+            cursor: pointer;
+        }
+        @media (prefers-color-scheme: dark) {
+            select {
+                background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='14' height='14' viewBox='0 0 24 24' fill='none' stroke='%238b99b3' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'%3E%3C/polyline%3E%3C/svg%3E");
+            }
+            input, select, textarea {
+                background: rgba(0,0,0,0.2);
+                border-color: rgba(255,255,255,0.08);
+                color: #F0F4FF;
+            }
+            input:focus, select:focus, textarea:focus {
+                background: rgba(0,0,0,0.3);
+            }
+        }
+        input:focus, select:focus, textarea:focus {
+            border-color: var(--primary);
+            box-shadow: 0 0 0 4px var(--primary-light);
+            background: #fff;
+        }
+        ::placeholder { color: #8a94a6; opacity: 1; font-weight: 400; }
+        @media (prefers-color-scheme: dark) { ::placeholder { color: #6a788b; } }
+
+        .btn {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            padding: 12px 22px;
+            border-radius: 14px;
+            font-weight: 600;
+            font-size: 0.9rem;
+            cursor: pointer;
+            border: none;
+            transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+            min-height: 48px;
+            touch-action: manipulation;
+            letter-spacing: 0.3px;
+            white-space: nowrap;
+            user-select: none;
+            position: relative;
+            overflow: hidden;
+            text-decoration: none;
+            backdrop-filter: blur(4px);
+        }
+        .btn::after { content: ''; position: absolute; inset: 0; background: rgba(255,255,255,0.15); opacity: 0; transition: opacity 0.2s; }
+        .btn:active::after { opacity: 1; }
+        .btn-primary {
+            background: linear-gradient(135deg, #2962FF 0%, #1E4FE0 100%);
+            color: #fff;
+            box-shadow: 0 4px 14px rgba(41,98,255,0.35);
+            border: 1px solid rgba(255,255,255,0.15);
+            font-weight: 600;
+            letter-spacing: 0.4px;
+        }
+        .btn-primary:hover {
+            background: linear-gradient(135deg, #1E4FE0 0%, #1546C0 100%);
+            box-shadow: 0 8px 22px rgba(41,98,255,0.45);
+            transform: translateY(-2px);
+        }
+        .btn-primary:active {
+            transform: scale(0.98);
+            box-shadow: 0 4px 14px rgba(41,98,255,0.35);
+        }
+        .btn-outline {
+            background: rgba(255,255,255,0.6);
+            backdrop-filter: blur(4px);
+            border: 1px solid rgba(0,0,0,0.08);
+            color: var(--text);
+            box-shadow: var(--shadow-sm);
+            font-weight: 500;
+        }
+        .btn-outline:hover {
+            background: rgba(255,255,255,0.9);
+            border-color: var(--primary);
+            box-shadow: 0 6px 18px rgba(0,0,0,0.06);
+            transform: translateY(-1px);
+        }
+        .btn-outline:active { transform: scale(0.98); background: rgba(255,255,255,0.8); }
+        .btn-danger {
+            background: var(--danger);
+            color: #fff;
+            box-shadow: 0 4px 12px rgba(217,38,60,0.35);
+            border: 1px solid rgba(255,255,255,0.15);
+            font-weight: 600;
+        }
+        .btn-danger:hover {
+            background: var(--danger-hover);
+            box-shadow: 0 8px 20px rgba(217,38,60,0.45);
+            transform: translateY(-1px);
+        }
+        .btn-danger:active { transform: scale(0.98); }
+        .btn-sm {
+            padding: 10px 16px;
+            font-size: 0.82rem;
+            min-height: 40px;
+            border-radius: 12px;
+            gap: 6px;
+            font-weight: 500;
+        }
+        .btn-icon { width: 44px; height: 44px; padding: 0; border-radius: 50%; font-size: 1.2rem; }
+        .btn:disabled { opacity: 0.45; cursor: not-allowed; pointer-events: none; filter: grayscale(0.2); }
+
+        .app-container { max-width: 1120px; max-height: 92vh; overflow-y: auto; min-height: 580px; scrollbar-width: none; -ms-overflow-style: none; display: flex; flex-direction: column; gap: 1.8rem; padding: 2rem 2.5rem; }
+        .app-container::-webkit-scrollbar { display: none; }
+
+        .app-header { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 20px; }
+        .logo { display: flex; align-items: center; gap: 12px; font-size: 1.8rem; font-weight: 700; color: var(--text); letter-spacing: -0.5px; }
+        .logo svg { width: 2.4rem; height: 2.4rem; filter: drop-shadow(0 4px 6px rgba(0,0,0,0.1)); }
+        .badge { background: rgba(255,255,255,0.6); backdrop-filter: blur(8px); padding: 10px 22px; border-radius: 36px; font-size: 0.82rem; font-weight: 600; color: var(--text-secondary); box-shadow: var(--shadow-sm); border: 1px solid rgba(0,0,0,0.05); display: flex; align-items: center; gap: 8px; }
+        .header-actions { display: flex; gap: 10px; flex-wrap: wrap; }
+
+        .search-bar { display: flex; gap: 14px; flex-wrap: wrap; align-items: center; }
+        .search-bar input { flex: 1; min-width: 200px; }
+        .search-bar select { width: auto; min-width: 120px; max-width: 150px; flex: 0 0 auto; }
+
+        .add-section { background: rgba(255,255,255,0.5); backdrop-filter: blur(12px); border-radius: var(--radius-lg); padding: 1.8rem; box-shadow: var(--shadow-sm); border: 1px solid rgba(0,0,0,0.04); }
+        .form-row { display: flex; flex-wrap: wrap; gap: 14px; margin-bottom: 16px; align-items: center; }
+        .form-row input, .form-row textarea, .form-row select { flex: 1; min-width: 140px; }
+        .optional-fields { display: none; }
+        .optional-fields.show { display: block; }
+        .form-actions { display: flex; justify-content: space-between; align-items: center; gap: 14px; flex-wrap: wrap; margin-top: 8px; }
+
+        .strength-bar { height: 6px; width: 100%; background: var(--border); border-radius: 6px; margin-top: 8px; overflow: hidden; }
+        .strength-fill { height: 100%; width: 0%; transition: width 0.3s, background-color 0.3s; border-radius: 6px; }
+        .strength-text { font-size: 0.75rem; margin-top: 6px; font-weight: 600; letter-spacing: 0.2px; }
+
+        .password-list { display: flex; flex-direction: column; gap: 14px; min-height: 220px; max-height: 50vh; overflow-y: auto; scrollbar-width: none; -ms-overflow-style: none; }
+        .password-list::-webkit-scrollbar { display: none; }
+        .password-item { display: flex; flex-wrap: wrap; align-items: center; gap: 16px; padding: 18px 24px; background: rgba(255,255,255,0.7); border-radius: 18px; border: 1px solid rgba(0,0,0,0.04); transition: all 0.2s; box-shadow: var(--shadow-xs); }
+        .password-item:hover { background: #fff; box-shadow: 0 12px 24px -10px rgba(0,0,0,0.1); border-left: 4px solid var(--primary); }
+        .item-info { flex: 2; min-width: 160px; overflow: hidden; }
+        .item-cat { display: inline-block; background: rgba(41,98,255,0.08); color: #1A4BD1; padding: 4px 16px; border-radius: 20px; font-size: 0.75rem; font-weight: 600; margin-bottom: 6px; letter-spacing: 0.2px; border: 1px solid rgba(41,98,255,0.15); }
+        @media (prefers-color-scheme: dark) {
+            .item-cat { background: rgba(75,142,255,0.2); color: #b3d0ff; border-color: rgba(75,142,255,0.35); }
+            .password-item { background: rgba(30,41,59,0.5); border-color: rgba(255,255,255,0.05); }
+            .password-item:hover { background: rgba(30,41,59,0.8); }
+            .btn-outline { background: rgba(255,255,255,0.06); border-color: rgba(255,255,255,0.1); color: #F0F4FF; }
+            .add-section { background: rgba(0,0,0,0.2); border-color: rgba(255,255,255,0.05); }
+            .badge { background: rgba(0,0,0,0.3); border-color: rgba(255,255,255,0.05); }
+        }
+        .item-pw { font-family: 'SF Mono', 'Cascadia Code', 'Fira Code', 'JetBrains Mono', monospace; background: var(--surface-alt); padding: 10px 18px; border-radius: 20px; font-size: 0.8rem; word-break: break-all; max-width: 160px; text-align: center; letter-spacing: 0.6px; border: 1px solid var(--border); font-weight: 500; }
+        .item-actions { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+
+        .modal { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.55); backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px); display: flex; align-items: center; justify-content: center; z-index: 2000; padding: 20px; }
+        .modal-card { background: var(--glass-bg); backdrop-filter: blur(24px); -webkit-backdrop-filter: blur(24px); border-radius: 28px; padding: 2.5rem; width: 100%; max-width: 540px; max-height: 85vh; overflow-y: auto; box-shadow: var(--shadow-xl); border: 1px solid var(--glass-border); scrollbar-width: none; }
+        .modal-card::-webkit-scrollbar { display: none; }
+        .modal-card h3 { margin-bottom: 1.4rem; font-size: 1.4rem; font-weight: 700; letter-spacing: -0.5px; }
+        .modal-card .button-group { display: flex; gap: 14px; margin-top: 28px; flex-wrap: wrap; }
+        .modal-card .button-group button { flex: 1; min-width: 120px; }
+        .modal-card input[type="password"], .modal-card input[type="text"] { margin: 8px 0 16px; }
+
+        .cat-grid { display: flex; flex-wrap: wrap; gap: 12px; margin-bottom: 22px; max-height: 320px; overflow-y: auto; padding: 6px; }
+        .cat-tag { display: inline-flex; align-items: center; gap: 10px; background: rgba(255,255,255,0.7); border: 1px solid rgba(0,0,0,0.05); border-radius: 24px; padding: 10px 20px; font-size: 0.88rem; transition: all var(--transition); font-weight: 500; }
+        .cat-tag:hover { background: #fff; box-shadow: 0 4px 12px rgba(0,0,0,0.05); }
+        .cat-tag .cat-count { font-size: 0.72rem; background: rgba(0,0,0,0.05); border-radius: 22px; padding: 3px 12px; font-weight: 600; }
+        .cat-tag button { background: none; border: none; cursor: pointer; font-size: 1.1rem; color: var(--text-secondary); padding: 6px 10px; min-height: 38px; display: flex; align-items: center; transition: var(--transition); border-radius: 18px; }
+        .cat-tag button:hover { color: var(--danger); background: rgba(217,38,60,0.08); }
+
+        .toast { position: fixed; bottom: 36px; left: 50%; transform: translateX(-50%); background: #1e293b; color: #fff; padding: 16px 32px; border-radius: 44px; font-size: 0.92rem; z-index: 3000; max-width: 92vw; text-align: center; box-shadow: 0 20px 50px rgba(0,0,0,0.5); animation: fadeUp 0.3s ease; font-weight: 500; letter-spacing: 0.3px; backdrop-filter: blur(8px); }
+        @keyframes fadeUp { from { opacity: 0; transform: translateX(-50%) translateY(16px); } to { opacity: 1; transform: translateX(-50%) translateY(0); } }
+
+        .warning-box { background: #fff8eb; border-left: 5px solid var(--warning); padding: 14px 20px; border-radius: 14px; margin: 16px 0; font-size: 0.88rem; color: #8c4f00; line-height: 1.6; font-weight: 500; }
+        @media (prefers-color-scheme: dark) { .warning-box { background: #2f2412; color: #fadf8a; } }
+
+        .highlight { background-color: #ffe484; color: #0f172a; border-radius: 4px; padding: 0 3px; font-weight: 600; }
+
+        .batch-bar { position: sticky; bottom: 0; background: var(--glass-bg); backdrop-filter: blur(16px); border-radius: 20px; padding: 16px 22px; display: flex; gap: 16px; justify-content: space-around; flex-wrap: wrap; box-shadow: 0 -8px 24px rgba(0,0,0,0.08); border: 1px solid var(--glass-border); align-items: center; margin-top: 4px; }
+        .checkbox-item { width: 22px; height: 22px; cursor: pointer; accent-color: var(--primary); flex-shrink: 0; }
+
+        .log-view { max-height: 320px; overflow-y: auto; font-size: 0.8rem; font-family: 'SF Mono', 'Cascadia Code', monospace; background: rgba(0,0,0,0.02); padding: 16px; border-radius: 14px; margin: 16px 0; scrollbar-width: none; border: 1px solid rgba(0,0,0,0.05); line-height: 1.7; }
+        .log-view::-webkit-scrollbar { display: none; }
+        .info-badge { font-size: 0.85rem; color: var(--text-secondary); text-align: center; background: rgba(0,0,0,0.02); padding: 12px 22px; border-radius: 32px; margin-bottom: 18px; border: 1px solid rgba(0,0,0,0.05); font-weight: 500; }
+
+        .grid-cols-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px; }
+        .grid-cols-1 { display: grid; grid-template-columns: 1fr; gap: 10px; }
+
+        .icon { width: 1.2em; height: 1.2em; vertical-align: middle; stroke: currentColor; fill: none; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; flex-shrink: 0; }
+
+        @media (max-width: 640px) {
+            body { padding: 8px; }
+            .app-container { padding: 1.2rem 1rem; border-radius: 24px; }
+            .search-bar { display: flex; flex-wrap: nowrap; gap: 10px; align-items: center; }
+            .search-bar input { flex: 2; min-width: 0; }
+            .search-bar select { flex: 1; width: auto; min-width: 90px; max-width: 120px; }
+            .add-section .form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+            .add-section .form-row:first-child { grid-template-columns: 1fr; }
+            .add-section .form-row:nth-child(2) { grid-template-columns: 1fr auto auto; }
+            .password-item { flex-wrap: wrap; gap: 12px; padding: 14px 16px; }
+            .item-info { flex: 1 1 100%; order: 1; }
+            .item-pw { order: 2; max-width: none; width: auto; flex: 0 1 auto; }
+            .item-actions { order: 3; margin-left: auto; }
+            .app-header { flex-direction: column; align-items: stretch; gap: 12px; }
+            .header-actions { justify-content: space-between; }
+            .badge { align-self: center; }
+        }
+        @media (max-width: 380px) {
+            .app-container { padding: 1rem 0.8rem; }
+            .search-bar { gap: 6px; }
+            .search-bar input, .search-bar select { font-size: 13px; height: 44px; }
+            .btn { padding: 8px 12px; font-size: 0.8rem; min-height: 40px; }
+        }
+    </style>
+</head>
+<body>
+    <!-- 统一 SVG 图标库 -->
+    <svg display="none" aria-hidden="true">
+        <symbol id="icon-lock" viewBox="0 0 24 24"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></symbol>
+        <symbol id="icon-unlock" viewBox="0 0 24 24"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 9.9-1"/></symbol>
+        <symbol id="icon-eye" viewBox="0 0 24 24"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></symbol>
+        <symbol id="icon-eye-off" viewBox="0 0 24 24"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></symbol>
+        <symbol id="icon-copy" viewBox="0 0 24 24"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></symbol>
+        <symbol id="icon-edit" viewBox="0 0 24 24"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></symbol>
+        <symbol id="icon-trash" viewBox="0 0 24 24"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></symbol>
+        <symbol id="icon-shield" viewBox="0 0 24 24"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></symbol>
+        <symbol id="icon-folder" viewBox="0 0 24 24"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></symbol>
+        <symbol id="icon-log" viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></symbol>
+        <symbol id="icon-plus" viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></symbol>
+        <symbol id="icon-refresh" viewBox="0 0 24 24"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></symbol>
+        <symbol id="icon-download" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></symbol>
+        <symbol id="icon-upload" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></symbol>
+        <symbol id="icon-check-square" viewBox="0 0 24 24"><polyline points="9 11 12 14 22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></symbol>
+        <symbol id="icon-alert-triangle" viewBox="0 0 24 24"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></symbol>
+        <symbol id="icon-search" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></symbol>
+        <symbol id="icon-sort" viewBox="0 0 24 24"><line x1="12" y1="2" x2="12" y2="22"/><polyline points="5 9 12 2 19 9"/></symbol>
+    </svg>
+    <div id="root"></div>
+    <script>
+        (function() {
+            const APP_VERSION = "2.6.0";
+            const STORAGE_VAULT = 'serene_vault_enc_v3';
+            const STORAGE_SALT = 'serene_vault_salt_v3';
+            const STORAGE_AUTH = 'serene_vault_auth_v3';
+            const STORAGE_INIT = 'serene_vault_init_v3';
+            const BRUTE_FAIL_KEY = 'serene_brute_fail_v3';
+            const BRUTE_LOCK_KEY = 'serene_brute_lock_v3';
+            const VERIFY_FAIL_KEY = 'serene_verify_fail_v3';
+            const VERIFY_LOCK_KEY = 'serene_verify_lock_v3';
+            const LOG_STORAGE = 'serene_op_log_v3';
+            const LAST_EXPORT_KEY = 'serene_last_export_v3';
+            const MAX_PASSWORDS = 10000;
+            const PASSWORD_MIN_LEN = 8;
+            const PASSWORD_MAX_LEN = 256;
+            const MAX_CSV_SIZE_MB = 20;
+            const PBKDF2_ITERATIONS = 600000;
+            const REAUTH_VALIDITY_MS = 30 * 1000;
+            const IDLE_TIMEOUT = 5 * 60 * 1000;
+            const LOCKOUT_DURATION_MS = 60 * 60 * 1000;
+            const MAX_FAIL_COUNT = 5;
+
+            let masterKey = null;
+            let passwords = [];
+            let customCategories = [];
+            let visiblePasswords = new Set();
+            let searchQuery = '';
+            let searchField = 'all';
+            let idleTimerInterval = null;
+            let lastActivity = Date.now();
+            let batchMode = false;
+            let selectedIds = new Set();
+            let sortAsc = true;
+            let activeCategoryModal = null;
+            let clipboardTimer = null;
+            let saveLock = null;
+            let lastReauthTime = 0;
+
+            function showToast(msg, isError = false, duration = 2800) {
+                const toast = document.createElement('div');
+                toast.className = 'toast';
+                toast.textContent = msg;
+                if (isError) toast.style.background = '#dc2626';
+                document.body.appendChild(toast);
+                setTimeout(() => toast.remove(), duration);
+                if (navigator.vibrate) navigator.vibrate(isError ? 80 : 30);
+            }
+
+            function escapeHtml(str) {
+                if (!str) return '';
+                const map = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' };
+                return String(str).replace(/[&<>"']/g, m => map[m]);
+            }
+
+            function escapeAttr(str) {
+                return String(str).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+            }
+
+            function formatDate(ts) {
+                if (!ts) return '';
+                const d = new Date(ts);
+                return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+            }
+
+            function escapeRegex(str) {
+                return str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+            }
+
+            function generateSecureId() {
+                const arr = new Uint8Array(16);
+                crypto.getRandomValues(arr);
+                return Array.from(arr).map(b => b.toString(16).padStart(2, '0')).join('');
+            }
+
+            function getPasswordStrength(pw) {
+                if (!pw) return 0;
+                let score = 0;
+                if (/[A-Z]/.test(pw)) score++;
+                if (/[a-z]/.test(pw)) score++;
+                if (/[0-9]/.test(pw)) score++;
+                if (/[^A-Za-z0-9]/.test(pw)) score++;
+                if (pw.length >= 14) score = Math.min(score + 1, 4);
+                else if (pw.length >= 10 && score >= 2) score = Math.min(score + 0.5, 4);
+                return Math.min(Math.floor(score), 4);
+            }
+
+            function isStrongPassword(pw) {
+                if (pw.length < PASSWORD_MIN_LEN) return false;
+                let classes = 0;
+                if (/[A-Z]/.test(pw)) classes++;
+                if (/[a-z]/.test(pw)) classes++;
+                if (/[0-9]/.test(pw)) classes++;
+                if (/[^A-Za-z0-9]/.test(pw)) classes++;
+                return classes >= 3;
+            }
+
+            function getStrengthText(level) {
+                return ['❌ 太弱', '⚠️ 弱', '📈 中等', '✅ 强', '💪 非常强'][level] || '未知';
+            }
+
+            function getStrengthColor(level) {
+                return ['#dc2626', '#f59e0b', '#f59e0b', '#059669', '#059669'][level] || '#dc2626';
+            }
+
+            function generateStrongPassword(length = 18) {
+                const lower = 'abcdefghijklmnopqrstuvwxyz';
+                const upper = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
+                const digits = '0123456789';
+                const symbols = '!@#$%^&*()_+-=[]{}|;:,.<>?';
+                const all = lower + upper + digits + symbols;
+                const getRandomIndex = (max) => {
+                    const range = 256 - (256 % max);
+                    let val;
+                    do { val = crypto.getRandomValues(new Uint8Array(1))[0]; } while (val >= range);
+                    return val % max;
+                };
+                let pw = lower[getRandomIndex(lower.length)] + upper[getRandomIndex(upper.length)] +
+                    digits[getRandomIndex(digits.length)] + symbols[getRandomIndex(symbols.length)];
+                for (let i = pw.length; i < length; i++) pw += all[getRandomIndex(all.length)];
+                const arr = pw.split('');
+                for (let i = arr.length - 1; i > 0; i--) {
+                    const j = getRandomIndex(i + 1);
+                    [arr[i], arr[j]] = [arr[j], arr[i]];
+                }
+                return arr.join('');
+            }
+
+            async function deriveKey(password, salt) {
+                const enc = new TextEncoder();
+                const keyMaterial = await crypto.subtle.importKey('raw', enc.encode(password), 'PBKDF2', false, ['deriveKey']);
+                return await crypto.subtle.deriveKey({ name: 'PBKDF2', salt, iterations: PBKDF2_ITERATIONS, hash: 'SHA-256' },
+                    keyMaterial, { name: 'AES-GCM', length: 256 }, false, ['encrypt', 'decrypt']);
+            }
+
+            async function encryptData(key, data) {
+                const iv = crypto.getRandomValues(new Uint8Array(12));
+                const ciphertext = await crypto.subtle.encrypt({ name: 'AES-GCM', iv }, key, new TextEncoder().encode(JSON.stringify(data)));
+                return { iv: Array.from(iv), ciphertext: Array.from(new Uint8Array(ciphertext)) };
+            }
+
+            async function decryptData(key, obj) {
+                const decrypted = await crypto.subtle.decrypt({ name: 'AES-GCM', iv: new Uint8Array(obj.iv) }, key, new Uint8Array(obj.ciphertext));
+                return JSON.parse(new TextDecoder().decode(decrypted));
+            }
+
+            async function createAuthVerifier(key) {
+                return await encryptData(key, { test: "serene-vault-verified-v3" });
+            }
+
+            async function verifyAuth(key, authData) {
+                try { await decryptData(key, authData); return true; } catch (e) { return false; }
+            }
+
+            async function computePlainChecksum(data) {
+                const hash = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(JSON.stringify(data)));
+                return Array.from(new Uint8Array(hash)).map(b => b.toString(16).padStart(2, '0')).join('');
+            }
+
+            function addLog(action, details) {
+                let logs = JSON.parse(localStorage.getItem(LOG_STORAGE) || '[]');
+                logs.unshift({ time: new Date().toISOString(), action, details: String(details).slice(0, 200) });
+                if (logs.length > 200) logs.pop();
+                localStorage.setItem(LOG_STORAGE, JSON.stringify(logs));
+            }
+
+            async function saveEncryptedWithLock() {
+                if (saveLock) await saveLock;
+                let resolveLock;
+                saveLock = new Promise(resolve => { resolveLock = resolve; });
+                const previousPasswords = [...passwords];
+                try {
+                    if (!masterKey) return;
+                    const vaultData = { passwords, customCategories, version: 3, lastUpdated: Date.now() };
+                    const encrypted = await encryptData(masterKey, vaultData);
+                    localStorage.setItem(STORAGE_VAULT, JSON.stringify(encrypted));
+                    localStorage.setItem(STORAGE_INIT, 'true');
+                    refreshActiveCategoryUI();
+                } catch (e) {
+                    passwords = previousPasswords;
+                    showToast('保存失败，数据已回滚: ' + e.message, true);
+                } finally {
+                    resolveLock();
+                    saveLock = null;
+                }
+            }
+
+            async function saveEncrypted() { await saveEncryptedWithLock(); }
+
+            function refreshActiveCategoryUI() {
+                if (activeCategoryModal && document.body.contains(activeCategoryModal)) {
+                    const container = activeCategoryModal.querySelector('#catListManage');
+                    if (container) renderCategoryListWithCount(container);
+                }
+            }
+
+            function loadCategories() {
+                return customCategories.length ? [...customCategories] : ['E-Mail', '工作', '社交', '银行', '购物', '娱乐', '其他'];
+            }
+
+            function saveCategories(cats) { customCategories = [...new Set(cats)]; }
+
+            function addCategory(name) {
+                const trimmed = name.trim();
+                if (!trimmed) return false;
+                const current = loadCategories();
+                if (current.includes(trimmed)) return false;
+                current.push(trimmed);
+                current.sort((a, b) => a.localeCompare(b));
+                saveCategories(current);
+                return true;
+            }
+
+            function removeCategory(name) {
+                const current = loadCategories();
+                const filtered = current.filter(c => c !== name);
+                if (filtered.length !== current.length) {
+                    saveCategories(filtered);
+                    return true;
+                }
+                return false;
+            }
+
+            function batchAddCategories(newCats, replace = false) {
+                if (!newCats.length) return false;
+                if (replace) {
+                    saveCategories([...new Set(newCats)]);
+                    return true;
+                }
+                const currentSet = new Set(loadCategories());
+                const toAdd = [...new Set(newCats.filter(c => c && c.trim() && !currentSet.has(c.trim())))].map(c => c.trim());
+                if (!toAdd.length) return false;
+                const updated = [...loadCategories(), ...toAdd];
+                updated.sort((a, b) => a.localeCompare(b));
+                saveCategories(updated);
+                return true;
+            }
+
+            function renderCategoryListWithCount(container) {
+                const cats = loadCategories();
+                const countMap = new Map();
+                passwords.forEach(p => { if (p.category) countMap.set(p.category, (countMap.get(p.category) || 0) + 1); });
+                container.innerHTML = '';
+                if (!cats.length) {
+                    container.innerHTML = '<div style="text-align:center;padding:20px;color:var(--text-secondary);">暂无分类，点击上方添加</div>';
+                    const cntEl = activeCategoryModal?.querySelector('#catCount');
+                    if (cntEl) cntEl.innerText = '0';
+                    return;
+                }
+                cats.forEach(cat => {
+                    const cnt = countMap.get(cat) || 0;
+                    const tag = document.createElement('div');
+                    tag.className = 'cat-tag';
+                    tag.innerHTML = `<span>${escapeHtml(cat)} <span class="cat-count">${cnt}</span></span><button data-cat="${escapeAttr(cat)}" title="删除分类"><svg class="icon"><use href="#icon-trash"/></svg></button>`;
+                    container.appendChild(tag);
+                });
+                container.querySelectorAll('button[data-cat]').forEach(btn => {
+                    btn.onclick = async (e) => {
+                        e.stopPropagation();
+                        const cat = btn.dataset.cat;
+                        if (!cat) return;
+                        const verified = await promptReauth('删除分类', false, true);
+                        if (!verified) return;
+                        const affected = passwords.filter(p => p.category === cat).length;
+                        if (confirm(`⚠️ 删除分类"${cat}"将清空 ${affected} 个条目的分类字段（不删除条目）。\n输入分类名称确认：`) && prompt(`请输入分类名称确认:`) === cat) {
+                            removeCategory(cat);
+                            passwords.forEach(p => { if (p.category === cat) p.category = ''; });
+                            await saveEncrypted();
+                            renderListOnly();
+                            refreshDatalist();
+                            renderCategoryListWithCount(container);
+                            showToast(`已删除分类"${cat}"`);
+                        }
+                    };
+                });
+                const cntEl = activeCategoryModal?.querySelector('#catCount');
+                if (cntEl) cntEl.innerText = cats.length;
+            }
+
+            function getBruteFailCount() { return parseInt(localStorage.getItem(BRUTE_FAIL_KEY) || '0'); }
+            function setBruteFailCount(n) { localStorage.setItem(BRUTE_FAIL_KEY, String(n)); }
+            function getBruteLockUntil() { return parseInt(localStorage.getItem(BRUTE_LOCK_KEY) || '0'); }
+            function setBruteLockUntil(ts) { localStorage.setItem(BRUTE_LOCK_KEY, String(ts)); }
+            function getVerifyFailCount() { return parseInt(localStorage.getItem(VERIFY_FAIL_KEY) || '0'); }
+            function setVerifyFailCount(n) { localStorage.setItem(VERIFY_FAIL_KEY, String(n)); }
+            function getVerifyLockUntil() { return parseInt(localStorage.getItem(VERIFY_LOCK_KEY) || '0'); }
+            function setVerifyLockUntil(ts) { localStorage.setItem(VERIFY_LOCK_KEY, String(ts)); }
+
+            function checkLockout(getLockFn) {
+                const lockUntil = getLockFn();
+                if (lockUntil > Date.now()) {
+                    const waitSec = Math.ceil((lockUntil - Date.now()) / 1000);
+                    throw new Error(`操作过于频繁，请等待 ${waitSec} 秒后重试`);
+                }
+            }
+
+            function recordFailAndMaybeLock(getFailFn, setFailFn, setLockFn) {
+                let fail = getFailFn() + 1;
+                setFailFn(fail);
+                if (fail >= MAX_FAIL_COUNT) {
+                    const lockEnd = Date.now() + LOCKOUT_DURATION_MS;
+                    setLockFn(lockEnd);
+                    setFailFn(0);
+                    throw new Error(`失败次数过多，已锁定 ${LOCKOUT_DURATION_MS / 3600000} 小时`);
+                }
+            }
+
+            function clearLockout(setFailFn, setLockFn) { setFailFn(0); setLockFn(0); }
+
+            async function verifyMasterPassword(password) {
+                const saltArr = JSON.parse(localStorage.getItem(STORAGE_SALT));
+                const authData = JSON.parse(localStorage.getItem(STORAGE_AUTH));
+                if (!saltArr || !authData) throw new Error('未初始化');
+                const key = await deriveKey(password, new Uint8Array(saltArr));
+                return await verifyAuth(key, authData);
+            }
+
+            async function unlockVault(password) {
+                checkLockout(getBruteLockUntil);
+                const saltArr = JSON.parse(localStorage.getItem(STORAGE_SALT));
+                const authData = JSON.parse(localStorage.getItem(STORAGE_AUTH));
+                if (!saltArr || !authData) throw new Error('未初始化');
+                const salt = new Uint8Array(saltArr);
+                const key = await deriveKey(password, salt);
+                const ok = await verifyAuth(key, authData);
+                if (!ok) {
+                    await recordFailAndMaybeLock(getBruteFailCount, setBruteFailCount, setBruteLockUntil);
+                    throw new Error('主密码错误');
+                }
+                clearLockout(setBruteFailCount, setBruteLockUntil);
+                masterKey = key;
+                const vault = localStorage.getItem(STORAGE_VAULT);
+                const decrypted = await decryptData(masterKey, JSON.parse(vault));
+                if (Array.isArray(decrypted)) {
+                    passwords = decrypted;
+                    customCategories = [];
+                } else {
+                    passwords = decrypted.passwords || [];
+                    customCategories = decrypted.customCategories || [];
+                }
+                if (!customCategories.length) customCategories = ['E-Mail', '工作', '社交', '银行', '购物', '娱乐', '其他'];
+                if (!decrypted.version || decrypted.version < 3) {
+                    const vaultData = { passwords, customCategories, version: 3, lastUpdated: Date.now() };
+                    const newEnc = await encryptData(masterKey, vaultData);
+                    localStorage.setItem(STORAGE_VAULT, JSON.stringify(newEnc));
+                }
+                addLog('登录', '成功解锁');
+                const lastExport = localStorage.getItem(LAST_EXPORT_KEY);
+                if (lastExport && (Date.now() - parseInt(lastExport) > 7 * 24 * 60 * 60 * 1000)) {
+                    setTimeout(() => showToast('📦 已超过7天未导出备份，建议立即备份', false, 5000), 1200);
+                }
+                checkStorageQuota();
+                startIdleMonitor();
+                return true;
+            }
+
+            async function initNewVault(password) {
+                if (!isStrongPassword(password)) throw new Error('主密码需至少8位，且包含大写、小写、数字、特殊字符中的至少三类');
+                const salt = crypto.getRandomValues(new Uint8Array(16));
+                const key = await deriveKey(password, salt);
+                const authData = await createAuthVerifier(key);
+                localStorage.setItem(STORAGE_SALT, JSON.stringify(Array.from(salt)));
+                localStorage.setItem(STORAGE_AUTH, JSON.stringify(authData));
+                localStorage.setItem(STORAGE_INIT, 'true');
+                masterKey = key;
+                passwords = [];
+                customCategories = ['E-Mail', '工作', '社交', '银行', '购物', '娱乐', '其他'];
+                await saveEncrypted();
+                addLog('初始化', '创建新保险库');
+                return true;
+            }
+
+            async function promptReauth(actionDesc, returnPw = false, forceReauth = false) {
+                if (!masterKey) throw new Error('未解锁');
+                const now = Date.now();
+                if (returnPw) forceReauth = true;
+                if (!forceReauth && lastReauthTime && (now - lastReauthTime) < REAUTH_VALIDITY_MS) return true;
+                return new Promise(resolve => {
+                    const modal = document.createElement('div');
+                    modal.className = 'modal';
+                    modal.innerHTML = `
+                        <div class="modal-card">
+                            <h3><svg class="icon" style="width:1.4rem;height:1.4rem;"><use href="#icon-lock"/></svg> 验证身份</h3>
+                            <p style="color:var(--text-secondary);margin-bottom:12px;">执行「${escapeHtml(actionDesc)}」需要验证主密码</p>
+                            <input type="password" id="verifyPw" placeholder="请输入当前主密码" autocomplete="off" autofocus>
+                            <div class="button-group">
+                                <button id="cancelVerify" class="btn btn-outline">取消</button>
+                                <button id="confirmVerify" class="btn btn-primary">确认</button>
+                            </div>
+                        </div>`;
+                    document.body.appendChild(modal);
+                    document.body.classList.add('modal-open');
+                    const input = modal.querySelector('#verifyPw');
+                    const confirmBtn = modal.querySelector('#confirmVerify');
+                    const cleanup = () => { modal.remove(); document.body.classList.remove('modal-open'); };
+                    confirmBtn.onclick = async () => {
+                        const pw = input.value;
+                        if (!pw) { showToast('请输入主密码', true); return; }
+                        try {
+                            checkLockout(getVerifyLockUntil);
+                            const ok = await verifyMasterPassword(pw);
+                            if (!ok) {
+                                await recordFailAndMaybeLock(getVerifyFailCount, setVerifyFailCount, setVerifyLockUntil);
+                                showToast('主密码错误', true);
+                                input.value = ''; input.focus(); return;
+                            }
+                            clearLockout(setVerifyFailCount, setVerifyLockUntil);
+                            lastReauthTime = Date.now();
+                            cleanup();
+                            resolve(returnPw ? pw : true);
+                        } catch (e) {
+                            showToast(e.message, true);
+                            input.value = ''; input.focus();
+                        }
+                    };
+                    modal.querySelector('#cancelVerify').onclick = () => { cleanup(); resolve(returnPw ? null : false); };
+                    input.addEventListener('keypress', e => { if (e.key === 'Enter') confirmBtn.click(); });
+                    input.focus();
+                });
+            }
+
+            async function requireReauth(actionDesc, forceReauth = false) {
+                const result = await promptReauth(actionDesc, false, forceReauth);
+                if (!result) throw new Error('验证取消');
+                return true;
+            }
+
+            function resetIdleTimer() { if (masterKey) lastActivity = Date.now(); }
+
+            function startIdleMonitor() {
+                if (idleTimerInterval) clearInterval(idleTimerInterval);
+                idleTimerInterval = setInterval(() => {
+                    if (masterKey && (Date.now() - lastActivity) >= IDLE_TIMEOUT) lockAndLogout();
+                }, 30000);
+            }
+
+            function stopIdleMonitor() { if (idleTimerInterval) { clearInterval(idleTimerInterval); idleTimerInterval = null; } }
+
+            function lockAndLogout() {
+                stopIdleMonitor();
+                document.querySelectorAll('.modal').forEach(m => m.remove());
+                document.body.classList.remove('modal-open');
+                activeCategoryModal = null;
+                masterKey = null;
+                passwords = []; customCategories = [];
+                visiblePasswords.clear(); selectedIds.clear();
+                batchMode = false; searchQuery = ''; searchField = 'all'; sortAsc = true; lastReauthTime = 0;
+                if (clipboardTimer) clearTimeout(clipboardTimer);
+                navigator.clipboard.writeText('').catch(() => {});
+                showToast('⏰ 已自动锁定');
+                showAuth();
+            }
+
+            function manualLock() { lockAndLogout(); showToast('🔒 已手动锁定'); }
+
+            function checkStorageQuota() {
+                if ('storage' in navigator && 'estimate' in navigator.storage) {
+                    navigator.storage.estimate().then(est => {
+                        const pct = (est.usage / est.quota) * 100;
+                        if (pct > 85) showToast(`⚠️ 存储空间已使用 ${Math.round(pct)}%，请及时导出备份`, false, 8000);
+                    }).catch(() => {});
+                }
+            }
+
+            function refreshDatalist() {
+                const cats = loadCategories();
+                const updateSelect = (id, currentVal) => {
+                    const sel = document.getElementById(id);
+                    if (!sel) return;
+                    const val = currentVal !== undefined ? currentVal : sel.value;
+                    sel.innerHTML = '<option value="">(无分类)</option>';
+                    cats.forEach(c => {
+                        const opt = document.createElement('option');
+                        opt.value = c; opt.textContent = c; sel.appendChild(opt);
+                    });
+                    if (val && cats.includes(val)) sel.value = val;
+                    else sel.value = '';
+                };
+                updateSelect('inpCategory');
+                updateSelect('batchCategorySelect');
+            }
+
+            function normalizeItem(item) {
+                return {
+                    id: generateSecureId(),
+                    createdAt: item.createdAt || Date.now(),
+                    name: String(item.name || '').trim(),
+                    username: String(item.username || '').trim(),
+                    password: String(item.password || '').trim(),
+                    email: String(item.email || '').trim(),
+                    phone: String(item.phone || '').trim(),
+                    category: String(item.category || '').trim(),
+                    note: String(item.note || '').trim()
+                };
+            }
+
+            async function copyAndClear(pw) {
+                if (clipboardTimer) clearTimeout(clipboardTimer);
+                try {
+                    await navigator.clipboard.writeText(pw);
+                    showToast('📋 已复制，3秒后尝试清除剪贴板');
+                    clipboardTimer = setTimeout(async () => {
+                        try { await navigator.clipboard.writeText(''); showToast('🧹 剪贴板已清除'); }
+                        catch (e) { showToast('⚠️ 自动清除失败，请手动清除剪贴板'); }
+                        clipboardTimer = null;
+                    }, 3000);
+                } catch (e) { showToast('复制失败，请手动复制', true); }
+            }
+
+            function highlightText(text, keyword) {
+                if (!keyword || !text) return escapeHtml(text);
+                const regex = new RegExp(`(${escapeRegex(keyword)})`, 'gi');
+                return escapeHtml(text).replace(regex, '<span class="highlight">$1</span>');
+            }
+
+            function renderListOnly() {
+                const listContainer = document.getElementById('listContainer');
+                if (!listContainer) return;
+                let filtered = [...passwords];
+                if (searchQuery.trim()) {
+                    const q = searchQuery.toLowerCase();
+                    filtered = filtered.filter(p => {
+                        const fields = searchField === 'all' ? [p.name, p.username, p.category, p.email, p.phone, p.note] : [p[searchField] || ''];
+                        return fields.some(f => String(f).toLowerCase().includes(q));
+                    });
+                }
+                const sortField = document.getElementById('sortFieldSelect')?.value || 'name';
+                filtered.sort((a, b) => {
+                    const x = String(a[sortField] || '').toLowerCase();
+                    const y = String(b[sortField] || '').toLowerCase();
+                    return sortAsc ? x.localeCompare(y) : y.localeCompare(x);
+                });
+                const keyword = searchQuery.trim();
+                let html = filtered.map(p => {
+                    const visible = visiblePasswords.has(p.id);
+                    const nameHtml = highlightText(p.name, keyword);
+                    const usernameHtml = highlightText(p.username || '', keyword);
+                    const emailHtml = highlightText(p.email || '', keyword);
+                    const catHtml = p.category ? `<span class="item-cat"><svg class="icon" style="width:0.9em;height:0.9em;"><use href="#icon-folder"/></svg> ${escapeHtml(p.category)}</span>` : '';
+                    const noteHtml = p.note ? `<div style="font-size:0.72rem;color:var(--text-secondary);">📝 ${escapeHtml(p.note)}</div>` : '';
+                    return `
+                    <div class="password-item">
+                        ${batchMode ? `<input type="checkbox" class="checkbox-item batch-check" data-id="${escapeAttr(p.id)}" ${selectedIds.has(p.id) ? 'checked' : ''}>` : ''}
+                        <div class="item-info">
+                            ${catHtml}
+                            <div><strong>${nameHtml}</strong></div>
+                            <div style="font-size:0.72rem;color:var(--text-secondary);">
+                                ${usernameHtml ? `👤 ${usernameHtml} ` : ''}${emailHtml ? `📧 ${emailHtml} ` : ''}${p.phone ? `📱 ${escapeHtml(p.phone)} ` : ''}📅 ${formatDate(p.createdAt)}
+                            </div>
+                            ${noteHtml}
+                        </div>
+                        <span class="item-pw">${escapeHtml(visible ? p.password : '•'.repeat(Math.min(p.password.length, 14)))}</span>
+                        <div class="item-actions">
+                            <button class="btn btn-outline btn-sm toggle-vis" data-id="${escapeAttr(p.id)}" title="${visible ? '隐藏' : '显示'}密码"><svg class="icon"><use href="#icon-${visible ? 'eye-off' : 'eye'}"/></svg></button>
+                            <button class="btn btn-outline btn-sm copy-btn" data-id="${escapeAttr(p.id)}" title="复制密码"><svg class="icon"><use href="#icon-copy"/></svg></button>
+                            <button class="btn btn-outline btn-sm edit-btn" data-id="${escapeAttr(p.id)}" title="编辑"><svg class="icon"><use href="#icon-edit"/></svg></button>
+                            <button class="btn btn-outline btn-sm del-btn" data-id="${escapeAttr(p.id)}" title="删除" style="color:var(--danger);"><svg class="icon"><use href="#icon-trash"/></svg></button>
+                        </div>
+                    </div>`;
+                }).join('');
+                if (!filtered.length) html = '<div style="text-align:center;padding:40px;color:var(--text-secondary);">✨ 暂无密码，点击上方添加</div>';
+                listContainer.innerHTML = html;
+                const countSpan = document.getElementById('countSpan');
+                if (countSpan) countSpan.innerText = passwords.length;
+                if (passwords.length > 9000) showToast(`⚠️ 密码数量接近上限 ${passwords.length}/${MAX_PASSWORDS}`, false, 4000);
+                if (batchMode) {
+                    listContainer.querySelectorAll('.batch-check').forEach(cb => {
+                        cb.addEventListener('change', () => {
+                            const id = cb.dataset.id;
+                            cb.checked ? selectedIds.add(id) : selectedIds.delete(id);
+                            const bc = document.getElementById('batchCount');
+                            if (bc) bc.innerText = selectedIds.size;
+                        });
+                    });
+                }
+            }
+
+            function openEditModal(item) {
+                refreshDatalist();
+                const cats = loadCategories();
+                let optionsHtml = '<option value="">(无分类)</option>';
+                cats.forEach(c => optionsHtml += `<option value="${escapeAttr(c)}" ${item.category === c ? 'selected' : ''}>${escapeHtml(c)}</option>`);
+                const modal = document.createElement('div');
+                modal.className = 'modal';
+                modal.innerHTML = `
+                    <div class="modal-card">
+                        <h3><svg class="icon" style="width:1.4rem;height:1.4rem;"><use href="#icon-edit"/></svg> 编辑密码条目</h3>
+                        <div class="form-row"><input id="editName" value="${escapeAttr(item.name)}" placeholder="名称 (必填)" maxlength="50"></div>
+                        <div class="form-row">
+                            <input id="editUsername" value="${escapeAttr(item.username || '')}" placeholder="用户名">
+                            <input type="password" id="editPassword" value="${escapeAttr(item.password)}" placeholder="密码 (${PASSWORD_MIN_LEN}-${PASSWORD_MAX_LEN}字符)" maxlength="${PASSWORD_MAX_LEN}">
+                            <button class="btn btn-outline btn-sm" id="toggleEditPwVis" type="button"><svg class="icon"><use href="#icon-eye"/></svg></button>
+                        </div>
+                        <div class="form-row"><input id="editEmail" value="${escapeAttr(item.email || '')}" placeholder="邮箱" type="email"></div>
+                        <div class="form-row"><input id="editPhone" value="${escapeAttr(item.phone || '')}" placeholder="手机号"></div>
+                        <div class="form-row"><select id="editCategory">${optionsHtml}</select></div>
+                        <div class="form-row"><textarea id="editNote" rows="2" placeholder="备注 (最多500字符)" maxlength="500">${escapeHtml(item.note || '')}</textarea></div>
+                        <div class="button-group">
+                            <button id="cancelEdit" class="btn btn-outline">取消</button>
+                            <button id="saveEdit" class="btn btn-primary"><svg class="icon"><use href="#icon-lock"/></svg> 保存</button>
+                        </div>
+                    </div>`;
+                document.body.appendChild(modal);
+                document.body.classList.add('modal-open');
+                const pwInput = modal.querySelector('#editPassword');
+                modal.querySelector('#toggleEditPwVis').onclick = () => {
+                    const isPw = pwInput.type === 'password';
+                    pwInput.type = isPw ? 'text' : 'password';
+                    modal.querySelector('#toggleEditPwVis').innerHTML = `<svg class="icon"><use href="#icon-${isPw ? 'eye-off' : 'eye'}"/></svg>`;
+                };
+                modal.querySelector('#saveEdit').onclick = async () => {
+                    const newName = modal.querySelector('#editName').value.trim();
+                    const newPw = modal.querySelector('#editPassword').value.trim();
+                    if (!newName || !newPw) return showToast('名称和密码不能为空', true);
+                    if (newPw.length < PASSWORD_MIN_LEN || newPw.length > PASSWORD_MAX_LEN) return showToast(`密码需${PASSWORD_MIN_LEN}-${PASSWORD_MAX_LEN}个字符`, true);
+                    if (passwords.some(p => p.name === newName && p.id !== item.id) && !confirm(`名称"${newName}"已存在，是否继续保存？`)) return;
+                    item.name = newName;
+                    item.username = modal.querySelector('#editUsername').value.trim();
+                    item.email = modal.querySelector('#editEmail').value.trim();
+                    item.password = newPw;
+                    item.phone = modal.querySelector('#editPhone').value.trim();
+                    item.category = modal.querySelector('#editCategory').value || '';
+                    item.note = modal.querySelector('#editNote').value.trim();
+                    await saveEncrypted();
+                    renderListOnly(); refreshDatalist();
+                    modal.remove(); document.body.classList.remove('modal-open');
+                    showToast('✅ 已更新');
+                };
+                modal.querySelector('#cancelEdit').onclick = () => { modal.remove(); document.body.classList.remove('modal-open'); };
+            }
+
+            function escapeCsvField(field) {
+                let str = String(field);
+                if (/^[=+\-@]/.test(str)) str = "'" + str;
+                return `"${str.replace(/"/g, '""')}"`;
+            }
+
+            async function exportCSV() {
+                await requireReauth('导出CSV', true);
+                const headers = ['name', 'username', 'password', 'category', 'email', 'phone', 'note'];
+                const rows = passwords.map(p => headers.map(h => escapeCsvField(p[h] || '')).join(','));
+                const csv = '\uFEFF' + [headers.join(','), ...rows].join('\n');
+                downloadBlob(new Blob([csv], { type: 'text/csv;charset=utf-8;' }), `静谧密钥_导出_${new Date().toISOString().slice(0,19)}.csv`);
+                addLog('导出CSV', `${passwords.length}条`); showToast('📎 CSV已导出');
+            }
+
+            async function exportEncryptedBackup() {
+                await requireReauth('导出加密备份', true);
+                const salt = new Uint8Array(JSON.parse(localStorage.getItem(STORAGE_SALT)));
+                const vaultData = { passwords, customCategories };
+                const exportData = await encryptData(masterKey, vaultData);
+                const plainChecksum = await computePlainChecksum(vaultData);
+                const exportObj = { version: 5, encrypted: true, salt: Array.from(salt), data: exportData, plainChecksum };
+                downloadBlob(new Blob([JSON.stringify(exportObj)], { type: 'application/json' }), `静谧密钥_加密备份_${new Date().toISOString().slice(0,19)}.json`);
+                localStorage.setItem(LAST_EXPORT_KEY, String(Date.now()));
+                addLog('导出加密备份', '成功'); showToast('🔒 加密备份已导出');
+            }
+
+            async function exportPlaintextJSON() {
+                if (!confirm('⚠️ 警告：明文JSON会暴露所有密码，任何人打开即可查看。\n\n是否继续？')) return;
+                await requireReauth('导出明文JSON', true);
+                const exportData = { version: 3, exportedAt: new Date().toISOString(), passwords: passwords.map(p => ({ ...p })), customCategories: loadCategories() };
+                downloadBlob(new Blob([JSON.stringify(exportData, null, 2)], { type: 'application/json' }), `静谧密钥_明文导出_${new Date().toISOString().slice(0,19)}.json`);
+                addLog('导出明文JSON', `${passwords.length}条`); showToast('📄 明文JSON已导出（请妥善保管）');
+            }
+
+            function downloadBlob(blob, filename) {
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a'); a.href = url; a.download = filename; a.click(); URL.revokeObjectURL(url);
+            }
+
+            function sanitizeImportField(val) {
+                let str = String(val);
+                if (/^[=+\-@]/.test(str)) str = "'" + str;
+                return str;
+            }
+
+            async function importCSV(file, trustChecked) {
+                if (!trustChecked) { showToast('请勾选信任来源', true); return; }
+                await requireReauth('导入CSV', true);
+                if (file.size > MAX_CSV_SIZE_MB * 1024 * 1024) { showToast(`文件不能超过${MAX_CSV_SIZE_MB}MB`, true); return; }
+                const text = await file.text();
+                const cleanText = text.charCodeAt(0) === 0xFEFF ? text.slice(1) : text;
+                function parseCSV(csvText) {
+                    const rows = [];
+                    let row = [], field = '', inQuotes = false;
+                    for (let i = 0; i < csvText.length; i++) {
+                        const ch = csvText[i];
+                        if (ch === '"') {
+                            if (inQuotes && csvText[i+1] === '"') { field += '"'; i++; }
+                            else inQuotes = !inQuotes;
+                        } else if (ch === ',' && !inQuotes) { row.push(field); field = ''; }
+                        else if ((ch === '\n' || (ch === '\r' && csvText[i+1] === '\n')) && !inQuotes) {
+                            if (ch === '\r') i++;
+                            row.push(field); if (row.length>1||row[0]!=='') rows.push(row);
+                            row = []; field = '';
+                        } else field += ch;
+                    }
+                    if (field !== '' || row.length > 0) { row.push(field); rows.push(row); }
+                    return rows;
+                }
+                const lines = parseCSV(cleanText);
+                if (lines.length < 2) { showToast('空文件或格式无效', true); return; }
+                const headers = lines[0].map(h => h.trim().toLowerCase().replace(/^\uFEFF/, ''));
+                const idx = {
+                    name: headers.findIndex(h => ['name','标题','title','名称','account'].includes(h)),
+                    username: headers.findIndex(h => ['username','用户名','user','login'].includes(h)),
+                    email: headers.findIndex(h => ['email','邮箱','mail'].includes(h)),
+                    password: headers.findIndex(h => ['password','密码','pass','pwd'].includes(h)),
+                    category: headers.findIndex(h => ['category','分类','folder','类别'].includes(h)),
+                    phone: headers.findIndex(h => ['phone','手机','mobile','电话'].includes(h)),
+                    note: headers.findIndex(h => ['note','备注','notes','说明'].includes(h))
+                };
+                if (idx.name === -1 || idx.password === -1) {
+                    if (!confirm('CSV缺少"名称"或"密码"列，继续导入可能导致数据错位。是否尝试？')) return;
+                }
+                const importedRaw = [], errorRows = [];
+                for (let i = 1; i < lines.length; i++) {
+                    const row = lines[i];
+                    if (!row.length || (row.length===1&&!row[0])) continue;
+                    const item = {
+                        name: (idx.name>=0?row[idx.name]:'')?.trim()||'',
+                        username: (idx.username>=0?row[idx.username]:'')?.trim()||'',
+                        email: (idx.email>=0?row[idx.email]:'')?.trim()||'',
+                        password: (idx.password>=0?row[idx.password]:'')?.trim()||'',
+                        category: (idx.category>=0?row[idx.category]:'')?.trim()||'',
+                        phone: (idx.phone>=0?row[idx.phone]:'')?.trim()||'',
+                        note: (idx.note>=0?row[idx.note]:'')?.trim()||''
+                    };
+                    for (let k in item) item[k] = sanitizeImportField(item[k]);
+                    if (item.name && item.password) importedRaw.push(item);
+                    else errorRows.push({ row: i+1, data: row.join(',') });
+                }
+                if (!importedRaw.length && errorRows.length) { showToast('无有效数据行', true); return; }
+                if (errorRows.length && !confirm(`发现 ${errorRows.length} 行无效数据，跳过并导入 ${importedRaw.length} 条？`)) return;
+                const imported = importedRaw.map(i => normalizeItem(i));
+                await applyImport(imported, [], false, false);
+                syncCategoriesFromPasswords();
+                showToast('CSV导入完成'); addLog('导入CSV', `${imported.length}条`);
+            }
+
+            async function importFromFile(file, trustChecked) {
+                if (file.size > MAX_CSV_SIZE_MB*1024*1024) { showToast('文件过大', true); return; }
+                const text = await file.text();
+                let parsed;
+                try { parsed = JSON.parse(text); } catch (e) { showToast('无效JSON文件', true); return; }
+                if (parsed && parsed.encrypted && parsed.salt && parsed.data) {
+                    if (![1,2,3,4,5].includes(parsed.version||1)) { showToast('不支持的加密版本', true); return; }
+                    const pw = await promptPasswordModal('请输入备份文件的主密码');
+                    if (!pw) return;
+                    try {
+                        const key = await deriveKey(pw, new Uint8Array(parsed.salt));
+                        let decrypted = await decryptData(key, parsed.data);
+                        if (parsed.version>=4 && parsed.plainChecksum) {
+                            const calc = await computePlainChecksum(decrypted);
+                            if (calc !== parsed.plainChecksum && !confirm('校验和不匹配，数据可能损坏。是否仍要导入？')) return;
+                        }
+                        let impPw=[], impCats=[];
+                        if (Array.isArray(decrypted)) impPw = decrypted;
+                        else { impPw = decrypted.passwords||[]; impCats = decrypted.customCategories||[]; }
+                        const replaceCats = impCats.length ? confirm('导入文件包含分类库，是否替换当前分类？') : confirm('导入文件不含分类库，是否清空当前分类？');
+                        await applyImport(impPw, impCats, replaceCats, true);
+                    } catch (e) { showToast('解密失败：密码错误或文件损坏', true); }
+                } else if (trustChecked && parsed && parsed.passwords && Array.isArray(parsed.passwords)) {
+                    await requireReauth('导入明文JSON', true);
+                    const replaceCats = (parsed.customCategories?.length) ? confirm('导入文件包含分类库，是否替换？') : confirm('是否清空当前分类？');
+                    await applyImport(parsed.passwords, parsed.customCategories||[], replaceCats, true);
+                } else if (trustChecked && Array.isArray(parsed)) {
+                    if (!parsed.length) { showToast('文件无数据', true); return; }
+                    await requireReauth('导入明文数组', true);
+                    if (confirm(`预览前5条：\n${parsed.slice(0,5).map(p=>`${p.name||'?'} | ${p.password||'?'}`).join('\n')}\n\n是否导入？`)) {
+                        await applyImport(parsed, [], false, true);
+                    }
+                } else { showToast('格式不支持或未勾选"信任来源"', true); }
+            }
+
+            async function applyImport(importedPasswords, importedCats, replaceCategories, allowOverwrite) {
+                importedPasswords = importedPasswords.slice(0, MAX_PASSWORDS).filter(i => i&&i.name&&i.password).map(i => normalizeItem(i));
+                if (!importedPasswords.length) { showToast('无有效密码数据', true); return; }
+                let overwrite = false;
+                if (allowOverwrite) overwrite = confirm('覆盖当前所有密码？\n确定=覆盖，取消=合并（跳过重名）');
+                const prevPw = [...passwords], prevCats = [...customCategories];
+                try {
+                    if (overwrite) {
+                        if (importedPasswords.length > MAX_PASSWORDS) { showToast(`超过上限${MAX_PASSWORDS}`, true); return; }
+                        passwords = importedPasswords;
+                    } else {
+                        if (passwords.length + importedPasswords.length > MAX_PASSWORDS) { showToast('合并后超过上限', true); return; }
+                        const existingNames = new Set(passwords.map(p => p.name));
+                        const newItems = importedPasswords.filter(it => !existingNames.has(it.name));
+                        passwords.push(...newItems.slice(0, MAX_PASSWORDS - passwords.length));
+                    }
+                    if (replaceCategories) saveCategories(importedCats.length ? [...importedCats] : []);
+                    else if (importedCats.length) batchAddCategories(importedCats, false);
+                    syncCategoriesFromPasswords();
+                    await saveEncrypted();
+                    if (!masterKey) throw new Error('存储异常');
+                } catch (e) {
+                    passwords = prevPw; customCategories = prevCats;
+                    showToast('导入失败，已回滚: ' + e.message, true); return;
+                }
+                renderListOnly(); refreshDatalist();
+                addLog('导入', `${importedPasswords.length}条`); showToast('✅ 导入完成');
+            }
+
+            function syncCategoriesFromPasswords() {
+                const catsFromPw = new Set();
+                passwords.forEach(p => { if (p.category) catsFromPw.add(p.category); });
+                const currentSet = new Set(loadCategories());
+                const newCats = [...catsFromPw].filter(c => !currentSet.has(c));
+                if (newCats.length) batchAddCategories(newCats, false);
+                refreshDatalist();
+            }
+
+            function promptPasswordModal(msg) {
+                return new Promise(resolve => {
+                    const modal = document.createElement('div');
+                    modal.className = 'modal';
+                    modal.innerHTML = `
+                        <div class="modal-card">
+                            <p>${escapeHtml(msg)}</p>
+                            <input type="password" id="modalPw" placeholder="主密码" autocomplete="off" autofocus>
+                            <div class="button-group">
+                                <button id="modalCancel" class="btn btn-outline">取消</button>
+                                <button id="modalOk" class="btn btn-primary">确认</button>
+                            </div>
+                        </div>`;
+                    document.body.appendChild(modal); document.body.classList.add('modal-open');
+                    const cleanup = val => { modal.remove(); document.body.classList.remove('modal-open'); resolve(val); };
+                    modal.querySelector('#modalOk').onclick = () => cleanup(modal.querySelector('#modalPw').value);
+                    modal.querySelector('#modalCancel').onclick = () => cleanup(null);
+                    modal.querySelector('#modalPw').addEventListener('keypress', e => { if (e.key==='Enter') modal.querySelector('#modalOk').click(); });
+                });
+            }
+
+            function toggleBatchMode() {
+                batchMode = !batchMode;
+                if (!batchMode) selectedIds.clear();
+                renderListOnly();
+                document.getElementById('batchBar').style.display = batchMode ? 'flex' : 'none';
+            }
+
+            async function batchDelete() {
+                if (!selectedIds.size) return;
+                await requireReauth('批量删除', true);
+                if (confirm(`确定删除 ${selectedIds.size} 个密码条目吗？此操作不可恢复。`)) {
+                    const ids = Array.from(selectedIds);
+                    passwords = passwords.filter(p => !ids.includes(p.id));
+                    selectedIds.clear(); batchMode = false;
+                    await saveEncrypted();
+                    renderListOnly(); refreshDatalist();
+                    document.getElementById('batchBar').style.display = 'none';
+                    showToast(`已删除 ${ids.length} 条`); addLog('批量删除', `${ids.length}条`);
+                }
+            }
+
+            async function batchMoveCategory(targetCat) {
+                if (!selectedIds.size || !targetCat) return;
+                await requireReauth('批量移动分类', true);
+                passwords.forEach(p => { if (selectedIds.has(p.id)) p.category = targetCat; });
+                await saveEncrypted();
+                renderListOnly(); refreshDatalist();
+                showToast(`已移动 ${selectedIds.size} 条到「${targetCat}」`);
+                addLog('批量移动', `${selectedIds.size}条→${targetCat}`);
+            }
+
+            async function wipeAllPasswords() {
+                await requireReauth('清空全部密码', true);
+                if (confirm('⚠️ 确定清空全部密码吗？此操作不可恢复！') && prompt('请输入"清空全部"确认:') === '清空全部') {
+                    passwords = []; await saveEncrypted();
+                    renderListOnly(); refreshDatalist();
+                    showToast('已清空全部密码'); addLog('清空全部', '用户清空所有密码');
+                } else showToast('输入不匹配，已取消', true);
+            }
+
+            async function showChangePwModal() {
+                const oldPw = await promptReauth('修改主密码', true);
+                if (!oldPw || typeof oldPw !== 'string') return;
+                const modal = document.createElement('div');
+                modal.className = 'modal';
+                modal.innerHTML = `
+                    <div class="modal-card">
+                        <h3><svg class="icon" style="width:1.4rem;height:1.4rem;"><use href="#icon-lock"/></svg> 修改主密码</h3>
+                        <div class="warning-box">⚠️ 新密码需至少8位，且包含大写、小写、数字、特殊字符中的至少三类</div>
+                        <input type="password" id="newPw" placeholder="新密码" autocomplete="off">
+                        <div class="strength-bar"><div class="strength-fill" id="strengthFill"></div></div>
+                        <div class="strength-text" id="strengthText"></div>
+                        <input type="password" id="confirmPw" placeholder="确认新密码" autocomplete="off">
+                        <button id="doChange" class="btn btn-primary" style="width:100%;margin-top:12px;">确认修改</button>
+                    </div>`;
+                document.body.appendChild(modal); document.body.classList.add('modal-open');
+                const newPwInput = modal.querySelector('#newPw');
+                const fill = modal.querySelector('#strengthFill');
+                const text = modal.querySelector('#strengthText');
+                newPwInput.addEventListener('input', () => {
+                    const level = getPasswordStrength(newPwInput.value);
+                    fill.style.width = (level/4)*100+'%'; fill.style.backgroundColor = getStrengthColor(level);
+                    text.textContent = getStrengthText(level); text.style.color = getStrengthColor(level);
+                });
+                modal.querySelector('#doChange').onclick = async () => {
+                    const newPw = newPwInput.value;
+                    const confirm = modal.querySelector('#confirmPw').value;
+                    if (!newPw) return showToast('请输入新密码', true);
+                    if (!isStrongPassword(newPw)) return showToast('密码强度不足', true);
+                    if (newPw !== confirm) return showToast('两次输入不一致', true);
+                    if (newPw === oldPw) return showToast('新旧密码不能相同', true);
+                    try {
+                        await changeMasterPassword(oldPw, newPw);
+                        modal.remove(); document.body.classList.remove('modal-open');
+                    } catch (e) { showToast(e.message, true); }
+                };
+            }
+
+            async function changeMasterPassword(oldPw, newPw) {
+                const oldSaltArr = JSON.parse(localStorage.getItem(STORAGE_SALT));
+                if (!oldSaltArr) throw new Error('未找到旧盐值');
+                const oldSalt = new Uint8Array(oldSaltArr);
+                const oldKey = await deriveKey(oldPw, oldSalt);
+                const authOk = await verifyAuth(oldKey, JSON.parse(localStorage.getItem(STORAGE_AUTH)));
+                if (!authOk) throw new Error('旧密码验证失败');
+                const vaultRaw = localStorage.getItem(STORAGE_VAULT);
+                if (!vaultRaw) throw new Error('未找到保险库');
+                const decrypted = await decryptData(oldKey, JSON.parse(vaultRaw));
+                const oldData = Array.isArray(decrypted) ? { passwords: decrypted, customCategories: [] } : { passwords: decrypted.passwords||[], customCategories: decrypted.customCategories||[] };
+                const newSalt = crypto.getRandomValues(new Uint8Array(16));
+                const newKey = await deriveKey(newPw, newSalt);
+                const newAuth = await createAuthVerifier(newKey);
+                const newVaultData = { ...oldData, version: 3, lastUpdated: Date.now() };
+                const newEncrypted = await encryptData(newKey, newVaultData);
+                const testDecrypt = await decryptData(newKey, newEncrypted);
+                if (JSON.stringify(testDecrypt.passwords) !== JSON.stringify(oldData.passwords)) throw new Error('新密钥验证失败');
+                localStorage.setItem(STORAGE_SALT, JSON.stringify(Array.from(newSalt)));
+                localStorage.setItem(STORAGE_AUTH, JSON.stringify(newAuth));
+                localStorage.setItem(STORAGE_VAULT, JSON.stringify(newEncrypted));
+                masterKey = newKey; passwords = oldData.passwords; customCategories = oldData.customCategories;
+                addLog('修改主密码', '成功'); showToast('✅ 主密码修改成功');
+            }
+
+            function showLogs() {
+                const logs = JSON.parse(localStorage.getItem(LOG_STORAGE) || '[]');
+                const modal = document.createElement('div');
+                modal.className = 'modal';
+                modal.innerHTML = `
+                    <div class="modal-card">
+                        <h3><svg class="icon" style="width:1.4rem;height:1.4rem;"><use href="#icon-log"/></svg> 操作日志</h3>
+                        <div class="log-view">${logs.length ? logs.map(l => `<div>${l.time} | ${l.action} | ${l.details}</div>`).join('') : '暂无日志记录'}</div>
+                        <div class="button-group">
+                            <button id="clearLogBtn" class="btn btn-outline btn-sm"><svg class="icon"><use href="#icon-trash"/></svg> 清空</button>
+                            <button id="exportLogBtn" class="btn btn-outline btn-sm"><svg class="icon"><use href="#icon-download"/></svg> 导出</button>
+                            <button id="closeLog" class="btn btn-primary btn-sm">关闭</button>
+                        </div>
+                    </div>`;
+                document.body.appendChild(modal); document.body.classList.add('modal-open');
+                const refresh = () => {
+                    const newLogs = JSON.parse(localStorage.getItem(LOG_STORAGE) || '[]');
+                    modal.querySelector('.log-view').innerHTML = newLogs.length ? newLogs.map(l => `<div>${l.time} | ${l.action} | ${l.details}</div>`).join('') : '暂无日志记录';
+                };
+                modal.querySelector('#closeLog').onclick = () => { modal.remove(); document.body.classList.remove('modal-open'); };
+                modal.querySelector('#exportLogBtn').onclick = () => {
+                    const data = JSON.parse(localStorage.getItem(LOG_STORAGE) || '[]');
+                    downloadBlob(new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' }), `静谧密钥_日志_${new Date().toISOString().slice(0,19)}.json`);
+                    showToast('日志已导出');
+                };
+                modal.querySelector('#clearLogBtn').onclick = () => {
+                    if (confirm('确定清空所有操作日志吗？')) { localStorage.setItem(LOG_STORAGE, '[]'); refresh(); showToast('日志已清空'); addLog('清空日志', '手动清空'); }
+                };
+            }
+
+            function openCategoryManager() {
+                const modal = document.createElement('div');
+                modal.className = 'modal';
+                modal.innerHTML = `
+                    <div class="modal-card">
+                        <h3><svg class="icon" style="width:1.4rem;height:1.4rem;"><use href="#icon-folder"/></svg> 自定义分类库</h3>
+                        <div class="info-badge">✨ 共 <span id="catCount">0</span> 个分类 | 数字为密码条目数量</div>
+                        <div id="catListManage" class="cat-grid"></div>
+                        <div class="form-row" style="margin-top:12px;">
+                            <input type="text" id="newCatName" placeholder="新分类名称" autocomplete="off">
+                            <button id="addCatBtn" class="btn btn-outline btn-sm"><svg class="icon"><use href="#icon-plus"/></svg> 添加</button>
+                        </div>
+                        <div class="button-group"><button id="closeCat" class="btn btn-primary">关闭</button></div>
+                    </div>`;
+                document.body.appendChild(modal); document.body.classList.add('modal-open');
+                activeCategoryModal = modal;
+                const container = modal.querySelector('#catListManage');
+                renderCategoryListWithCount(container);
+                modal.querySelector('#addCatBtn').onclick = () => {
+                    const name = modal.querySelector('#newCatName').value.trim();
+                    if (!name) { showToast('请输入分类名称', true); return; }
+                    if (addCategory(name)) { renderCategoryListWithCount(container); refreshDatalist(); modal.querySelector('#newCatName').value = ''; showToast(`✅ 已添加"${name}"`); }
+                    else showToast('分类已存在或无效', true);
+                };
+                modal.querySelector('#closeCat').onclick = () => { modal.remove(); document.body.classList.remove('modal-open'); activeCategoryModal = null; };
+            }
+
+            function renderApp() {
+                const root = document.getElementById('root');
+                if (!root) return;
+                root.innerHTML = `
+                <div class="app-container card" id="appContainer">
+                    <div class="app-header">
+                        <div class="logo">
+                            <svg viewBox="0 0 24 24" style="width:2.4rem;height:2.4rem;fill:none;stroke:currentColor;stroke-width:1.8;"><use href="#icon-shield"/></svg>
+                            静谧·密钥
+                        </div>
+                        <div class="badge">📋 已存 <strong id="countSpan">${passwords.length}</strong> / ${MAX_PASSWORDS}</div>
+                        <div class="header-actions">
+                            <button class="btn btn-outline btn-sm" id="lockBtn"><svg class="icon"><use href="#icon-lock"/></svg> 锁定</button>
+                            <button class="btn btn-outline btn-sm" id="changeMasterPwBtn"><svg class="icon"><use href="#icon-refresh"/></svg> 改密</button>
+                            <button class="btn btn-outline btn-sm" id="categoryManagerBtn"><svg class="icon"><use href="#icon-folder"/></svg> 分类</button>
+                            <button class="btn btn-outline btn-sm" id="logBtn"><svg class="icon"><use href="#icon-log"/></svg> 日志</button>
+                        </div>
+                    </div>
+                    <div class="search-bar">
+                        <input type="text" id="searchInput" placeholder="🔍 搜索名称/账号/分类..." autocomplete="off">
+                        <select id="searchFieldSelect">
+                            <option value="all">全部字段</option>
+                            <option value="name">名称</option>
+                            <option value="username">用户名</option>
+                            <option value="category">分类</option>
+                            <option value="email">邮箱</option>
+                            <option value="phone">手机号</option>
+                            <option value="note">备注</option>
+                        </select>
+                    </div>
+                    <div class="add-section">
+                        <div class="form-row">
+                            <input id="inpName" placeholder="名称 (必填)" maxlength="50">
+                            <input id="inpUsername" placeholder="用户名">
+                            <input id="inpPassword" placeholder="密码 (${PASSWORD_MIN_LEN}-${PASSWORD_MAX_LEN}字符)" maxlength="${PASSWORD_MAX_LEN}" type="password">
+                            <button class="btn btn-outline btn-sm" id="genPwBtn" type="button"><svg class="icon"><use href="#icon-refresh"/></svg> 生成</button>
+                            <button class="btn btn-outline btn-sm" id="togglePwVis" type="button"><svg class="icon"><use href="#icon-eye"/></svg></button>
+                        </div>
+                        <div class="optional-fields" id="optionalFields">
+                            <div class="form-row" id="optionalRow1">
+                                <input id="inpEmail" placeholder="邮箱" type="email">
+                                <input id="inpPhone" placeholder="手机号">
+                                <select id="inpCategory"><option value="">(无分类)</option></select>
+                            </div>
+                            <div class="form-row"><textarea id="inpNote" rows="2" placeholder="备注 (最多500字符)" maxlength="500"></textarea></div>
+                        </div>
+                        <div class="form-actions">
+                            <button class="btn btn-outline btn-sm" id="toggleOptional">更多信息</button>
+                            <div style="display:flex;gap:8px;">
+                                <button class="btn btn-outline btn-sm" id="clearForm"><svg class="icon"><use href="#icon-trash"/></svg> 清空</button>
+                                <button class="btn btn-primary btn-sm" id="addBtn"><svg class="icon"><use href="#icon-plus"/></svg> 添加密码</button>
+                            </div>
+                        </div>
+                    </div>
+                    <div style="display:flex;flex-wrap:wrap;gap:12px;align-items:center;justify-content:space-between;">
+                        <div style="display:flex;gap:8px;align-items:center;">
+                            <select id="sortFieldSelect">
+                                <option value="name">排序:名称</option>
+                                <option value="username">用户名</option>
+                                <option value="category">分类</option>
+                                <option value="createdAt">创建时间</option>
+                            </select>
+                            <button class="btn btn-outline btn-sm" id="sortBtn"><svg class="icon"><use href="#icon-sort"/></svg> 切换</button>
+                        </div>
+                        <div style="display:flex;gap:8px;flex-wrap:wrap;">
+                            <button class="btn btn-outline btn-sm" id="exportEncryptBtn"><svg class="icon"><use href="#icon-download"/></svg> 加密备份</button>
+                            <button class="btn btn-outline btn-sm" id="exportPlainBtn"><svg class="icon"><use href="#icon-download"/></svg> 明文JSON</button>
+                            <button class="btn btn-outline btn-sm" id="exportCsvBtn"><svg class="icon"><use href="#icon-download"/></svg> CSV</button>
+                            <button class="btn btn-outline btn-sm" id="importBtn"><svg class="icon"><use href="#icon-upload"/></svg> 导入</button>
+                            <button class="btn btn-outline btn-sm" id="batchBtn"><svg class="icon"><use href="#icon-check-square"/></svg> 批量</button>
+                            <button class="btn btn-outline btn-sm" id="wipeBtn" style="color:var(--danger);border-color:var(--danger);"><svg class="icon"><use href="#icon-alert-triangle"/></svg> 清空</button>
+                        </div>
+                    </div>
+                    <div class="password-list" id="listContainer"></div>
+                    <div id="batchBar" style="display:none;" class="batch-bar">
+                        <span>已选 <strong id="batchCount">0</strong> 项</span>
+                        <button class="btn btn-outline btn-sm" id="batchDeleteBtn" style="color:var(--danger);"><svg class="icon"><use href="#icon-trash"/></svg> 删除选中</button>
+                        <select id="batchCategorySelect"><option value="">移动分类</option></select>
+                        <button class="btn btn-outline btn-sm" id="batchMoveBtn">移动</button>
+                        <button class="btn btn-outline btn-sm" id="cancelBatchBtn">取消批量</button>
+                    </div>
+                </div>`;
+                const optionalRow = document.getElementById('optionalRow1');
+                if (optionalRow && window.innerWidth <= 640) {
+                    optionalRow.classList.add('grid-cols-3');
+                }
+                const container = document.getElementById('appContainer');
+                container.addEventListener('click', async (e) => {
+                    const t = e.target.closest('button');
+                    if (!t) return;
+                    if (t.classList.contains('toggle-vis')) {
+                        const id = t.dataset.id;
+                        visiblePasswords.has(id) ? visiblePasswords.delete(id) : visiblePasswords.add(id);
+                        renderListOnly();
+                    } else if (t.classList.contains('copy-btn')) {
+                        const item = passwords.find(p => p.id === t.dataset.id);
+                        if (item) copyAndClear(item.password);
+                    } else if (t.classList.contains('edit-btn')) {
+                        const item = passwords.find(p => p.id === t.dataset.id);
+                        if (item) openEditModal(item);
+                    } else if (t.classList.contains('del-btn')) {
+                        const item = passwords.find(p => p.id === t.dataset.id);
+                        if (item && confirm(`确定删除"${item.name}"吗？`)) {
+                            passwords = passwords.filter(p => p.id !== item.id);
+                            await saveEncrypted();
+                            renderListOnly(); refreshDatalist();
+                            showToast('已删除');
+                        }
+                    }
+                });
+                document.getElementById('searchInput').addEventListener('input', e => { searchQuery = e.target.value; renderListOnly(); resetIdleTimer(); });
+                document.getElementById('searchFieldSelect').addEventListener('change', e => { searchField = e.target.value; renderListOnly(); });
+                document.getElementById('sortFieldSelect').addEventListener('change', () => { renderListOnly(); });
+                document.getElementById('sortBtn').onclick = () => { sortAsc = !sortAsc; renderListOnly(); };
+                document.getElementById('addBtn').onclick = async () => {
+                    const name = document.getElementById('inpName').value.trim();
+                    const pw = document.getElementById('inpPassword').value.trim();
+                    if (!name || !pw) return showToast('名称和密码不能为空', true);
+                    if (pw.length < PASSWORD_MIN_LEN || pw.length > PASSWORD_MAX_LEN) return showToast(`密码需${PASSWORD_MIN_LEN}-${PASSWORD_MAX_LEN}个字符`, true);
+                    if (passwords.length >= MAX_PASSWORDS) return showToast(`已达上限${MAX_PASSWORDS}`, true);
+                    if (passwords.some(p => p.name === name) && !confirm(`名称"${name}"已存在，是否继续添加？`)) return;
+                    passwords.unshift(normalizeItem({
+                        name, username: document.getElementById('inpUsername').value.trim(),
+                        email: document.getElementById('inpEmail').value.trim(), password: pw,
+                        phone: document.getElementById('inpPhone').value.trim(),
+                        category: document.getElementById('inpCategory').value || '',
+                        note: document.getElementById('inpNote').value.trim(), createdAt: Date.now()
+                    }));
+                    await saveEncrypted();
+                    renderListOnly(); refreshDatalist();
+                    showToast(`✅ 已添加「${name}」`);
+                    resetIdleTimer();
+                };
+                document.getElementById('clearForm').onclick = () => {
+                    ['inpName','inpUsername','inpPassword','inpEmail','inpPhone','inpCategory','inpNote'].forEach(id => {
+                        const el = document.getElementById(id); if (el) el.value = '';
+                    });
+                    document.getElementById('inpCategory').value = '';
+                };
+                document.getElementById('toggleOptional').onclick = () => document.getElementById('optionalFields').classList.toggle('show');
+                document.getElementById('togglePwVis').onclick = () => {
+                    const inp = document.getElementById('inpPassword');
+                    const btn = document.getElementById('togglePwVis');
+                    const isPw = inp.type === 'password';
+                    inp.type = isPw ? 'text' : 'password';
+                    btn.innerHTML = `<svg class="icon"><use href="#icon-${isPw ? 'eye-off' : 'eye'}"/></svg>`;
+                };
+                document.getElementById('genPwBtn').onclick = () => {
+                    const newPw = generateStrongPassword(18);
+                    document.getElementById('inpPassword').value = newPw;
+                    document.getElementById('inpPassword').type = 'text';
+                    document.getElementById('togglePwVis').innerHTML = `<svg class="icon"><use href="#icon-eye-off"/></svg>`;
+                    showToast('🔀 已生成18位强密码');
+                };
+                document.getElementById('exportEncryptBtn').onclick = exportEncryptedBackup;
+                document.getElementById('exportPlainBtn').onclick = exportPlaintextJSON;
+                document.getElementById('exportCsvBtn').onclick = exportCSV;
+                document.getElementById('batchBtn').onclick = toggleBatchMode;
+                document.getElementById('cancelBatchBtn').onclick = toggleBatchMode;
+                document.getElementById('batchDeleteBtn').onclick = batchDelete;
+                document.getElementById('batchMoveBtn').onclick = () => {
+                    const cat = document.getElementById('batchCategorySelect').value;
+                    if (cat) batchMoveCategory(cat);
+                };
+                document.getElementById('lockBtn').onclick = manualLock;
+                document.getElementById('changeMasterPwBtn').onclick = showChangePwModal;
+                document.getElementById('categoryManagerBtn').onclick = openCategoryManager;
+                document.getElementById('logBtn').onclick = showLogs;
+                document.getElementById('wipeBtn').onclick = wipeAllPasswords;
+                document.getElementById('importBtn').onclick = () => {
+                    const modal = document.createElement('div');
+                    modal.className = 'modal';
+                    modal.innerHTML = `
+                        <div class="modal-card">
+                            <h3><svg class="icon" style="width:1.4rem;height:1.4rem;"><use href="#icon-upload"/></svg> 导入选项</h3>
+                            <div class="warning-box">⚠️ 导入明文JSON/CSV会暴露所有密码，请务必确认来源绝对可信。</div>
+                            <label style="display:flex;align-items:center;gap:8px;cursor:pointer;padding:8px 0;">
+                                <input type="checkbox" id="trustPlainCheck"> 我信任此来源，允许导入明文文件
+                            </label>
+                            <button id="importFileBtn" class="btn btn-primary" style="width:100%;margin-top:12px;">选择文件</button>
+                        </div>`;
+                    document.body.appendChild(modal); document.body.classList.add('modal-open');
+                    modal.querySelector('#importFileBtn').onclick = () => {
+                        const trustChecked = modal.querySelector('#trustPlainCheck').checked;
+                        modal.remove(); document.body.classList.remove('modal-open');
+                        const inp = document.createElement('input');
+                        inp.type = 'file'; inp.accept = '.json,.csv';
+                        inp.onchange = async (e) => {
+                            const file = e.target.files[0];
+                            if (!file) return;
+                            if (file.name.endsWith('.csv')) await importCSV(file, trustChecked);
+                            else await importFromFile(file, trustChecked);
+                            inp.remove();
+                        };
+                        inp.click();
+                    };
+                };
+                refreshDatalist();
+                renderListOnly();
+                resetIdleTimer();
+                checkStorageQuota();
+            }
+
+            function showAuth() {
+                const root = document.getElementById('root');
+                if (!root) return;
+                const initialized = localStorage.getItem(STORAGE_INIT)==='true' && localStorage.getItem(STORAGE_SALT) && localStorage.getItem(STORAGE_AUTH) && localStorage.getItem(STORAGE_VAULT);
+                if (!initialized) {
+                    root.innerHTML = `
+                        <div class="card auth-card">
+                            <div class="auth-icon"><svg viewBox="0 0 24 24" style="width:4rem;height:4rem;fill:none;stroke:currentColor;stroke-width:1.8;"><use href="#icon-shield"/></svg></div>
+                            <h2>静谧·密钥</h2>
+                            <p style="font-size:0.95rem;">专业的本地密码管理器</p>
+                            <p style="font-size:0.85rem;color:var(--text-secondary);">首次使用，请设置一个强主密码来保护您的数据</p>
+                            <button class="btn btn-primary" id="setupBtn" style="width:100%;">设置主密码</button>
+                        </div>`;
+                    document.getElementById('setupBtn').onclick = () => {
+                        const modal = document.createElement('div');
+                        modal.className = 'modal';
+                        modal.innerHTML = `
+                            <div class="modal-card">
+                                <h3><svg class="icon" style="width:1.4rem;height:1.4rem;"><use href="#icon-lock"/></svg> 设置主密码</h3>
+                                <div class="warning-box">⚠️ 主密码需至少8位，且包含大写、小写、数字、特殊字符中的至少三类。请务必牢记！</div>
+                                <input type="password" id="newPw1" placeholder="至少8位，含三类字符" autocomplete="off" autofocus>
+                                <div class="strength-bar"><div class="strength-fill" id="setupStrengthFill"></div></div>
+                                <div class="strength-text" id="setupStrengthText"></div>
+                                <input type="password" id="newPw2" placeholder="确认主密码" autocomplete="off">
+                                <button id="confirmSetup" class="btn btn-primary" style="width:100%;margin-top:12px;">创建保险库</button>
+                            </div>`;
+                        document.body.appendChild(modal); document.body.classList.add('modal-open');
+                        const pw1 = modal.querySelector('#newPw1');
+                        const fill = modal.querySelector('#setupStrengthFill');
+                        const text = modal.querySelector('#setupStrengthText');
+                        pw1.addEventListener('input', () => {
+                            const level = getPasswordStrength(pw1.value);
+                            fill.style.width = (level/4)*100+'%'; fill.style.backgroundColor = getStrengthColor(level);
+                            text.textContent = getStrengthText(level); text.style.color = getStrengthColor(level);
+                        });
+                        modal.querySelector('#confirmSetup').onclick = async () => {
+                            const p1 = pw1.value, p2 = modal.querySelector('#newPw2').value;
+                            if (!isStrongPassword(p1)) return showToast('密码强度不足，需至少8位含三类字符', true);
+                            if (p1 !== p2) return showToast('两次输入不一致', true);
+                            try {
+                                await initNewVault(p1);
+                                modal.remove(); document.body.classList.remove('modal-open');
+                                showToast('✅ 保险库创建成功！');
+                                showAuth();
+                            } catch (e) { showToast(e.message, true); }
+                        };
+                    };
+                } else {
+                    root.innerHTML = `
+                        <div class="card auth-card">
+                            <div class="auth-icon"><svg viewBox="0 0 24 24" style="width:4rem;height:4rem;fill:none;stroke:currentColor;stroke-width:1.8;"><use href="#icon-lock"/></svg></div>
+                            <h2>静谧·密钥</h2>
+                            <p>请输入主密码以解锁</p>
+                            <input type="password" id="loginPw" placeholder="主密码" autocomplete="off" autofocus>
+                            <div id="errorMsg" style="color:var(--danger);font-size:0.85rem;min-height:20px;margin:4px 0;"></div>
+                            <button class="btn btn-primary" id="loginBtn" style="width:100%;"><svg class="icon"><use href="#icon-unlock"/></svg> 验证进入</button>
+                            <p style="font-size:0.72rem;color:var(--text-secondary);margin-top:12px;">🔒 数据完全存储在本地浏览器，不会上传至任何服务器</p>
+                        </div>`;
+                    const loginPw = document.getElementById('loginPw');
+                    const loginBtn = document.getElementById('loginBtn');
+                    const errorDiv = document.getElementById('errorMsg');
+                    const doLogin = async () => {
+                        try {
+                            await unlockVault(loginPw.value);
+                            renderApp();
+                        } catch (e) {
+                            errorDiv.innerText = e.message;
+                            loginPw.value = ''; loginPw.focus();
+                        }
+                    };
+                    loginBtn.onclick = doLogin;
+                    loginPw.addEventListener('keypress', e => { if (e.key==='Enter') doLogin(); });
+                    loginPw.focus();
+                }
+            }
+
+            function bindIdleEvents() {
+                ['click', 'keydown', 'touchstart', 'scroll'].forEach(ev => window.addEventListener(ev, resetIdleTimer, { passive: true }));
+            }
+
+            if (typeof crypto !== 'undefined' && crypto.subtle && (location.protocol === 'https:' || location.hostname === 'localhost' || location.hostname === '127.0.0.1')) {
+                bindIdleEvents();
+                showAuth();
+            } else {
+                document.getElementById('root').innerHTML = `<div class="card auth-card"><h2>⚠️ 环境不安全</h2><p>Web Crypto API 需要 HTTPS 或 localhost 环境才能正常工作。</p><p style="color:var(--text-secondary);">当前协议：${location.protocol}</p></div>`;
+            }
+        })();
+    </script>
+</body>
+</html>
