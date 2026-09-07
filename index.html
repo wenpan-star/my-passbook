@@ -1,22 +1,22 @@
 <!--
 ====================================================================================
- 静谧·密钥 v6.6.0 — 安全加固与逻辑修复
+ 静谧·密钥 v6.7.0 — 深度修复与体验优化
  更新日期：2026-09-08
 ====================================================================================
- 更新内容（v6.5.0 → v6.6.0）：
+ 更新内容（v6.6.0 → v6.7.0）：
 
- 1. [修复] 覆盖导入时清空密码可见性集合，避免无效 ID 残留。
- 2. [修复] 加密备份导入时强制校验和，不匹配则中止导入，防止损坏数据进入。
- 3. [修复] 分类删除与批量删除的确认流程，正确处理取消操作，避免误删。
- 4. [修复] 修改主密码函数内部增加新旧密码相同检查。
- 5. [优化] 导入条目的默认创建时间添加索引偏移，保证按时间排序稳定。
- 6. [优化] 导入结果提示准确显示跳过与截断数量。
- 7. [优化] 移除密码可见性切换后的自动聚焦，避免移动端键盘弹出。
+ 1. [修复] 导入加密备份（数组格式）时不再误清空现有分类，统一默认保持。
+ 2. [修复] 初始化保险库失败时正确回滚 State，避免半初始化状态。
+ 3. [修复] DOM 查询改为属性选择器，避免潜在 ID 转义问题。
+ 4. [优化] 删除未使用的变量，提升代码整洁度。
+ 5. [优化] 下载文件增加异常处理，失败时提示用户。
+ 6. [优化] 日志清空改用自定义确认对话框，与整体交互保持一致。
+ 7. [优化] 导入分类处理逻辑统一：无分类信息时保持现有分类不变。
  8. [兼容] 继续使用 ES5 风格函数，保持旧浏览器兼容。
- 9. [优化] 部分逻辑细化，提升代码可读性。
- 
- 历史更新（v6.4.2 → v6.5.0）：
- 新增移动端顶部工具栏折叠功能。
+ 9. [其他] 添加关键注释，提升可维护性。
+
+ 历史更新（v6.5.0 → v6.6.0）：
+ 修复覆盖导入清空可见密码集合等问题。
 ====================================================================================
 -->
 <!DOCTYPE html>
@@ -30,9 +30,9 @@
     <meta http-equiv="X-Frame-Options" content="DENY">
     <meta http-equiv="X-Content-Type-Options" content="nosniff">
     <meta http-equiv="Referrer-Policy" content="strict-origin-when-cross-origin">
-    <title>🔐 静谧·密钥 | 安全密码本 v6.6.0</title>
+    <title>🔐 静谧·密钥 | 安全密码本 v6.7.0</title>
     <style>
-        /* ===== 样式保持不变，完整复制自原代码 ===== */
+        /* ===== 样式保持不变，完整复制自 v6.6.0 ===== */
         :root {
             --bg-gradient: linear-gradient(135deg, #e0f2fe 0%, #bae6fd 50%, #e0e7ff 100%);
             --glass-bg: rgba(255, 255, 255, 0.75);
@@ -1095,6 +1095,7 @@
 </head>
 <body>
 <svg display="none" aria-hidden="true">
+    <!-- SVG symbols 与 v6.6.0 完全一致 -->
     <symbol id="icon-lock" viewBox="0 0 24 24"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></symbol>
     <symbol id="icon-unlock" viewBox="0 0 24 24"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 9.9-1"/></symbol>
     <symbol id="icon-eye" viewBox="0 0 24 24"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></symbol>
@@ -1123,7 +1124,7 @@
 
     // ===================== 常量与配置 =====================
     const CONFIG = {
-        APP_VERSION: '6.6.0',
+        APP_VERSION: '6.7.0',
         STORAGE_VAULT: 'serene_vault_enc_v3',
         STORAGE_SALT: 'serene_vault_salt_v3',
         STORAGE_AUTH: 'serene_vault_auth_v3',
@@ -1615,6 +1616,7 @@
             await saveVault();
             addLog('初始化','创建新保险库');
         } catch (error) {
+            // 初始化失败，回滚状态和存储
             try {
                 localStorage.removeItem(CONFIG.STORAGE_SALT);
                 localStorage.removeItem(CONFIG.STORAGE_AUTH);
@@ -1623,6 +1625,16 @@
             } catch(e) {
                 console.warn('初始化失败清理异常:', e);
             }
+            // 重置 State 相关字段
+            State.masterKey = null;
+            State.passwords = [];
+            State.customCategories = [];
+            State.passwordIdIndex.clear();
+            State.visibleLoginPasswords.clear();
+            State.visibleTransactionPasswords.clear();
+            State.lastReauthenticationTime = 0;
+            State.bruteFailCount = 0;
+            State.verifyFailCount = 0;
             throw new Error('初始化失败：' + error.message);
         }
     }
@@ -2109,7 +2121,6 @@
                     if (!verified) return;
                 } catch(e) { return; }
                 const affected = State.passwords.filter(function(item) { return item.category === category; }).length;
-                // 使用自定义确认框避免原生prompt取消问题
                 const userConfirmed = await promptForCategoryDeletion(category, affected);
                 if (!userConfirmed) return;
                 const oldPasswords = State.passwords.map(function(p) { return {...p}; });
@@ -2139,7 +2150,7 @@
         if (countElement) countElement.innerText = categories.length;
     }
 
-    // 自定义分类删除确认对话框，避免prompt取消问题
+    // 自定义分类删除确认对话框
     function promptForCategoryDeletion(category, affectedCount) {
         return new Promise(function(resolve) {
             const modal = document.createElement('div');
@@ -2299,14 +2310,15 @@
             fragment.appendChild(itemElement);
 
             if (loginVisible) {
-                const loginInput = itemElement.querySelector('#login-' + Util.escapeAttr(item.id));
+                // 使用属性选择器，避免特殊字符问题
+                const loginInput = itemElement.querySelector('[id="login-' + item.id + '"]');
                 if (loginInput) {
                     loginInput.type = 'text';
                     loginInput.value = item.loginPassword || '';
                 }
             }
             if (transactionVisible && item.transactionPassword) {
-                const tranInput = itemElement.querySelector('#tran-' + Util.escapeAttr(item.id));
+                const tranInput = itemElement.querySelector('[id="tran-' + item.id + '"]');
                 if (tranInput) {
                     tranInput.type = 'text';
                     tranInput.value = item.transactionPassword || '';
@@ -2609,12 +2621,17 @@
     }
 
     function downloadBlob(blob, filename) {
-        const url = URL.createObjectURL(blob);
-        const anchor = document.createElement('a');
-        anchor.href = url;
-        anchor.download = filename;
-        anchor.click();
-        URL.revokeObjectURL(url);
+        try {
+            const url = URL.createObjectURL(blob);
+            const anchor = document.createElement('a');
+            anchor.href = url;
+            anchor.download = filename;
+            anchor.click();
+            URL.revokeObjectURL(url);
+        } catch (error) {
+            console.error('下载文件失败:', error);
+            showToast('下载失败，请重试或检查浏览器权限', true);
+        }
     }
 
     // ===================== 导入功能 =====================
@@ -2691,13 +2708,17 @@
                 if (parsed.version >= 4 && parsed.plainChecksum) {
                     const calculatedChecksum = await CryptoModule.computeStringChecksum(JSON.stringify(decrypted));
                     if (calculatedChecksum !== parsed.plainChecksum) {
-                        // 强制中止导入，避免数据损坏
                         throw new Error('校验和不匹配，文件可能已损坏，已中止导入');
                     }
                 }
                 let importedPasswords = [], importedCategories = [];
-                if (Array.isArray(decrypted)) importedPasswords = decrypted;
-                else { importedPasswords = decrypted.passwords || []; importedCategories = decrypted.customCategories || []; }
+                if (Array.isArray(decrypted)) {
+                    importedPasswords = decrypted;
+                    // 旧版数组备份不含分类信息，保持现有分类不变
+                } else {
+                    importedPasswords = decrypted.passwords || [];
+                    importedCategories = decrypted.customCategories || [];
+                }
                 if (importedPasswords.length > CONFIG.MAX_PASSWORDS) {
                     showToast(`导入文件包含 ${importedPasswords.length} 条密码，超过上限 ${CONFIG.MAX_PASSWORDS}，请分批导入或调整上限`, true, 5000);
                     return;
@@ -2708,7 +2729,11 @@
                     normalized.createdAt = normalized.createdAt || (baseTime + index);
                     return normalized;
                 });
-                const replaceCategories = importedCategories.length ? confirm('导入文件包含分类库，是否替换当前分类？') : confirm('导入文件不含分类库，是否清空当前分类？');
+                // 修复：导入加密备份时，若无分类信息，保持现有分类，不询问清空
+                let replaceCategories = false;
+                if (importedCategories.length > 0) {
+                    replaceCategories = confirm('导入文件包含分类库，是否替换当前分类？');
+                }
                 await applyImport(importedPasswords, importedCategories, replaceCategories, true);
             } catch (error) {
                 showToast('导入失败：' + error.message, true);
@@ -2721,14 +2746,19 @@
                 showToast(`导入文件包含 ${parsed.passwords.length} 条密码，超过上限 ${CONFIG.MAX_PASSWORDS}`, true, 5000);
                 return;
             }
-            const replaceCategories = parsed.customCategories && parsed.customCategories.length ? confirm('导入文件包含分类库，是否替换？') : confirm('是否清空当前分类？');
+            // 修复：若明文JSON不包含分类信息或分类为空，默认保持现有分类；否则询问是否替换
+            const importedCategories = parsed.customCategories || [];
+            let replaceCategories = false;
+            if (importedCategories.length > 0) {
+                replaceCategories = confirm('导入文件包含分类库，是否替换？');
+            }
             const baseTime = Date.now();
             let importedPasswords = parsed.passwords.map(function(item, index) {
                 const normalized = normalizeItem(item);
                 normalized.createdAt = normalized.createdAt || (baseTime + index);
                 return normalized;
             });
-            await applyImport(importedPasswords, parsed.customCategories || [], replaceCategories, true);
+            await applyImport(importedPasswords, importedCategories, replaceCategories, true);
         } else if (trustChecked && Array.isArray(parsed)) {
             if (!parsed.length) { showToast('文件无数据', true); return; }
             if (parsed.length > CONFIG.MAX_PASSWORDS) {
@@ -2764,7 +2794,6 @@
             if (overwrite) {
                 if (importedPasswords.length > CONFIG.MAX_PASSWORDS) { showToast(`超过上限${CONFIG.MAX_PASSWORDS}`, true); return; }
                 State.passwords = importedPasswords;
-                // 修复：覆盖导入时清空可见密码集合
                 State.visibleLoginPasswords.clear();
                 State.visibleTransactionPasswords.clear();
             } else {
@@ -2891,7 +2920,6 @@
         addLog('批量删除', `${ids.length}条`);
     }
 
-    // 自定义批量删除确认对话框
     function promptForBatchDeletion(phrase, count) {
         return new Promise(function(resolve) {
             const modal = document.createElement('div');
@@ -2979,7 +3007,6 @@
         addLog('清空全部', '用户清空所有密码');
     }
 
-    // 自定义清空确认对话框
     function promptForWipeAll() {
         return new Promise(function(resolve) {
             const modal = document.createElement('div');
@@ -3083,7 +3110,7 @@
     }
 
     async function changeMasterPassword(oldPassword, newPassword) {
-        // 内部再次检查新旧密码不同
+        // 内部再次检查新旧密码不同，防止逻辑漏洞
         if (oldPassword === newPassword) throw new Error('新旧密码不能相同');
         const oldSaltArray = JSON.parse(localStorage.getItem(CONFIG.STORAGE_SALT));
         if (!oldSaltArray) throw new Error('未找到旧盐值');
@@ -3111,7 +3138,7 @@
         } catch (error) {
             console.warn('备份旧数据失败，继续修改主密码:', error);
         }
-        const oldMasterKey = State.masterKey;
+        const oldMasterKey = State.masterKey; // 保存当前密钥以便回滚
 
         try {
             const newSalt = crypto.getRandomValues(new Uint8Array(16));
@@ -3134,8 +3161,7 @@
             State.lastReauthenticationTime = 0;
 
             cleanMigrationBackup();
-            // 尝试清空旧密码变量（无法完全清除，但可赋空）
-            oldPassword = '';
+            oldPassword = ''; // 尝试清空旧密码变量
             addLog('修改主密码', '成功');
 
             if (State.channel) {
@@ -3208,14 +3234,43 @@
             downloadBlob(new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' }), `静谧密钥_日志_${new Date().toISOString().slice(0,19)}.json`);
             showToast('日志已导出');
         };
-        modal.querySelector('#clearLogBtn').onclick = function() {
-            if (confirm('确定清空所有操作日志吗？')) {
+        modal.querySelector('#clearLogBtn').onclick = async function() {
+            const userConfirmed = await promptForLogClear();
+            if (userConfirmed) {
                 addLog('清空日志', '手动清空');
                 localStorage.setItem(CONFIG.LOG_STORAGE, '[]');
                 refreshLogs();
                 showToast('日志已清空');
             }
         };
+    }
+
+    // 自定义日志清空确认对话框
+    function promptForLogClear() {
+        return new Promise(function(resolve) {
+            const modal = document.createElement('div');
+            modal.className = 'modal';
+            modal.innerHTML = `
+                <div class="modal-card">
+                    <h3><svg class="icon" style="width:1.4rem;height:1.4rem;"><use href="#icon-alert-triangle"/></svg> 清空日志确认</h3>
+                    <p>确定清空所有操作日志吗？此操作不可恢复。</p>
+                    <div class="button-group">
+                        <button id="cancelLogClear" class="btn btn-outline">取消</button>
+                        <button id="confirmLogClear" class="btn btn-danger">清空</button>
+                    </div>
+                </div>`;
+            document.body.appendChild(modal);
+            document.body.classList.add('modal-open');
+            const previousFocus = document.activeElement;
+            const cleanup = function(result) {
+                modal.remove();
+                document.body.classList.remove('modal-open');
+                if (previousFocus && typeof previousFocus.focus === 'function') previousFocus.focus();
+                resolve(result);
+            };
+            modal.querySelector('#cancelLogClear').onclick = function() { cleanup(false); };
+            modal.querySelector('#confirmLogClear').onclick = function() { cleanup(true); };
+        });
     }
 
     function openCategoryManager() {
@@ -3476,8 +3531,6 @@
         const appContainer = document.getElementById('appContainer');
         const collapseBtn = document.getElementById('collapseTopBarBtn');
         const expandBtn = document.getElementById('expandTopBarBtn');
-        const stickyTop = document.getElementById('appStickyTop');
-        const expandContainer = document.getElementById('expandTopBar');
 
         const toggleTopBar = (collapse) => {
             if (collapse === undefined) {
