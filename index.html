@@ -2083,7 +2083,7 @@
             const transactionVisible = State.visibleTransactionPasswords.has(item.id);
             const nameHtml = highlightText(item.name, keyword);
             const usernameHtml = highlightText(item.username || '', keyword);
-            const categoryHtml = item.category ? `<span class="item-cat" style="font-size:0.7rem; margin-left:8px; flex-shrink:0;"><svg class="icon" style="width:0.9em;height:0.9em;"><use href="#icon-folder"/></svg> ${Util.escapeHtml(item.category)}</span>` : '';
+            const categoryHtml = item.category ? `<span class="item-cat" style="font-size:0.7rem; flex-shrink:0;"><svg class="icon" style="width:0.9em;height:0.9em;"><use href="#icon-folder"/></svg> ${Util.escapeHtml(item.category)}</span>` : '';
             const noteHtml = item.note ? `<div style="font-size:0.72rem;color:var(--text-secondary);">📝 ${Util.escapeHtml(item.note)}</div>` : '';
 
             const loginInputType = loginVisible ? 'text' : 'password';
@@ -2099,18 +2099,18 @@
             const itemElement = document.createElement('div');
             itemElement.className = 'password-item';
             itemElement.innerHTML = `
-                <div style="display:flex;justify-content:space-between;align-items:flex-start;">
-                    <div class="item-info">
+                <div style="display:flex;justify-content:space-between;align-items:flex-start; gap:8px;">
+                    <div class="item-info" style="flex:1; min-width:0;">
                         ${State.batchMode ? `<input type="checkbox" class="checkbox-item batch-check" data-id="${Util.escapeAttr(item.id)}" ${State.selectedIds.has(item.id) ? 'checked' : ''}>` : ''}
-                        <div style="display:flex; align-items:center; justify-content:space-between; gap:8px;">
-                            <strong>${nameHtml}</strong>
-                            ${categoryHtml}
+                        <div style="display:flex; align-items:center; gap:8px;">
+                            <strong style="flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${nameHtml}</strong>
                         </div>
                         <div style="font-size:0.72rem;color:var(--text-secondary);">
                             ${usernameHtml ? `👤 ${usernameHtml} ` : ''}${item.email ? `📧 ${Util.escapeHtml(item.email)} ` : ''}${item.phone ? `📱 ${Util.escapeHtml(item.phone)} ` : ''}📅 ${Util.formatDate(item.createdAt)}
                         </div>
                         ${noteHtml}
                     </div>
+                    ${categoryHtml}
                     ${!State.batchMode ? '' : '<div style="flex-shrink:0;"></div>'}
                 </div>
                 <div class="password-group">
