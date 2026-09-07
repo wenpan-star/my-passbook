@@ -1,35 +1,16 @@
 <!--
 ====================================================================================
- 静谧·密钥 v6.3.0 — 深度修复与健壮性增强
- 更新日期：2026-07-08
+ 静谧·密钥 v6.4.1 — 排序修复与健壮性增强
+ 更新日期：2026-07-11
 ====================================================================================
- 更新内容（v6.1.1 → v6.3.0）：
+ 更新内容（v6.4.0 → v6.4.1）：
 
- 【安全修复】
- 1. [修复] promptReauthentication 当 returnPassword=true 时始终弹出模态框，
-    确保修改主密码等操作不会被30秒有效期缓存阻断。
- 2. [修复] State.reset() 中确认重置 lastReauthenticationTime = 0，
-    锁定后所有认证缓存立即失效，杜绝绕过安全机制。
- 3. [修复] saveSecurityState 增加异常保护，localStorage 写入失败时降级为内存存储，
-    暴力破解计数不会因存储异常而丢失。
- 4. [修复] changeMasterPassword 中 BroadcastChannel.postMessage 增加 try-catch，
-    主密码修改流程不会因跨窗口消息失败而中断。
-
- 【健壮性修复】
- 5. [修复] 编辑密码保存失败时不再关闭模态框，用户可重试或取消，
-    且回滚仅恢复内存数据，表单内容保留。
- 6. [修复] saveVault 中 localStorage.setItem 增加 try-catch 并提供明确错误信息，
-    BroadcastChannel.postMessage 增加 try-catch，不影响保存主流程。
- 7. [修复] applyImport 合并模式统计并提示跳过（重名）与截断（超上限）数量。
- 8. [修复] State.reset() 中主动移除 visibilitychange 监听器，避免冗余监听。
-
- 【功能增强】
- 9. [新增] 主密码设置与修改模态框中添加实时密码强度指示条（4段式），
-    利用已有 getPasswordStrength 函数，提升用户体验与安全意识。
- 10. [新增] 解锁失败且疑似数据损坏时，登录界面显示"重置保险库"按钮，
-     用户经二次确认后可清除所有数据并重新初始化。
-
- 【保持】所有原有功能、变量名、UI 逻辑完全不变，未做任何删减或简写。
+ 1. [修复] 按“创建时间”排序错误：createdAt 字段改为数值比较，确保排序正确。
+ 2. [优化] 日志导出读取增加异常保护，避免存储异常导致导出失败。
+ 
+ 历史更新（v6.3.1 → v6.4.0）：
+ 综合修复与可用性增强，包括回滚备份、认证缓存失效、BroadcastChannel 保护、
+ 模态框取消按钮、密码明文复位、日志与导出保护、分类标签优化等。
 ====================================================================================
 -->
 <!DOCTYPE html>
@@ -43,7 +24,7 @@
     <meta http-equiv="X-Frame-Options" content="DENY">
     <meta http-equiv="X-Content-Type-Options" content="nosniff">
     <meta http-equiv="Referrer-Policy" content="strict-origin-when-cross-origin">
-    <title>🔐 静谧·密钥 | 安全密码本 v6.3.0</title>
+    <title>🔐 静谧·密钥 | 安全密码本 v6.4.1</title>
     <style>
         :root {
             --bg-gradient: linear-gradient(135deg, #e0f2fe 0%, #bae6fd 50%, #e0e7ff 100%);
@@ -1051,7 +1032,7 @@
 
     // ===================== 常量与配置 =====================
     const CONFIG = {
-        APP_VERSION: '6.3.0',
+        APP_VERSION: '6.4.1',
         STORAGE_VAULT: 'serene_vault_enc_v3',
         STORAGE_SALT: 'serene_vault_salt_v3',
         STORAGE_AUTH: 'serene_vault_auth_v3',
@@ -1605,54 +1586,59 @@
             State.channel = null;
         }
         if (typeof BroadcastChannel !== 'undefined') {
-            State.channel = new BroadcastChannel('serene_vault_sync');
-            State.channel.onmessage = async function(event) {
-                if (event.data && event.data.type === 'vaultUpdated') {
-                    if (State.activeEditItemId && typeof State.activeEditModalCleanup === 'function') {
-                        showToast('⚠️ 其他窗口已更新数据，当前编辑将被关闭', true, 3000);
-                        State.activeEditModalCleanup();
-                    }
-                    if (State.addSectionVisible) {
-                        const addSection = document.getElementById('addSection');
-                        if (addSection && addSection.style.display !== 'none') {
-                            const nameInput = document.getElementById('inpName');
-                            const loginPwInput = document.getElementById('inpLoginPw');
-                            const hasUnsaved = (nameInput && nameInput.value.trim()) || (loginPwInput && loginPwInput.value.trim());
-                            if (hasUnsaved) {
-                                showToast('⚠️ 其他窗口已更新数据，未保存的添加内容将被丢弃', true, 3000);
-                                if (addSection) addSection.style.display = 'none';
-                                State.addSectionVisible = false;
-                                const chevron = document.getElementById('addToggleChevron');
-                                if (chevron) chevron.style.transform = 'rotate(0deg)';
-                                ['inpName','inpUsername','inpLoginPw','inpTranPw','inpEmail','inpPhone','inpCategory','inpNote'].forEach(function(id) {
-                                    const el = document.getElementById(id);
-                                    if (el) el.value = '';
-                                });
-                                resetPasswordVisibilityButtons();
-                                updateAllSelectColors();
+            try {
+                State.channel = new BroadcastChannel('serene_vault_sync');
+                State.channel.onmessage = async function(event) {
+                    if (event.data && event.data.type === 'vaultUpdated') {
+                        if (State.activeEditItemId && typeof State.activeEditModalCleanup === 'function') {
+                            showToast('⚠️ 其他窗口已更新数据，当前编辑将被关闭', true, 3000);
+                            State.activeEditModalCleanup();
+                        }
+                        if (State.addSectionVisible) {
+                            const addSection = document.getElementById('addSection');
+                            if (addSection && addSection.style.display !== 'none') {
+                                const nameInput = document.getElementById('inpName');
+                                const loginPwInput = document.getElementById('inpLoginPw');
+                                const hasUnsaved = (nameInput && nameInput.value.trim()) || (loginPwInput && loginPwInput.value.trim());
+                                if (hasUnsaved) {
+                                    showToast('⚠️ 其他窗口已更新数据，未保存的添加内容将被丢弃', true, 3000);
+                                    if (addSection) addSection.style.display = 'none';
+                                    State.addSectionVisible = false;
+                                    const chevron = document.getElementById('addToggleChevron');
+                                    if (chevron) chevron.style.transform = 'rotate(0deg)';
+                                    ['inpName','inpUsername','inpLoginPw','inpTranPw','inpEmail','inpPhone','inpCategory','inpNote'].forEach(function(id) {
+                                        const el = document.getElementById(id);
+                                        if (el) el.value = '';
+                                    });
+                                    resetPasswordVisibilityButtons();
+                                    updateAllSelectColors();
+                                }
                             }
                         }
+                        try {
+                            const vaultRawReload = localStorage.getItem(CONFIG.STORAGE_VAULT);
+                            if (!vaultRawReload) return;
+                            const decryptedReload = await CryptoModule.decrypt(State.masterKey, JSON.parse(vaultRawReload));
+                            State.passwords = decryptedReload.passwords || [];
+                            State.customCategories = decryptedReload.customCategories || [];
+                            if (!State.customCategories.length) State.customCategories = ['E-Mail','工作','社交','银行','购物','娱乐','其他'];
+                            migrateOldData();
+                            State.rebuildIndex();
+                            if (typeof renderListOnly === 'function') renderListOnly();
+                            if (typeof refreshDatalist === 'function') refreshDatalist();
+                            showToast('🔄 数据已从另一窗口同步');
+                        } catch (error) {
+                            console.warn('同步失败:', error);
+                        }
+                    } else if (event.data && event.data.type === 'masterPasswordChanged') {
+                        showToast('⚠️ 主密码已在其他窗口修改，即将锁定', true, 3000);
+                        lockAndLogout();
                     }
-                    try {
-                        const vaultRawReload = localStorage.getItem(CONFIG.STORAGE_VAULT);
-                        if (!vaultRawReload) return;
-                        const decryptedReload = await CryptoModule.decrypt(State.masterKey, JSON.parse(vaultRawReload));
-                        State.passwords = decryptedReload.passwords || [];
-                        State.customCategories = decryptedReload.customCategories || [];
-                        if (!State.customCategories.length) State.customCategories = ['E-Mail','工作','社交','银行','购物','娱乐','其他'];
-                        migrateOldData();
-                        State.rebuildIndex();
-                        if (typeof renderListOnly === 'function') renderListOnly();
-                        if (typeof refreshDatalist === 'function') refreshDatalist();
-                        showToast('🔄 数据已从另一窗口同步');
-                    } catch (error) {
-                        console.warn('同步失败:', error);
-                    }
-                } else if (event.data && event.data.type === 'masterPasswordChanged') {
-                    showToast('⚠️ 主密码已在其他窗口修改，即将锁定', true, 3000);
-                    lockAndLogout();
-                }
-            };
+                };
+            } catch (error) {
+                console.warn('BroadcastChannel 创建失败，跨窗口同步不可用:', error);
+                State.channel = null;
+            }
         }
 
         addLog('登录','成功解锁');
@@ -2078,9 +2064,17 @@
         }
         const sortField = document.getElementById('sortFieldSelect')?.value || 'name';
         filtered.sort(function(a, b) {
-            const valueA = String(a[sortField] || '').toLowerCase();
-            const valueB = String(b[sortField] || '').toLowerCase();
-            return State.sortAscending ? valueA.localeCompare(valueB) : valueB.localeCompare(valueA);
+            let comparisonResult = 0;
+            if (sortField === 'createdAt') {
+                const timeA = a.createdAt || 0;
+                const timeB = b.createdAt || 0;
+                comparisonResult = timeA - timeB;
+            } else {
+                const valueA = String(a[sortField] || '').toLowerCase();
+                const valueB = String(b[sortField] || '').toLowerCase();
+                comparisonResult = valueA.localeCompare(valueB);
+            }
+            return State.sortAscending ? comparisonResult : -comparisonResult;
         });
         const keyword = State.searchQuery.trim();
         const fragment = document.createDocumentFragment();
@@ -2089,7 +2083,7 @@
             const transactionVisible = State.visibleTransactionPasswords.has(item.id);
             const nameHtml = highlightText(item.name, keyword);
             const usernameHtml = highlightText(item.username || '', keyword);
-            const categoryHtml = item.category ? `<span class="item-cat"><svg class="icon" style="width:0.9em;height:0.9em;"><use href="#icon-folder"/></svg> ${Util.escapeHtml(item.category)}</span>` : '';
+            const categoryHtml = item.category ? `<span class="item-cat" style="font-size:0.7rem; margin-left:8px; flex-shrink:0;"><svg class="icon" style="width:0.9em;height:0.9em;"><use href="#icon-folder"/></svg> ${Util.escapeHtml(item.category)}</span>` : '';
             const noteHtml = item.note ? `<div style="font-size:0.72rem;color:var(--text-secondary);">📝 ${Util.escapeHtml(item.note)}</div>` : '';
 
             const loginInputType = loginVisible ? 'text' : 'password';
@@ -2108,8 +2102,10 @@
                 <div style="display:flex;justify-content:space-between;align-items:flex-start;">
                     <div class="item-info">
                         ${State.batchMode ? `<input type="checkbox" class="checkbox-item batch-check" data-id="${Util.escapeAttr(item.id)}" ${State.selectedIds.has(item.id) ? 'checked' : ''}>` : ''}
-                        ${categoryHtml}
-                        <div><strong>${nameHtml}</strong></div>
+                        <div style="display:flex; align-items:center; justify-content:space-between; gap:8px;">
+                            <strong>${nameHtml}</strong>
+                            ${categoryHtml}
+                        </div>
                         <div style="font-size:0.72rem;color:var(--text-secondary);">
                             ${usernameHtml ? `👤 ${usernameHtml} ` : ''}${item.email ? `📧 ${Util.escapeHtml(item.email)} ` : ''}${item.phone ? `📱 ${Util.escapeHtml(item.phone)} ` : ''}📅 ${Util.formatDate(item.createdAt)}
                         </div>
@@ -2313,16 +2309,8 @@
             if (newLoginPassword.length < CONFIG.LOGIN_PW_MIN || newLoginPassword.length > CONFIG.LOGIN_PW_MAX) return showToast(`登录密码需${CONFIG.LOGIN_PW_MIN}-${CONFIG.LOGIN_PW_MAX}位`, true);
             if (newTransactionPassword && !/^\d{6}$/.test(newTransactionPassword)) return showToast('交易密码必须为6位数字', true);
 
-            const originalValues = {
-                name: item.name,
-                username: item.username,
-                loginPassword: item.loginPassword,
-                transactionPassword: item.transactionPassword,
-                email: item.email,
-                phone: item.phone,
-                category: item.category,
-                note: item.note
-            };
+            // 完整备份当前密码数组，确保任何修改（包括覆盖删除）在保存失败时可完全回滚
+            const passwordsBeforeSave = State.passwords.map(function(p) { return { ...p }; });
             const oldCategories = [...State.customCategories];
 
             const existingItem = State.passwords.find(function(p) { return p.name === newName && p.id !== item.id; });
@@ -2362,16 +2350,33 @@
                 closeModal();
                 showToast('✅ 已更新');
             } catch (error) {
-                item.name = originalValues.name;
-                item.username = originalValues.username;
-                item.loginPassword = originalValues.loginPassword;
-                item.transactionPassword = originalValues.transactionPassword;
-                item.email = originalValues.email;
-                item.phone = originalValues.phone;
-                item.category = originalValues.category;
-                item.note = originalValues.note;
+                // 完整恢复密码数组和分类，确保覆盖删除的条目也被恢复
+                State.passwords = passwordsBeforeSave;
                 State.customCategories = oldCategories;
                 State.rebuildIndex();
+
+                // 若密码输入框当前为明文显示，切换回密码模式并清空，减少敏感信息暴露
+                const loginPwField = modal.querySelector('#editLoginPw');
+                if (loginPwField && loginPwField.type === 'text') {
+                    loginPwField.type = 'password';
+                    loginPwField.value = '';
+                    const toggleLoginBtn = modal.querySelector('#toggleEditLoginVis');
+                    if (toggleLoginBtn) {
+                        toggleLoginBtn.innerHTML = '<svg class="icon"><use href="#icon-eye"/></svg>';
+                        toggleLoginBtn.setAttribute('aria-label', '显示登录密码');
+                    }
+                }
+                const tranPwField = modal.querySelector('#editTranPw');
+                if (tranPwField && tranPwField.type === 'text') {
+                    tranPwField.type = 'password';
+                    tranPwField.value = '';
+                    const toggleTranBtn = modal.querySelector('#toggleEditTranVis');
+                    if (toggleTranBtn) {
+                        toggleTranBtn.innerHTML = '<svg class="icon"><use href="#icon-eye"/></svg>';
+                        toggleTranBtn.setAttribute('aria-label', '显示交易密码');
+                    }
+                }
+
                 showToast('保存失败：' + error.message + '，请重试或取消', true, 5000);
             }
         };
@@ -2405,7 +2410,11 @@
         const exportData = await CryptoModule.encrypt(State.masterKey, vaultData);
         const exportObject = { version: 5, encrypted: true, salt: JSON.parse(localStorage.getItem(CONFIG.STORAGE_SALT)), data: exportData, plainChecksum: exportData.checksum };
         downloadBlob(new Blob([JSON.stringify(exportObject)], { type: 'application/json' }), `静谧密钥_加密备份_${new Date().toISOString().slice(0,19)}.json`);
-        localStorage.setItem(CONFIG.LAST_EXPORT_KEY, String(Date.now()));
+        try {
+            localStorage.setItem(CONFIG.LAST_EXPORT_KEY, String(Date.now()));
+        } catch (error) {
+            console.warn('记录上次导出时间失败:', error);
+        }
         addLog('导出加密备份', '成功');
         showToast('🔒 加密备份已导出');
     }
@@ -2736,7 +2745,10 @@
                 </div>
                 <div class="strength-text" id="changePwStrengthText">请输入新主密码</div>
                 <input type="password" id="confirmPw" placeholder="确认新密码" autocomplete="off" style="margin-top:8px;">
-                <button id="doChange" class="btn btn-primary" style="width:100%;margin-top:12px;">确认修改</button>
+                <div class="button-group" style="display:flex; gap:10px; margin-top:12px;">
+                    <button id="cancelChangePw" class="btn btn-outline" style="flex:1;">取消</button>
+                    <button id="doChange" class="btn btn-primary" style="flex:2;">确认修改</button>
+                </div>
             </div>`;
         document.body.appendChild(modal);
         document.body.classList.add('modal-open');
@@ -2745,6 +2757,15 @@
         newPasswordInput.addEventListener('input', function() {
             updateStrengthIndicator('changePwStrengthIndicator', 'changePwStrengthText', newPasswordInput.value);
         });
+        const closeChangePwModal = function() {
+            newPasswordInput.value = '';
+            modal.querySelector('#confirmPw').value = '';
+            modal.remove();
+            document.body.classList.remove('modal-open');
+            if (previousFocus && typeof previousFocus.focus === 'function') previousFocus.focus();
+        };
+        modal.querySelector('#cancelChangePw').onclick = closeChangePwModal;
+        modal.addEventListener('click', function(e) { if (e.target === modal) closeChangePwModal(); });
         modal.querySelector('#doChange').onclick = async function() {
             const newPassword = newPasswordInput.value;
             const confirmPassword = modal.querySelector('#confirmPw').value;
@@ -2785,7 +2806,11 @@
             auth: JSON.parse(localStorage.getItem(CONFIG.STORAGE_AUTH)),
             vault: JSON.parse(vaultRaw)
         };
-        localStorage.setItem(CONFIG.MIGRATION_BACKUP_KEY, JSON.stringify(oldBackup));
+        try {
+            localStorage.setItem(CONFIG.MIGRATION_BACKUP_KEY, JSON.stringify(oldBackup));
+        } catch (error) {
+            console.warn('备份旧数据失败，继续修改主密码:', error);
+        }
         const oldMasterKey = State.masterKey;
 
         try {
@@ -2805,6 +2830,9 @@
             State.passwords = oldData.passwords;
             State.customCategories = oldData.customCategories;
             State.rebuildIndex();
+
+            // 修改主密码后，立即清除所有认证缓存，强制后续敏感操作重新验证新密码
+            State.lastReauthenticationTime = 0;
 
             cleanMigrationBackup();
             oldPassword = null;
@@ -2832,7 +2860,13 @@
 
     // ===================== 日志与分类管理界面 =====================
     function showLogs() {
-        const logs = JSON.parse(localStorage.getItem(CONFIG.LOG_STORAGE) || '[]');
+        let logs = [];
+        try {
+            logs = JSON.parse(localStorage.getItem(CONFIG.LOG_STORAGE) || '[]');
+        } catch (error) {
+            console.warn('日志读取失败:', error);
+            logs = [];
+        }
         const modal = document.createElement('div');
         modal.className = 'modal';
         modal.innerHTML = `
@@ -2849,7 +2883,13 @@
         document.body.classList.add('modal-open');
         const previousFocus = document.activeElement;
         const refreshLogs = function() {
-            const newLogs = JSON.parse(localStorage.getItem(CONFIG.LOG_STORAGE) || '[]');
+            let newLogs = [];
+            try {
+                newLogs = JSON.parse(localStorage.getItem(CONFIG.LOG_STORAGE) || '[]');
+            } catch (error) {
+                console.warn('日志刷新读取失败:', error);
+                newLogs = [];
+            }
             modal.querySelector('.log-view').innerHTML = newLogs.length ? newLogs.map(function(log) { return `<div>${Util.escapeHtml(log.time)} | ${Util.escapeHtml(log.action)} | ${Util.escapeHtml(log.details)}</div>`; }).join('') : '暂无日志记录';
         };
         modal.querySelector('#closeLog').onclick = function() {
@@ -2858,12 +2898,24 @@
             if (previousFocus && typeof previousFocus.focus === 'function') previousFocus.focus();
         };
         modal.querySelector('#exportLogBtn').onclick = function() {
-            const data = JSON.parse(localStorage.getItem(CONFIG.LOG_STORAGE) || '[]');
+            let data = [];
+            try {
+                data = JSON.parse(localStorage.getItem(CONFIG.LOG_STORAGE) || '[]');
+            } catch (error) {
+                console.warn('日志导出读取失败:', error);
+                data = [];
+            }
             downloadBlob(new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' }), `静谧密钥_日志_${new Date().toISOString().slice(0,19)}.json`);
             showToast('日志已导出');
         };
         modal.querySelector('#clearLogBtn').onclick = function() {
-            if (confirm('确定清空所有操作日志吗？')) { localStorage.setItem(CONFIG.LOG_STORAGE, '[]'); refreshLogs(); showToast('日志已清空'); addLog('清空日志', '手动清空'); }
+            if (confirm('确定清空所有操作日志吗？')) {
+                // 先记录一条清空操作日志，再清空，确保用户可见清空动作
+                addLog('清空日志', '手动清空');
+                localStorage.setItem(CONFIG.LOG_STORAGE, '[]');
+                refreshLogs();
+                showToast('日志已清空');
+            }
         };
     }
 
@@ -2923,7 +2975,12 @@
         const root = document.documentElement;
         Object.entries(theme.vars).forEach(function([property, value]) { root.style.setProperty(property, value); });
         State.currentTheme = themeKey;
-        localStorage.setItem(CONFIG.THEME_STORAGE, themeKey);
+        try {
+            localStorage.setItem(CONFIG.THEME_STORAGE, themeKey);
+        } catch (error) {
+            console.warn('主题设置保存失败:', error);
+            // 即使存储失败，主题仍然立即应用，仅无法持久化
+        }
         const themeButton = document.getElementById('themeSwitcherBtn');
         if (themeButton) themeButton.innerHTML = `<svg class="icon"><use href="#icon-palette"/></svg> ${theme.icon}`;
         const dropdown = document.getElementById('themeDropdown');
@@ -3361,16 +3418,24 @@
                     <label style="display:flex;align-items:center;gap:10px;cursor:pointer;padding:8px 0;font-size:0.9rem;">
                         <input type="checkbox" id="trustPlainCheckSmall" class="checkbox-sm"> 我信任此来源，允许导入明文文件
                     </label>
-                    <button id="importFileBtnSmall" class="btn btn-primary" style="width:100%;margin-top:12px;">选择文件</button>
+                    <div class="button-group" style="display:flex; gap:10px; margin-top:12px;">
+                        <button id="cancelImportSmallBtn" class="btn btn-outline" style="flex:1;">取消</button>
+                        <button id="importFileBtnSmall" class="btn btn-primary" style="flex:2;">选择文件</button>
+                    </div>
                 </div>`;
             document.body.appendChild(modal);
             document.body.classList.add('modal-open');
             const previousFocus = document.activeElement;
-            modal.querySelector('#importFileBtnSmall').onclick = function() {
-                const trustChecked = modal.querySelector('#trustPlainCheckSmall').checked;
+            const closeImportSmallModal = function() {
                 modal.remove();
                 document.body.classList.remove('modal-open');
                 if (previousFocus && typeof previousFocus.focus === 'function') previousFocus.focus();
+            };
+            modal.querySelector('#cancelImportSmallBtn').onclick = closeImportSmallModal;
+            modal.addEventListener('click', function(e) { if (e.target === modal) closeImportSmallModal(); });
+            modal.querySelector('#importFileBtnSmall').onclick = function() {
+                const trustChecked = modal.querySelector('#trustPlainCheckSmall').checked;
+                closeImportSmallModal();
                 const fileInput = document.createElement('input');
                 fileInput.type = 'file';
                 fileInput.accept = '.json,.csv';
@@ -3409,16 +3474,24 @@
                     <label style="display:flex;align-items:center;gap:10px;cursor:pointer;padding:8px 0;font-size:0.9rem;">
                         <input type="checkbox" id="trustPlainCheck" class="checkbox-sm"> 我信任此来源，允许导入明文文件
                     </label>
-                    <button id="importFileBtn" class="btn btn-primary" style="width:100%;margin-top:12px;">选择文件</button>
+                    <div class="button-group" style="display:flex; gap:10px; margin-top:12px;">
+                        <button id="cancelImportBtn" class="btn btn-outline" style="flex:1;">取消</button>
+                        <button id="importFileBtn" class="btn btn-primary" style="flex:2;">选择文件</button>
+                    </div>
                 </div>`;
             document.body.appendChild(modal);
             document.body.classList.add('modal-open');
             const previousFocus = document.activeElement;
-            modal.querySelector('#importFileBtn').onclick = function() {
-                const trustChecked = modal.querySelector('#trustPlainCheck').checked;
+            const closeImportModal = function() {
                 modal.remove();
                 document.body.classList.remove('modal-open');
                 if (previousFocus && typeof previousFocus.focus === 'function') previousFocus.focus();
+            };
+            modal.querySelector('#cancelImportBtn').onclick = closeImportModal;
+            modal.addEventListener('click', function(e) { if (e.target === modal) closeImportModal(); });
+            modal.querySelector('#importFileBtn').onclick = function() {
+                const trustChecked = modal.querySelector('#trustPlainCheck').checked;
+                closeImportModal();
                 const fileInput = document.createElement('input');
                 fileInput.type = 'file';
                 fileInput.accept = '.json,.csv';
@@ -3486,7 +3559,10 @@
                         </div>
                         <div class="strength-text" id="setupPwStrengthText">请输入主密码</div>
                         <input type="password" id="newPw2" placeholder="确认主密码" autocomplete="off" style="margin-top:8px;">
-                        <button id="confirmSetup" class="btn btn-primary" style="width:100%;margin-top:12px;">创建保险库</button>
+                        <div class="button-group" style="display:flex; gap:10px; margin-top:12px;">
+                            <button id="cancelSetup" class="btn btn-outline" style="flex:1;">取消</button>
+                            <button id="confirmSetup" class="btn btn-primary" style="flex:2;">创建保险库</button>
+                        </div>
                     </div>`;
                 document.body.appendChild(modal);
                 document.body.classList.add('modal-open');
@@ -3495,6 +3571,14 @@
                 passwordInput1.addEventListener('input', function() {
                     updateStrengthIndicator('setupPwStrengthIndicator', 'setupPwStrengthText', passwordInput1.value);
                 });
+                const closeSetupModal = function() {
+                    passwordInput1.value = '';
+                    modal.querySelector('#newPw2').value = '';
+                    modal.remove();
+                    document.body.classList.remove('modal-open');
+                    if (previousFocus && typeof previousFocus.focus === 'function') previousFocus.focus();
+                };
+                modal.querySelector('#cancelSetup').onclick = closeSetupModal;
                 modal.querySelector('#confirmSetup').onclick = async function() {
                     const password1 = passwordInput1.value;
                     const password2 = modal.querySelector('#newPw2').value;
@@ -3502,15 +3586,12 @@
                     if (password1 !== password2) return showToast('两次输入不一致', true);
                     try {
                         await initializeNewVault(password1);
-                        passwordInput1.value = '';
-                        modal.querySelector('#newPw2').value = '';
-                        modal.remove();
-                        document.body.classList.remove('modal-open');
-                        if (previousFocus && typeof previousFocus.focus === 'function') previousFocus.focus();
+                        closeSetupModal();
                         showToast('✅ 保险库创建成功！');
                         showAuth();
                     } catch (error) { showToast(error.message, true); }
                 };
+                modal.addEventListener('click', function(e) { if (e.target === modal) closeSetupModal(); });
             };
         } else {
             root.innerHTML = `
