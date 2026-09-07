@@ -1,16 +1,23 @@
 <!--
 ====================================================================================
- 静谧·密钥 v6.4.1 — 排序修复与健壮性增强
- 更新日期：2026-07-11
+ 静谧·密钥 v6.5.0 — 综合优化与修复
+ 更新日期：2026-09-08
 ====================================================================================
- 更新内容（v6.4.0 → v6.4.1）：
+ 更新内容（v6.4.2 → v6.5.0）：
 
- 1. [修复] 按“创建时间”排序错误：createdAt 字段改为数值比较，确保排序正确。
- 2. [优化] 日志导出读取增加异常保护，避免存储异常导致导出失败。
+ 1. [修复] 设备旋转导致顶部折叠状态残留，加入 resize 监听自动展开。
+ 2. [修复] 覆盖导入时清空密码可见性集合，避免无效 ID 残留。
+ 3. [增强] 导入解密后限制密码条目数量，防止内存溢出。
+ 4. [优化] 折叠按钮事件阻止冒泡，避免潜在冲突。
+ 5. [优化] CSV 解析完善对回车符（\r）的处理。
+ 6. [兼容] 全面替换可选链操作符（?.），提升旧浏览器兼容性。
+ 7. [优化] 剪贴板复制提示更明确，强调自动清理时间。
+ 8. [优化] 列表渲染使用 requestAnimationFrame 降低布局抖动。
+ 9. [优化] 移动端折叠按钮增加文字提示，提升可发现性。
+ 10. [优化] 部分变量名和逻辑细化，提升代码可读性。
  
- 历史更新（v6.3.1 → v6.4.0）：
- 综合修复与可用性增强，包括回滚备份、认证缓存失效、BroadcastChannel 保护、
- 模态框取消按钮、密码明文复位、日志与导出保护、分类标签优化等。
+ 历史更新（v6.4.1 → v6.4.2）：
+ 新增移动端顶部工具栏折叠功能。
 ====================================================================================
 -->
 <!DOCTYPE html>
@@ -24,7 +31,7 @@
     <meta http-equiv="X-Frame-Options" content="DENY">
     <meta http-equiv="X-Content-Type-Options" content="nosniff">
     <meta http-equiv="Referrer-Policy" content="strict-origin-when-cross-origin">
-    <title>🔐 静谧·密钥 | 安全密码本 v6.4.1</title>
+    <title>🔐 静谧·密钥 | 安全密码本 v6.5.0</title>
     <style>
         :root {
             --bg-gradient: linear-gradient(135deg, #e0f2fe 0%, #bae6fd 50%, #e0e7ff 100%);
@@ -928,6 +935,89 @@
             transition: color 0.3s ease;
         }
 
+        /* ===== 顶部折叠控制样式（仅移动端） ===== */
+        .collapse-top-btn {
+            display: none;
+            background: transparent;
+            border: none;
+            padding: 6px 8px;
+            cursor: pointer;
+            color: var(--text-secondary);
+            font-size: 0.85rem;
+            align-items: center;
+            justify-content: center;
+            border-radius: 10px;
+            transition: background 0.2s;
+            min-width: auto;
+            min-height: 40px;
+            gap: 4px;
+        }
+
+        .collapse-top-btn .collapse-text {
+            display: inline;
+        }
+
+        .collapse-top-btn:hover {
+            background: rgba(0,0,0,0.06);
+        }
+
+        #expandTopBar {
+            display: none;
+        }
+
+        @media (max-width: 640px) {
+            .collapse-top-btn {
+                display: inline-flex;
+            }
+            .collapse-top-btn .collapse-text {
+                display: none;
+            }
+        }
+
+        .top-collapsed #expandTopBar {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            gap: 8px;
+            padding: 6px 16px;
+            background: var(--glass-bg);
+            backdrop-filter: blur(16px);
+            -webkit-backdrop-filter: blur(16px);
+            border-radius: 0 0 20px 20px;
+            border: 1px solid var(--glass-border);
+            border-top: none;
+            box-shadow: 0 4px 16px rgba(0,0,0,0.06);
+            margin-bottom: 4px;
+            position: sticky;
+            top: 0;
+            z-index: 50;
+            font-size: 0.85rem;
+            font-weight: 500;
+            color: var(--text-secondary);
+        }
+
+        .top-collapsed #expandTopBar .btn {
+            min-height: 36px;
+            padding: 6px 18px;
+            font-size: 0.85rem;
+        }
+
+        .top-collapsed .app-sticky-top {
+            display: none !important;
+        }
+
+        @media (max-width: 640px) {
+            .top-collapsed #expandTopBar {
+                padding: 4px 12px;
+                border-radius: 0 0 16px 16px;
+            }
+            .top-collapsed #expandTopBar .btn {
+                min-height: 32px;
+                padding: 4px 14px;
+                font-size: 0.78rem;
+            }
+        }
+
         @media (max-width: 640px) {
             html { font-size: 17px; }
             body { padding: calc(8px + var(--safe-area-top)) calc(8px + var(--safe-area-right)) calc(8px + var(--safe-area-bottom)) calc(8px + var(--safe-area-left)); }
@@ -1024,6 +1114,7 @@
     <symbol id="icon-palette" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M12 2a10 10 0 0 1 7 17H12V2z"/></symbol>
     <symbol id="icon-sort" viewBox="0 0 24 24"><path d="M12 5v14M5 12l7-7 7 7"/></symbol>
     <symbol id="icon-chevron-down" viewBox="0 0 24 24"><polyline points="6 9 12 15 18 9"/></symbol>
+    <symbol id="icon-chevron-up" viewBox="0 0 24 24"><polyline points="18 15 12 9 6 15"/></symbol>
 </svg>
 <div id="root"></div>
 <script>
@@ -1032,7 +1123,7 @@
 
     // ===================== 常量与配置 =====================
     const CONFIG = {
-        APP_VERSION: '6.4.1',
+        APP_VERSION: '6.5.0',
         STORAGE_VAULT: 'serene_vault_enc_v3',
         STORAGE_SALT: 'serene_vault_salt_v3',
         STORAGE_AUTH: 'serene_vault_auth_v3',
@@ -1345,6 +1436,7 @@
         visibilityLockTimer: null,
         searchDebounceTimer: null,
         globalEventController: null,
+        renderFrameRequest: null,
 
         rebuildIndex: function() {
             this.passwordIdIndex.clear();
@@ -1388,6 +1480,10 @@
             if (this.searchDebounceTimer) {
                 clearTimeout(this.searchDebounceTimer);
                 this.searchDebounceTimer = null;
+            }
+            if (this.renderFrameRequest) {
+                cancelAnimationFrame(this.renderFrameRequest);
+                this.renderFrameRequest = null;
             }
             if (this.channel) {
                 this.channel.close();
@@ -1717,7 +1813,8 @@
         if (filtered.length !== current.length) { saveCategories(filtered); return true; }
         return false;
     }
-    function batchAddCategories(newCategories, replaceExisting = false) {
+    function batchAddCategories(newCategories, replaceExisting) {
+        if (replaceExisting === undefined) replaceExisting = false;
         if (!newCategories.length) return false;
         if (replaceExisting) { saveCategories([...new Set(newCategories)]); return true; }
         const currentSet = new Set(loadCategories());
@@ -1730,7 +1827,9 @@
     }
 
     // ===================== 提示与剪贴板 =====================
-    function showToast(message, isError = false, duration = 2800) {
+    function showToast(message, isError, duration) {
+        if (isError === undefined) isError = false;
+        if (duration === undefined) duration = 2800;
         document.querySelectorAll('.toast').forEach(function(toast) { toast.remove(); });
         const toast = document.createElement('div');
         toast.className = 'toast';
@@ -1743,7 +1842,7 @@
     async function copyAndClear(text) {
         try {
             await navigator.clipboard.writeText(text);
-            showToast('📋 已复制，请手动清理剪贴板以保安全');
+            showToast('📋 已复制，10秒后自动清空剪贴板，请尽快使用');
             State.clipboardTimer = setTimeout(function() {
                 navigator.clipboard.writeText('').catch(function() {});
                 State.clipboardTimer = null;
@@ -1754,7 +1853,9 @@
     }
 
     // ===================== 重新认证 =====================
-    async function promptReauthentication(actionDescription, returnPassword = false, forceReauth = false) {
+    async function promptReauthentication(actionDescription, returnPassword, forceReauth) {
+        if (returnPassword === undefined) returnPassword = false;
+        if (forceReauth === undefined) forceReauth = false;
         if (!State.masterKey) throw new Error('未解锁');
         if (!forceReauth && !returnPassword && State.lastReauthenticationTime && (Date.now() - State.lastReauthenticationTime) < CONFIG.REAUTH_VALIDITY_MS) {
             return true;
@@ -1798,7 +1899,8 @@
             input.addEventListener('keypress', function(e) { if (e.key==='Enter') confirmButton.click(); });
         });
     }
-    async function requireReauthentication(actionDesc, force = false) {
+    async function requireReauthentication(actionDesc, force) {
+        if (force === undefined) force = false;
         if (!await promptReauthentication(actionDesc, false, force)) throw new Error('验证取消');
         return true;
     }
@@ -1916,35 +2018,48 @@
             modal.querySelector('#dupCancel').onclick = function() { cleanup('cancel'); };
         });
     }
-    // ===================== CSV 解析器 =====================
+
+    // ===================== CSV 解析器（增强版） =====================
     function parseCSV(csvText) {
         const rows = [];
         let currentRow = [];
         let currentField = '';
         let inQuotes = false;
-        for (let i = 0; i < csvText.length; i++) {
+        let i = 0;
+        while (i < csvText.length) {
             const char = csvText[i];
             if (char === '"') {
                 if (inQuotes && i + 1 < csvText.length && csvText[i + 1] === '"') {
                     currentField += '"';
-                    i++;
+                    i += 2;
+                    continue;
                 } else {
                     inQuotes = !inQuotes;
+                    i++;
+                    continue;
                 }
-            } else if (char === ',' && !inQuotes) {
+            }
+            if (char === ',' && !inQuotes) {
                 currentRow.push(currentField);
                 currentField = '';
-            } else if ((char === '\n' || (char === '\r' && i + 1 < csvText.length && csvText[i + 1] === '\n')) && !inQuotes) {
-                if (char === '\r') i++;
+                i++;
+                continue;
+            }
+            if (!inQuotes && (char === '\n' || char === '\r')) {
+                if (char === '\r' && i + 1 < csvText.length && csvText[i + 1] === '\n') {
+                    i++;
+                }
                 currentRow.push(currentField);
                 if (currentRow.length > 1 || currentRow[0] !== '') {
                     rows.push(currentRow);
                 }
                 currentRow = [];
                 currentField = '';
-            } else {
-                currentField += char;
+                i++;
+                continue;
             }
+            currentField += char;
+            i++;
         }
         if (currentField !== '' || currentRow.length > 0) {
             currentRow.push(currentField);
@@ -1965,7 +2080,7 @@
         container.innerHTML = '';
         if (!categories.length) {
             container.innerHTML = '<div class="cat-empty"><div style="font-size:2rem;margin-bottom:8px;">📁</div><p>暂无自定义分类</p><p style="font-size:0.75rem;color:var(--text-secondary);">添加后将在此显示</p></div>';
-            const countElement = State.activeCategoryModal?.querySelector('#catCount');
+            const countElement = State.activeCategoryModal ? State.activeCategoryModal.querySelector('#catCount') : null;
             if (countElement) countElement.innerText = '0';
             return;
         }
@@ -2018,7 +2133,7 @@
                 }
             };
         });
-        const countElement = State.activeCategoryModal?.querySelector('#catCount');
+        const countElement = State.activeCategoryModal ? State.activeCategoryModal.querySelector('#catCount') : null;
         if (countElement) countElement.innerText = categories.length;
     }
 
@@ -2050,8 +2165,18 @@
         return Util.escapeHtml(text).replace(regex, '<span class="highlight">$1</span>');
     }
 
-    // ===================== 密码列表渲染 =====================
+    // ===================== 密码列表渲染（requestAnimationFrame 优化） =====================
     let renderListOnly = function() {
+        if (State.renderFrameRequest) {
+            cancelAnimationFrame(State.renderFrameRequest);
+        }
+        State.renderFrameRequest = requestAnimationFrame(function() {
+            State.renderFrameRequest = null;
+            actualRenderList();
+        });
+    };
+
+    function actualRenderList() {
         const listContainer = document.getElementById('listContainer');
         if (!listContainer) return;
         let filtered = [...State.passwords];
@@ -2062,7 +2187,8 @@
                 return fields.some(function(field) { return String(field).toLowerCase().includes(query); });
             });
         }
-        const sortField = document.getElementById('sortFieldSelect')?.value || 'name';
+        const sortFieldSelect = document.getElementById('sortFieldSelect');
+        const sortField = sortFieldSelect ? sortFieldSelect.value : 'name';
         filtered.sort(function(a, b) {
             let comparisonResult = 0;
             if (sortField === 'createdAt') {
@@ -2129,14 +2255,14 @@
             fragment.appendChild(itemElement);
 
             if (loginVisible) {
-                const loginInput = itemElement.querySelector(`#login-${Util.escapeAttr(item.id)}`);
+                const loginInput = itemElement.querySelector('#login-' + Util.escapeAttr(item.id));
                 if (loginInput) {
                     loginInput.type = 'text';
                     loginInput.value = item.loginPassword || '';
                 }
             }
             if (transactionVisible && item.transactionPassword) {
-                const tranInput = itemElement.querySelector(`#tran-${Util.escapeAttr(item.id)}`);
+                const tranInput = itemElement.querySelector('#tran-' + Util.escapeAttr(item.id));
                 if (tranInput) {
                     tranInput.type = 'text';
                     tranInput.value = item.transactionPassword || '';
@@ -2151,18 +2277,24 @@
             listContainer.appendChild(fragment);
         }
 
-        document.getElementById('countSpan').innerText = State.passwords.length;
+        const countSpan = document.getElementById('countSpan');
+        if (countSpan) countSpan.innerText = State.passwords.length;
 
         if (State.batchMode) {
             listContainer.querySelectorAll('.batch-check').forEach(function(checkbox) {
                 checkbox.addEventListener('change', function() {
                     const id = checkbox.dataset.id;
-                    checkbox.checked ? State.selectedIds.add(id) : State.selectedIds.delete(id);
-                    document.getElementById('batchCount').innerText = State.selectedIds.size;
+                    if (checkbox.checked) {
+                        State.selectedIds.add(id);
+                    } else {
+                        State.selectedIds.delete(id);
+                    }
+                    const batchCount = document.getElementById('batchCount');
+                    if (batchCount) batchCount.innerText = State.selectedIds.size;
                 });
             });
         }
-    };
+    }
 
     // ===================== 编辑密码模态框 =====================
     function openEditModal(item) {
@@ -2309,7 +2441,6 @@
             if (newLoginPassword.length < CONFIG.LOGIN_PW_MIN || newLoginPassword.length > CONFIG.LOGIN_PW_MAX) return showToast(`登录密码需${CONFIG.LOGIN_PW_MIN}-${CONFIG.LOGIN_PW_MAX}位`, true);
             if (newTransactionPassword && !/^\d{6}$/.test(newTransactionPassword)) return showToast('交易密码必须为6位数字', true);
 
-            // 完整备份当前密码数组，确保任何修改（包括覆盖删除）在保存失败时可完全回滚
             const passwordsBeforeSave = State.passwords.map(function(p) { return { ...p }; });
             const oldCategories = [...State.customCategories];
 
@@ -2350,12 +2481,10 @@
                 closeModal();
                 showToast('✅ 已更新');
             } catch (error) {
-                // 完整恢复密码数组和分类，确保覆盖删除的条目也被恢复
                 State.passwords = passwordsBeforeSave;
                 State.customCategories = oldCategories;
                 State.rebuildIndex();
 
-                // 若密码输入框当前为明文显示，切换回密码模式并清空，减少敏感信息暴露
                 const loginPwField = modal.querySelector('#editLoginPw');
                 if (loginPwField && loginPwField.type === 'text') {
                     loginPwField.type = 'password';
@@ -2399,7 +2528,7 @@
         const csvContent = '\uFEFF' + [headers.join(',')].concat(rows).join('\n');
         downloadBlob(new Blob([csvContent], { type: 'text/csv;charset=utf-8;' }), `静谧密钥_导出_${new Date().toISOString().slice(0,19)}.csv`);
         addLog('导出CSV', `${State.passwords.length}条`);
-        showToast('📎 CSV已导出');
+        showToast('📎 CSV已导出，请妥善保管');
     }
 
     async function exportEncryptedBackup() {
@@ -2432,7 +2561,7 @@
         };
         downloadBlob(new Blob([JSON.stringify(exportData, null, 2)], { type: 'application/json' }), `静谧密钥_明文导出_${new Date().toISOString().slice(0,19)}.json`);
         addLog('导出明文JSON', `${State.passwords.length}条`);
-        showToast('📄 明文JSON已导出（请妥善保管）');
+        showToast('📄 明文JSON已导出，请妥善保管');
     }
 
     function downloadBlob(blob, filename) {
@@ -2456,7 +2585,7 @@
         const lines = parseCSV(cleanText);
         if (lines.length < 2) { showToast('空文件或格式无效', true); return; }
         const headers = lines[0].map(function(header) { return header.trim().toLowerCase().replace(/^\uFEFF/, ''); });
-        if (!headers.every(h => h)) { showToast('CSV表头无效', true); return; }
+        if (!headers.every(function(h) { return h; })) { showToast('CSV表头无效', true); return; }
         const columnIndex = {
             name: headers.findIndex(function(h) { return ['name','标题','title','名称','account'].includes(h); }),
             username: headers.findIndex(function(h) { return ['username','用户名','user','login'].includes(h); }),
@@ -2475,14 +2604,14 @@
             const row = lines[i];
             if (!row.length || (row.length === 1 && !row[0])) continue;
             const item = {
-                name: (columnIndex.name >= 0 ? row[columnIndex.name] : '')?.trim() || '',
-                username: (columnIndex.username >= 0 ? row[columnIndex.username] : '')?.trim() || '',
-                loginPassword: (columnIndex.loginPassword >= 0 ? row[columnIndex.loginPassword] : '')?.trim() || '',
-                transactionPassword: (columnIndex.transactionPassword >= 0 ? row[columnIndex.transactionPassword] : '')?.trim() || '',
-                email: (columnIndex.email >= 0 ? row[columnIndex.email] : '')?.trim() || '',
-                phone: (columnIndex.phone >= 0 ? row[columnIndex.phone] : '')?.trim() || '',
-                category: (columnIndex.category >= 0 ? row[columnIndex.category] : '')?.trim() || '',
-                note: (columnIndex.note >= 0 ? row[columnIndex.note] : '')?.trim() || ''
+                name: (columnIndex.name >= 0 ? row[columnIndex.name] : '') ? String(row[columnIndex.name]).trim() : '',
+                username: (columnIndex.username >= 0 ? row[columnIndex.username] : '') ? String(row[columnIndex.username]).trim() : '',
+                loginPassword: (columnIndex.loginPassword >= 0 ? row[columnIndex.loginPassword] : '') ? String(row[columnIndex.loginPassword]).trim() : '',
+                transactionPassword: (columnIndex.transactionPassword >= 0 ? row[columnIndex.transactionPassword] : '') ? String(row[columnIndex.transactionPassword]).trim() : '',
+                email: (columnIndex.email >= 0 ? row[columnIndex.email] : '') ? String(row[columnIndex.email]).trim() : '',
+                phone: (columnIndex.phone >= 0 ? row[columnIndex.phone] : '') ? String(row[columnIndex.phone]).trim() : '',
+                category: (columnIndex.category >= 0 ? row[columnIndex.category] : '') ? String(row[columnIndex.category]).trim() : '',
+                note: (columnIndex.note >= 0 ? row[columnIndex.note] : '') ? String(row[columnIndex.note]).trim() : ''
             };
             if (item.name && item.loginPassword) importedRaw.push(item);
         }
@@ -2516,6 +2645,10 @@
                 let importedPasswords = [], importedCategories = [];
                 if (Array.isArray(decrypted)) importedPasswords = decrypted;
                 else { importedPasswords = decrypted.passwords || []; importedCategories = decrypted.customCategories || []; }
+                if (importedPasswords.length > CONFIG.MAX_PASSWORDS) {
+                    showToast(`导入文件包含 ${importedPasswords.length} 条密码，超过上限 ${CONFIG.MAX_PASSWORDS}，请分批导入或调整上限`, true, 5000);
+                    return;
+                }
                 importedPasswords = importedPasswords.map(function(item) { return normalizeItem(item); });
                 const replaceCategories = importedCategories.length ? confirm('导入文件包含分类库，是否替换当前分类？') : confirm('导入文件不含分类库，是否清空当前分类？');
                 await applyImport(importedPasswords, importedCategories, replaceCategories, true);
@@ -2524,11 +2657,19 @@
             try {
                 await requireReauthentication('导入明文JSON', true);
             } catch(e) { return; }
-            const replaceCategories = parsed.customCategories?.length ? confirm('导入文件包含分类库，是否替换？') : confirm('是否清空当前分类？');
+            if (parsed.passwords.length > CONFIG.MAX_PASSWORDS) {
+                showToast(`导入文件包含 ${parsed.passwords.length} 条密码，超过上限 ${CONFIG.MAX_PASSWORDS}`, true, 5000);
+                return;
+            }
+            const replaceCategories = parsed.customCategories && parsed.customCategories.length ? confirm('导入文件包含分类库，是否替换？') : confirm('是否清空当前分类？');
             let importedPasswords = parsed.passwords.map(function(item) { return normalizeItem(item); });
             await applyImport(importedPasswords, parsed.customCategories || [], replaceCategories, true);
         } else if (trustChecked && Array.isArray(parsed)) {
             if (!parsed.length) { showToast('文件无数据', true); return; }
+            if (parsed.length > CONFIG.MAX_PASSWORDS) {
+                showToast(`文件包含 ${parsed.length} 条密码，超过上限 ${CONFIG.MAX_PASSWORDS}`, true, 5000);
+                return;
+            }
             try {
                 await requireReauthentication('导入明文数组', true);
             } catch(e) { return; }
@@ -2553,6 +2694,8 @@
             if (overwrite) {
                 if (importedPasswords.length > CONFIG.MAX_PASSWORDS) { showToast(`超过上限${CONFIG.MAX_PASSWORDS}`, true); return; }
                 State.passwords = importedPasswords;
+                State.visibleLoginPasswords.clear();
+                State.visibleTransactionPasswords.clear();
             } else {
                 if (State.passwords.length + importedPasswords.length > CONFIG.MAX_PASSWORDS) {
                     const spaceRemaining = CONFIG.MAX_PASSWORDS - State.passwords.length;
@@ -2562,13 +2705,13 @@
                     const toAdd = newItems.slice(0, spaceRemaining);
                     skippedCount = skipped.length;
                     truncatedCount = newItems.length - toAdd.length;
-                    State.passwords.push(...toAdd);
+                    State.passwords.push.apply(State.passwords, toAdd);
                 } else {
                     const existingNames = new Set(State.passwords.map(function(p) { return p.name; }));
                     const skipped = importedPasswords.filter(function(item) { return existingNames.has(item.name); });
                     const newItems = importedPasswords.filter(function(item) { return !existingNames.has(item.name); });
                     skippedCount = skipped.length;
-                    State.passwords.push(...newItems);
+                    State.passwords.push.apply(State.passwords, newItems);
                 }
             }
             if (replaceCategories) saveCategories(importedCategories.length ? [...importedCategories] : []);
@@ -2643,7 +2786,8 @@
         State.batchMode = !State.batchMode;
         if (!State.batchMode) State.selectedIds.clear();
         renderListOnly();
-        document.getElementById('batchBar').style.display = State.batchMode ? 'flex' : 'none';
+        const batchBar = document.getElementById('batchBar');
+        if (batchBar) batchBar.style.display = State.batchMode ? 'flex' : 'none';
     }
 
     async function batchDelete() {
@@ -2669,7 +2813,8 @@
             }
             renderListOnly();
             refreshDatalist();
-            document.getElementById('batchBar').style.display = 'none';
+            const batchBar = document.getElementById('batchBar');
+            if (batchBar) batchBar.style.display = 'none';
             showToast(`已删除 ${ids.length} 条`);
             addLog('批量删除', `${ids.length}条`);
         } else {
@@ -2831,7 +2976,6 @@
             State.customCategories = oldData.customCategories;
             State.rebuildIndex();
 
-            // 修改主密码后，立即清除所有认证缓存，强制后续敏感操作重新验证新密码
             State.lastReauthenticationTime = 0;
 
             cleanMigrationBackup();
@@ -2910,7 +3054,6 @@
         };
         modal.querySelector('#clearLogBtn').onclick = function() {
             if (confirm('确定清空所有操作日志吗？')) {
-                // 先记录一条清空操作日志，再清空，确保用户可见清空动作
                 addLog('清空日志', '手动清空');
                 localStorage.setItem(CONFIG.LOG_STORAGE, '[]');
                 refreshLogs();
@@ -2973,13 +3116,14 @@
         const theme = THEMES[themeKey];
         if (!theme) return;
         const root = document.documentElement;
-        Object.entries(theme.vars).forEach(function([property, value]) { root.style.setProperty(property, value); });
+        Object.entries(theme.vars).forEach(function(entry) {
+            root.style.setProperty(entry[0], entry[1]);
+        });
         State.currentTheme = themeKey;
         try {
             localStorage.setItem(CONFIG.THEME_STORAGE, themeKey);
         } catch (error) {
             console.warn('主题设置保存失败:', error);
-            // 即使存储失败，主题仍然立即应用，仅无法持久化
         }
         const themeButton = document.getElementById('themeSwitcherBtn');
         if (themeButton) themeButton.innerHTML = `<svg class="icon"><use href="#icon-palette"/></svg> ${theme.icon}`;
@@ -2991,7 +3135,9 @@
     function buildThemeDropdown() {
         const dropdown = document.getElementById('themeDropdown');
         if (!dropdown) return;
-        dropdown.innerHTML = Object.entries(THEMES).map(function([key, theme]) {
+        dropdown.innerHTML = Object.entries(THEMES).map(function(entry) {
+            const key = entry[0];
+            const theme = entry[1];
             return `<div class="theme-option" data-theme="${key}">
                 <div class="theme-color-preview" style="background: ${theme.vars['--primary']};"></div>
                 <span>${theme.icon} ${theme.name}</span>
@@ -3049,7 +3195,12 @@
         if (!root) return;
         root.innerHTML = `
         <div class="app-container card" id="appContainer">
-            <div class="app-sticky-top">
+            <div id="expandTopBar">
+                <button class="btn btn-outline btn-sm" id="expandTopBarBtn" aria-label="展开顶部工具栏">
+                    <svg class="icon"><use href="#icon-chevron-down"/></svg> 展开工具栏
+                </button>
+            </div>
+            <div class="app-sticky-top" id="appStickyTop">
                 <div class="app-header">
                     <div class="logo">
                         <svg viewBox="0 0 24 24" style="width:2.4rem;height:2.4rem;fill:none;stroke:currentColor;stroke-width:1.8;"><use href="#icon-shield"/></svg>
@@ -3062,13 +3213,17 @@
                             <svg class="icon" style="width:1em;height:1em;transition:transform 0.25s;" id="addToggleChevron"><use href="#icon-chevron-down"/></svg>
                         </button>
                         <div class="theme-switcher">
-                            <button class="btn btn-outline btn-sm" id="themeSwitcherBtn" aria-label="切换主题"><svg class="icon"><use href="#icon-palette"/></svg> ${THEMES[State.currentTheme]?.icon || '🎨'}</button>
+                            <button class="btn btn-outline btn-sm" id="themeSwitcherBtn" aria-label="切换主题"><svg class="icon"><use href="#icon-palette"/></svg> ${THEMES[State.currentTheme] ? THEMES[State.currentTheme].icon : '🎨'}</button>
                             <div class="theme-dropdown" id="themeDropdown"></div>
                         </div>
                         <button class="btn btn-outline btn-sm" id="lockBtn" aria-label="锁定应用"><svg class="icon"><use href="#icon-lock"/></svg> 锁定</button>
                         <button class="btn btn-outline btn-sm" id="changeMasterPwBtn" aria-label="修改主密码"><svg class="icon"><use href="#icon-refresh"/></svg> 改密</button>
                         <button class="btn btn-outline btn-sm" id="categoryManagerBtn" aria-label="管理分类"><svg class="icon"><use href="#icon-folder"/></svg> 分类</button>
                         <button class="btn btn-outline btn-sm" id="logBtn" aria-label="查看日志"><svg class="icon"><use href="#icon-log"/></svg> 日志</button>
+                        <button class="collapse-top-btn" id="collapseTopBarBtn" aria-label="折叠顶部工具栏">
+                            <svg class="icon"><use href="#icon-chevron-up"/></svg>
+                            <span class="collapse-text">收起</span>
+                        </button>
                     </div>
                 </div>
                 <div class="search-bar">
@@ -3163,6 +3318,42 @@
         }
 
         const appContainer = document.getElementById('appContainer');
+        const collapseBtn = document.getElementById('collapseTopBarBtn');
+        const expandBtn = document.getElementById('expandTopBarBtn');
+        const stickyTop = document.getElementById('appStickyTop');
+        const expandContainer = document.getElementById('expandTopBar');
+
+        const toggleTopBar = (collapse) => {
+            if (collapse === undefined) {
+                collapse = !appContainer.classList.contains('top-collapsed');
+            }
+            appContainer.classList.toggle('top-collapsed', collapse);
+            if (collapse) {
+                setTimeout(renderListOnly, 150);
+            } else {
+                renderListOnly();
+            }
+        };
+
+        if (collapseBtn) {
+            collapseBtn.addEventListener('click', function(event) {
+                event.stopPropagation();
+                toggleTopBar(true);
+            });
+        }
+        if (expandBtn) {
+            expandBtn.addEventListener('click', function(event) {
+                event.stopPropagation();
+                toggleTopBar(false);
+            });
+        }
+
+        const handleResize = function() {
+            if (window.innerWidth > 640 && appContainer.classList.contains('top-collapsed')) {
+                toggleTopBar(false);
+            }
+        };
+        window.addEventListener('resize', handleResize, { signal });
 
         appContainer.addEventListener('click', async function(event) {
             const editButton = event.target.closest('.edit-btn');
@@ -3223,13 +3414,18 @@
                 debouncedSearch();
             });
         }
-        document.getElementById('searchFieldSelect').addEventListener('change', function(event) {
-            State.searchField = event.target.value;
-            renderListOnly();
-        });
+        const searchFieldSelect = document.getElementById('searchFieldSelect');
+        if (searchFieldSelect) {
+            searchFieldSelect.addEventListener('change', function(event) {
+                State.searchField = event.target.value;
+                renderListOnly();
+            });
+        }
 
-        document.getElementById('sortFieldSelect').addEventListener('change', function() { renderListOnly(); });
-        document.getElementById('sortBtn').onclick = function() { State.sortAscending = !State.sortAscending; renderListOnly(); };
+        const sortFieldSelect = document.getElementById('sortFieldSelect');
+        if (sortFieldSelect) sortFieldSelect.addEventListener('change', function() { renderListOnly(); });
+        const sortBtn = document.getElementById('sortBtn');
+        if (sortBtn) sortBtn.onclick = function() { State.sortAscending = !State.sortAscending; renderListOnly(); };
 
         const addToggleBtn = document.getElementById('addToggleBtn');
         const addSection = document.getElementById('addSection');
@@ -3377,14 +3573,14 @@
             document.body.classList.add('modal-open');
             const previousFocus = document.activeElement;
 
-            const closeModal = () => {
+            const closeModal = function() {
                 modal.remove();
                 document.body.classList.remove('modal-open');
                 if (previousFocus && typeof previousFocus.focus === 'function') previousFocus.focus();
             };
-            modal.querySelector('#exportEncryptChoice').onclick = () => { closeModal(); exportEncryptedBackup(); };
-            modal.querySelector('#exportPlainChoice').onclick = () => { closeModal(); exportPlaintextJSON(); };
-            modal.querySelector('#exportCsvChoice').onclick = () => { closeModal(); exportCSV(); };
+            modal.querySelector('#exportEncryptChoice').onclick = function() { closeModal(); exportEncryptedBackup(); };
+            modal.querySelector('#exportPlainChoice').onclick = function() { closeModal(); exportPlaintextJSON(); };
+            modal.querySelector('#exportCsvChoice').onclick = function() { closeModal(); exportCSV(); };
             modal.querySelector('#cancelExport').onclick = closeModal;
             modal.addEventListener('click', function(e) { if (e.target === modal) closeModal(); });
         };
@@ -3404,10 +3600,14 @@
             document.addEventListener('click', closeExportDropdown, { signal });
         }
 
-        document.getElementById('exportEncryptSmall')?.addEventListener('click', function() { exportDropdown.classList.remove('show'); exportEncryptedBackup(); });
-        document.getElementById('exportPlainSmall')?.addEventListener('click', function() { exportDropdown.classList.remove('show'); exportPlaintextJSON(); });
-        document.getElementById('exportCsvSmall')?.addEventListener('click', function() { exportDropdown.classList.remove('show'); exportCSV(); });
-        document.getElementById('importSmall')?.addEventListener('click', function() {
+        const exportEncryptSmallBtn = document.getElementById('exportEncryptSmall');
+        if (exportEncryptSmallBtn) exportEncryptSmallBtn.addEventListener('click', function() { exportDropdown.classList.remove('show'); exportEncryptedBackup(); });
+        const exportPlainSmallBtn = document.getElementById('exportPlainSmall');
+        if (exportPlainSmallBtn) exportPlainSmallBtn.addEventListener('click', function() { exportDropdown.classList.remove('show'); exportPlaintextJSON(); });
+        const exportCsvSmallBtn = document.getElementById('exportCsvSmall');
+        if (exportCsvSmallBtn) exportCsvSmallBtn.addEventListener('click', function() { exportDropdown.classList.remove('show'); exportCSV(); });
+        const importSmallBtn = document.getElementById('importSmall');
+        if (importSmallBtn) importSmallBtn.addEventListener('click', function() {
             exportDropdown.classList.remove('show');
             const modal = document.createElement('div');
             modal.className = 'modal';
