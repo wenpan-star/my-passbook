@@ -1,13 +1,35 @@
 <!--
 ====================================================================================
- 静谧·密钥 v6.1.1 — 健壮性细节修复
- 更新日期：2026-07-06
+ 静谧·密钥 v6.3.0 — 深度修复与健壮性增强
+ 更新日期：2026-07-08
 ====================================================================================
- 更新内容（v6.1.0 → v6.1.1）：
- 1. 【修复】自动锁定时调用编辑模态框清理函数增加异常保护，确保锁定流程不中断。
- 2. 【修复】密码输入模态框关闭时主动清空输入值，减少敏感数据驻留。
- 3. 【修复】初始化保险库时增加 localStorage 写入异常捕获，避免存储失败时静默中断。
- 4. 【保持】所有原有功能、变量名、UI 逻辑完全不变，未做任何删减或简写。
+ 更新内容（v6.1.1 → v6.3.0）：
+
+ 【安全修复】
+ 1. [修复] promptReauthentication 当 returnPassword=true 时始终弹出模态框，
+    确保修改主密码等操作不会被30秒有效期缓存阻断。
+ 2. [修复] State.reset() 中确认重置 lastReauthenticationTime = 0，
+    锁定后所有认证缓存立即失效，杜绝绕过安全机制。
+ 3. [修复] saveSecurityState 增加异常保护，localStorage 写入失败时降级为内存存储，
+    暴力破解计数不会因存储异常而丢失。
+ 4. [修复] changeMasterPassword 中 BroadcastChannel.postMessage 增加 try-catch，
+    主密码修改流程不会因跨窗口消息失败而中断。
+
+ 【健壮性修复】
+ 5. [修复] 编辑密码保存失败时不再关闭模态框，用户可重试或取消，
+    且回滚仅恢复内存数据，表单内容保留。
+ 6. [修复] saveVault 中 localStorage.setItem 增加 try-catch 并提供明确错误信息，
+    BroadcastChannel.postMessage 增加 try-catch，不影响保存主流程。
+ 7. [修复] applyImport 合并模式统计并提示跳过（重名）与截断（超上限）数量。
+ 8. [修复] State.reset() 中主动移除 visibilitychange 监听器，避免冗余监听。
+
+ 【功能增强】
+ 9. [新增] 主密码设置与修改模态框中添加实时密码强度指示条（4段式），
+    利用已有 getPasswordStrength 函数，提升用户体验与安全意识。
+ 10. [新增] 解锁失败且疑似数据损坏时，登录界面显示"重置保险库"按钮，
+     用户经二次确认后可清除所有数据并重新初始化。
+
+ 【保持】所有原有功能、变量名、UI 逻辑完全不变，未做任何删减或简写。
 ====================================================================================
 -->
 <!DOCTYPE html>
@@ -21,9 +43,8 @@
     <meta http-equiv="X-Frame-Options" content="DENY">
     <meta http-equiv="X-Content-Type-Options" content="nosniff">
     <meta http-equiv="Referrer-Policy" content="strict-origin-when-cross-origin">
-    <title>🔐 静谧·密钥 | 安全密码本 v6.1.1</title>
+    <title>🔐 静谧·密钥 | 安全密码本 v6.3.0</title>
     <style>
-        /* ===================== 完整 CSS（卡片式布局 + 全量优化） ===================== */
         :root {
             --bg-gradient: linear-gradient(135deg, #e0f2fe 0%, #bae6fd 50%, #e0e7ff 100%);
             --glass-bg: rgba(255, 255, 255, 0.75);
@@ -412,7 +433,7 @@
         }
 
         .export-more-wrapper {
-            display: none; /* 默认隐藏，移动端通过媒体查询显示 */
+            display: none;
         }
         .export-dropdown {
             display: none;
@@ -553,7 +574,6 @@
             margin-top: 8px;
         }
 
-        /* --- 卡片式密码条目 --- */
         .password-item {
             display: flex;
             flex-direction: column;
@@ -595,7 +615,6 @@
             justify-content: flex-end;
         }
 
-        /* --- 密码组（内嵌按钮） --- */
         .password-group {
             display: flex;
             flex-direction: column;
@@ -667,7 +686,6 @@
             height: 1.1em;
         }
 
-        /* --- 分类管理 Grid 优化 --- */
         .cat-grid {
             display: grid;
             grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
@@ -910,7 +928,25 @@
             flex-shrink: 0;
         }
 
-        /* 移动端增强 */
+        .strength-indicator {
+            display: flex;
+            gap: 4px;
+            margin: 8px 0;
+        }
+        .strength-segment {
+            flex: 1;
+            height: 6px;
+            background: #e2e8f0;
+            border-radius: 3px;
+            transition: background 0.3s ease;
+        }
+        .strength-text {
+            font-size: 0.75rem;
+            margin-top: 4px;
+            color: var(--text-secondary);
+            transition: color 0.3s ease;
+        }
+
         @media (max-width: 640px) {
             html { font-size: 17px; }
             body { padding: calc(8px + var(--safe-area-top)) calc(8px + var(--safe-area-right)) calc(8px + var(--safe-area-bottom)) calc(8px + var(--safe-area-left)); }
@@ -987,7 +1023,6 @@
     </style>
 </head>
 <body>
-<!-- SVG 图标库 -->
 <svg display="none" aria-hidden="true">
     <symbol id="icon-lock" viewBox="0 0 24 24"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></symbol>
     <symbol id="icon-unlock" viewBox="0 0 24 24"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 9.9-1"/></symbol>
@@ -1012,9 +1047,11 @@
 <div id="root"></div>
 <script>
 (function() {
+    'use strict';
+
     // ===================== 常量与配置 =====================
     const CONFIG = {
-        APP_VERSION: '6.1.1',
+        APP_VERSION: '6.3.0',
         STORAGE_VAULT: 'serene_vault_enc_v3',
         STORAGE_SALT: 'serene_vault_salt_v3',
         STORAGE_AUTH: 'serene_vault_auth_v3',
@@ -1158,7 +1195,6 @@
             return Array.from(array).map(byte => byte.toString(16).padStart(2,'0')).join('');
         },
         getPasswordStrength: function(password) {
-            // 保留函数供未来可能使用，当前UI不调用
             if (!password) return 0;
             let score = 0;
             const length = password.length;
@@ -1267,17 +1303,25 @@
     };
 
     // ===================== 安全锁定持久化 =====================
+    let securityStateMemory = null;
+
     function loadSecurityState() {
         try {
             const raw = localStorage.getItem(CONFIG.SECURITY_STORAGE);
-            if (!raw) return { bruteFailCount: 0, lockoutUntil: 0 };
-            return JSON.parse(raw);
+            if (raw) return JSON.parse(raw);
         } catch (e) {
-            return { bruteFailCount: 0, lockoutUntil: 0 };
+            console.warn('安全状态读取失败，使用内存存储:', e);
         }
+        if (securityStateMemory) return securityStateMemory;
+        return { bruteFailCount: 0, lockoutUntil: 0 };
     }
     function saveSecurityState(securityData) {
-        localStorage.setItem(CONFIG.SECURITY_STORAGE, JSON.stringify(securityData));
+        securityStateMemory = securityData;
+        try {
+            localStorage.setItem(CONFIG.SECURITY_STORAGE, JSON.stringify(securityData));
+        } catch (error) {
+            console.warn('安全状态保存失败，降级为内存存储:', error);
+        }
     }
     function getSecurityState() {
         return loadSecurityState();
@@ -1356,8 +1400,14 @@
                 clearTimeout(this.clipboardTimer);
                 this.clipboardTimer = null;
             }
-            if (this.visibilityLockTimer) clearTimeout(this.visibilityLockTimer);
-            if (this.searchDebounceTimer) clearTimeout(this.searchDebounceTimer);
+            if (this.visibilityLockTimer) {
+                clearTimeout(this.visibilityLockTimer);
+                this.visibilityLockTimer = null;
+            }
+            if (this.searchDebounceTimer) {
+                clearTimeout(this.searchDebounceTimer);
+                this.searchDebounceTimer = null;
+            }
             if (this.channel) {
                 this.channel.close();
                 this.channel = null;
@@ -1366,6 +1416,7 @@
                 this.globalEventController.abort();
                 this.globalEventController = null;
             }
+            document.removeEventListener('visibilitychange', onVisibilityChange);
         }
     };
 
@@ -1399,10 +1450,14 @@
 
     // ===================== 日志 =====================
     function addLog(action, details) {
-        let logs = JSON.parse(localStorage.getItem(CONFIG.LOG_STORAGE) || '[]');
-        logs.unshift({ time: new Date().toISOString(), action: action, details: String(details).slice(0,200) });
-        if (logs.length > 200) logs.pop();
-        localStorage.setItem(CONFIG.LOG_STORAGE, JSON.stringify(logs));
+        try {
+            let logs = JSON.parse(localStorage.getItem(CONFIG.LOG_STORAGE) || '[]');
+            logs.unshift({ time: new Date().toISOString(), action: action, details: String(details).slice(0,200) });
+            if (logs.length > 200) logs.pop();
+            localStorage.setItem(CONFIG.LOG_STORAGE, JSON.stringify(logs));
+        } catch (e) {
+            console.warn('日志写入失败:', e);
+        }
     }
 
     // ===================== 速率限制 =====================
@@ -1422,10 +1477,18 @@
             lastUpdated: Date.now()
         };
         const encrypted = await CryptoModule.encrypt(State.masterKey, vaultData);
-        localStorage.setItem(CONFIG.STORAGE_VAULT, JSON.stringify(encrypted));
-        localStorage.setItem(CONFIG.STORAGE_INIT, 'true');
+        try {
+            localStorage.setItem(CONFIG.STORAGE_VAULT, JSON.stringify(encrypted));
+            localStorage.setItem(CONFIG.STORAGE_INIT, 'true');
+        } catch (error) {
+            throw new Error('数据保存失败：浏览器存储空间可能不足或不可用');
+        }
         if (State.channel) {
-            State.channel.postMessage({ type: 'vaultUpdated', timestamp: Date.now() });
+            try {
+                State.channel.postMessage({ type: 'vaultUpdated', timestamp: Date.now() });
+            } catch (error) {
+                console.warn('BroadcastChannel 消息发送失败:', error);
+            }
         }
     }
 
@@ -1440,7 +1503,9 @@
     function cleanMigrationBackup() {
         try {
             localStorage.removeItem(CONFIG.MIGRATION_BACKUP_KEY);
-        } catch(e) {}
+        } catch(e) {
+            console.warn('清理迁移备份失败:', e);
+        }
     }
 
     async function verifyMasterPassword(password) {
@@ -1473,13 +1538,14 @@
             await saveVault();
             addLog('初始化','创建新保险库');
         } catch (error) {
-            // 清理可能已写入的部分数据，避免残留
             try {
                 localStorage.removeItem(CONFIG.STORAGE_SALT);
                 localStorage.removeItem(CONFIG.STORAGE_AUTH);
                 localStorage.removeItem(CONFIG.STORAGE_INIT);
                 localStorage.removeItem(CONFIG.STORAGE_VAULT);
-            } catch(e) {}
+            } catch(e) {
+                console.warn('初始化失败清理异常:', e);
+            }
             throw new Error('初始化失败：' + error.message);
         }
     }
@@ -1529,6 +1595,7 @@
 
         State.masterKey = key;
         State.bruteFailCount = 0;
+        State.lastReauthenticationTime = 0;
         updateSecurityState({ bruteFailCount: 0, lockoutUntil: 0 });
 
         cleanMigrationBackup();
@@ -1627,7 +1694,6 @@
         if (State.visibilityLockTimer) { clearTimeout(State.visibilityLockTimer); State.visibilityLockTimer = null; }
         if (State.channel) { State.channel.close(); State.channel = null; }
 
-        // 自动锁定时，若存在编辑模态框，先调用清理函数，确保密码明文不残留（增加异常保护）
         try {
             if (typeof State.activeEditModalCleanup === 'function') {
                 State.activeEditModalCleanup();
@@ -1636,7 +1702,6 @@
             console.warn('编辑模态框清理失败:', e);
         }
 
-        // 移除其他所有模态框
         document.querySelectorAll('.modal').forEach(function(modal) { modal.remove(); });
         document.body.classList.remove('modal-open');
 
@@ -1705,8 +1770,8 @@
     // ===================== 重新认证 =====================
     async function promptReauthentication(actionDescription, returnPassword = false, forceReauth = false) {
         if (!State.masterKey) throw new Error('未解锁');
-        if (!forceReauth && State.lastReauthenticationTime && (Date.now() - State.lastReauthenticationTime) < CONFIG.REAUTH_VALIDITY_MS) {
-            return returnPassword ? null : true;
+        if (!forceReauth && !returnPassword && State.lastReauthenticationTime && (Date.now() - State.lastReauthenticationTime) < CONFIG.REAUTH_VALIDITY_MS) {
+            return true;
         }
         return new Promise(function(resolve) {
             const modal = document.createElement('div'); modal.className='modal';
@@ -1715,12 +1780,12 @@
             const previousFocus = document.activeElement;
             const input = modal.querySelector('#verifyPw');
             const confirmButton = modal.querySelector('#confirmVerify');
-            const cleanup = function(value) { 
-                if (input) input.value = ''; // 主动清空
-                modal.remove(); 
-                document.body.classList.remove('modal-open'); 
+            const cleanup = function(value) {
+                if (input) input.value = '';
+                modal.remove();
+                document.body.classList.remove('modal-open');
                 if (previousFocus && typeof previousFocus.focus === 'function') previousFocus.focus();
-                resolve(value); 
+                resolve(value);
             };
             confirmButton.onclick = async function() {
                 const password = input.value;
@@ -1809,7 +1874,6 @@
             toggleButton.setAttribute('aria-label', '隐藏密码');
         } else {
             inputElement.type = 'password';
-            // 编辑模态框：保留用户输入不清空
             toggleButton.innerHTML = '<svg class="icon"><use href="#icon-eye"/></svg>';
             toggleButton.setAttribute('aria-label', '显示密码');
         }
@@ -2249,7 +2313,16 @@
             if (newLoginPassword.length < CONFIG.LOGIN_PW_MIN || newLoginPassword.length > CONFIG.LOGIN_PW_MAX) return showToast(`登录密码需${CONFIG.LOGIN_PW_MIN}-${CONFIG.LOGIN_PW_MAX}位`, true);
             if (newTransactionPassword && !/^\d{6}$/.test(newTransactionPassword)) return showToast('交易密码必须为6位数字', true);
 
-            const oldPasswords = State.passwords.map(function(p) { return {...p}; });
+            const originalValues = {
+                name: item.name,
+                username: item.username,
+                loginPassword: item.loginPassword,
+                transactionPassword: item.transactionPassword,
+                email: item.email,
+                phone: item.phone,
+                category: item.category,
+                note: item.note
+            };
             const oldCategories = [...State.customCategories];
 
             const existingItem = State.passwords.find(function(p) { return p.name === newName && p.id !== item.id; });
@@ -2289,11 +2362,17 @@
                 closeModal();
                 showToast('✅ 已更新');
             } catch (error) {
-                State.passwords = oldPasswords;
+                item.name = originalValues.name;
+                item.username = originalValues.username;
+                item.loginPassword = originalValues.loginPassword;
+                item.transactionPassword = originalValues.transactionPassword;
+                item.email = originalValues.email;
+                item.phone = originalValues.phone;
+                item.category = originalValues.category;
+                item.note = originalValues.note;
                 State.customCategories = oldCategories;
                 State.rebuildIndex();
-                closeModal();
-                showToast('保存失败：' + error.message, true, 5000);
+                showToast('保存失败：' + error.message + '，请重试或取消', true, 5000);
             }
         };
         modal.querySelector('#cancelEdit').onclick = closeModal;
@@ -2460,14 +2539,28 @@
         const previousPasswords = State.passwords.map(function(p) { return {...p}; });
         const previousCategories = [...State.customCategories];
         try {
+            let skippedCount = 0;
+            let truncatedCount = 0;
             if (overwrite) {
                 if (importedPasswords.length > CONFIG.MAX_PASSWORDS) { showToast(`超过上限${CONFIG.MAX_PASSWORDS}`, true); return; }
                 State.passwords = importedPasswords;
             } else {
-                if (State.passwords.length + importedPasswords.length > CONFIG.MAX_PASSWORDS) { showToast('合并后超过上限', true); return; }
-                const existingNames = new Set(State.passwords.map(function(p) { return p.name; }));
-                const newItems = importedPasswords.filter(function(item) { return !existingNames.has(item.name); });
-                State.passwords.push(...newItems.slice(0, CONFIG.MAX_PASSWORDS - State.passwords.length));
+                if (State.passwords.length + importedPasswords.length > CONFIG.MAX_PASSWORDS) {
+                    const spaceRemaining = CONFIG.MAX_PASSWORDS - State.passwords.length;
+                    const existingNames = new Set(State.passwords.map(function(p) { return p.name; }));
+                    const newItems = importedPasswords.filter(function(item) { return !existingNames.has(item.name); });
+                    const skipped = importedPasswords.filter(function(item) { return existingNames.has(item.name); });
+                    const toAdd = newItems.slice(0, spaceRemaining);
+                    skippedCount = skipped.length;
+                    truncatedCount = newItems.length - toAdd.length;
+                    State.passwords.push(...toAdd);
+                } else {
+                    const existingNames = new Set(State.passwords.map(function(p) { return p.name; }));
+                    const skipped = importedPasswords.filter(function(item) { return existingNames.has(item.name); });
+                    const newItems = importedPasswords.filter(function(item) { return !existingNames.has(item.name); });
+                    skippedCount = skipped.length;
+                    State.passwords.push(...newItems);
+                }
             }
             if (replaceCategories) saveCategories(importedCategories.length ? [...importedCategories] : []);
             else if (importedCategories.length) batchAddCategories(importedCategories, false);
@@ -2475,17 +2568,24 @@
             State.rebuildIndex();
             await saveEncrypted();
             if (!State.masterKey) throw new Error('存储异常');
+            renderListOnly();
+            refreshDatalist();
+            addLog('导入', `${importedPasswords.length}条`);
+            if (skippedCount > 0 || truncatedCount > 0) {
+                let messageParts = [`✅ 导入完成（添加${importedPasswords.length - skippedCount - truncatedCount}条`];
+                if (skippedCount > 0) messageParts.push(`跳过${skippedCount}条重名`);
+                if (truncatedCount > 0) messageParts.push(`截断${truncatedCount}条（超上限）`);
+                messageParts.push('）');
+                showToast(messageParts.join('，'));
+            } else {
+                showToast('✅ 导入完成');
+            }
         } catch (error) {
             State.passwords = previousPasswords;
             State.customCategories = previousCategories;
             State.rebuildIndex();
             showToast('保存失败：' + error.message, true, 5000);
-            return;
         }
-        renderListOnly();
-        refreshDatalist();
-        addLog('导入', `${importedPasswords.length}条`);
-        showToast('✅ 导入完成');
     }
 
     function syncCategoriesFromPasswords() {
@@ -2514,12 +2614,12 @@
             document.body.classList.add('modal-open');
             const previousFocus = document.activeElement;
             const inputElement = modal.querySelector('#modalPw');
-            const cleanup = function(value) { 
-                if (inputElement) inputElement.value = ''; // 主动清空
-                modal.remove(); 
-                document.body.classList.remove('modal-open'); 
+            const cleanup = function(value) {
+                if (inputElement) inputElement.value = '';
+                modal.remove();
+                document.body.classList.remove('modal-open');
                 if (previousFocus && typeof previousFocus.focus === 'function') previousFocus.focus();
-                resolve(value); 
+                resolve(value);
             };
             modal.querySelector('#modalOk').onclick = function() { cleanup(inputElement ? inputElement.value : null); };
             modal.querySelector('#modalCancel').onclick = function() { cleanup(null); };
@@ -2628,13 +2728,23 @@
                 <h3><svg class="icon" style="width:1.4rem;height:1.4rem;"><use href="#icon-lock"/></svg> 修改主密码</h3>
                 <div class="warning-box">⚠️ 新密码需至少${CONFIG.MASTER_MIN_LEN}位，且包含大写、小写、数字、特殊符号四类字符</div>
                 <input type="password" id="newPw" placeholder="新密码" autocomplete="off">
-                <input type="password" id="confirmPw" placeholder="确认新密码" autocomplete="off">
+                <div class="strength-indicator" id="changePwStrengthIndicator">
+                    <div class="strength-segment" data-index="0"></div>
+                    <div class="strength-segment" data-index="1"></div>
+                    <div class="strength-segment" data-index="2"></div>
+                    <div class="strength-segment" data-index="3"></div>
+                </div>
+                <div class="strength-text" id="changePwStrengthText">请输入新主密码</div>
+                <input type="password" id="confirmPw" placeholder="确认新密码" autocomplete="off" style="margin-top:8px;">
                 <button id="doChange" class="btn btn-primary" style="width:100%;margin-top:12px;">确认修改</button>
             </div>`;
         document.body.appendChild(modal);
         document.body.classList.add('modal-open');
         const previousFocus = document.activeElement;
         const newPasswordInput = modal.querySelector('#newPw');
+        newPasswordInput.addEventListener('input', function() {
+            updateStrengthIndicator('changePwStrengthIndicator', 'changePwStrengthText', newPasswordInput.value);
+        });
         modal.querySelector('#doChange').onclick = async function() {
             const newPassword = newPasswordInput.value;
             const confirmPassword = modal.querySelector('#confirmPw').value;
@@ -2644,6 +2754,8 @@
             if (newPassword === oldPassword) return showToast('新旧密码不能相同', true);
             try {
                 await changeMasterPassword(oldPassword, newPassword);
+                newPasswordInput.value = '';
+                modal.querySelector('#confirmPw').value = '';
                 modal.remove();
                 document.body.classList.remove('modal-open');
                 if (previousFocus && typeof previousFocus.focus === 'function') previousFocus.focus();
@@ -2699,7 +2811,11 @@
             addLog('修改主密码', '成功');
 
             if (State.channel) {
-                State.channel.postMessage({ type: 'masterPasswordChanged', timestamp: Date.now() });
+                try {
+                    State.channel.postMessage({ type: 'masterPasswordChanged', timestamp: Date.now() });
+                } catch (error) {
+                    console.warn('BroadcastChannel 消息发送失败:', error);
+                }
             }
 
             showToast('✅ 主密码修改成功');
@@ -2736,9 +2852,9 @@
             const newLogs = JSON.parse(localStorage.getItem(CONFIG.LOG_STORAGE) || '[]');
             modal.querySelector('.log-view').innerHTML = newLogs.length ? newLogs.map(function(log) { return `<div>${Util.escapeHtml(log.time)} | ${Util.escapeHtml(log.action)} | ${Util.escapeHtml(log.details)}</div>`; }).join('') : '暂无日志记录';
         };
-        modal.querySelector('#closeLog').onclick = function() { 
-            modal.remove(); 
-            document.body.classList.remove('modal-open'); 
+        modal.querySelector('#closeLog').onclick = function() {
+            modal.remove();
+            document.body.classList.remove('modal-open');
             if (previousFocus && typeof previousFocus.focus === 'function') previousFocus.focus();
         };
         modal.querySelector('#exportLogBtn').onclick = function() {
@@ -2792,10 +2908,10 @@
                 showToast('分类已存在或无效', true);
             }
         };
-        modal.querySelector('#closeCat').onclick = function() { 
-            modal.remove(); 
-            document.body.classList.remove('modal-open'); 
-            State.activeCategoryModal = null; 
+        modal.querySelector('#closeCat').onclick = function() {
+            modal.remove();
+            document.body.classList.remove('modal-open');
+            State.activeCategoryModal = null;
             if (previousFocus && typeof previousFocus.focus === 'function') previousFocus.focus();
         };
     }
@@ -2838,9 +2954,29 @@
         }, CONFIG.SEARCH_DEBOUNCE_MS);
     }
 
+    // ===================== 密码强度指示器 =====================
+    function updateStrengthIndicator(indicatorId, textId, password) {
+        const container = document.getElementById(indicatorId);
+        if (!container) return;
+        const level = Util.getPasswordStrength(password);
+        const segments = container.querySelectorAll('.strength-segment');
+        const textElement = document.getElementById(textId);
+        const colors = ['#dc2626', '#f59e0b', '#f59e0b', '#059669', '#059669'];
+        segments.forEach(function(segment, index) {
+            if (index < level) {
+                segment.style.background = colors[level] || '#dc2626';
+            } else {
+                segment.style.background = '#e2e8f0';
+            }
+        });
+        if (textElement) {
+            textElement.innerText = Util.strengthText(level);
+            textElement.style.color = Util.strengthColor(level);
+        }
+    }
+
     // ===================== 主界面渲染 =====================
     let renderApp = function() {
-        // 清理旧的搜索防抖定时器
         if (State.searchDebounceTimer) {
             clearTimeout(State.searchDebounceTimer);
             State.searchDebounceTimer = null;
@@ -3136,7 +3272,6 @@
             this.textContent = expanded ? '收起信息' : '更多信息';
         };
 
-        // 添加表单密码可见性切换（保留用户输入）
         document.getElementById('toggleLoginPwVis').onclick = function() {
             const input = document.getElementById('inpLoginPw');
             const button = document.getElementById('toggleLoginPwVis');
@@ -3147,7 +3282,6 @@
                     button.setAttribute('aria-label', '隐藏登录密码');
                 } else {
                     input.type = 'password';
-                    // 不清空 value
                     button.innerHTML = '<svg class="icon"><use href="#icon-eye"/></svg>';
                     button.setAttribute('aria-label', '显示登录密码');
                 }
@@ -3164,7 +3298,6 @@
                     button.setAttribute('aria-label', '隐藏交易密码');
                 } else {
                     input.type = 'password';
-                    // 不清空 value
                     button.innerHTML = '<svg class="icon"><use href="#icon-eye"/></svg>';
                     button.setAttribute('aria-label', '显示交易密码');
                 }
@@ -3172,7 +3305,6 @@
             }
         };
 
-        // 导出按钮
         document.getElementById('exportBtn').onclick = function() {
             const modal = document.createElement('div');
             modal.className = 'modal';
@@ -3200,7 +3332,6 @@
             modal.addEventListener('click', function(e) { if (e.target === modal) closeModal(); });
         };
 
-        // 移动端导出下拉
         const exportMoreBtn = document.getElementById('exportMoreBtn');
         const exportDropdown = document.getElementById('exportDropdown');
         if (exportMoreBtn && exportDropdown) {
@@ -3302,7 +3433,6 @@
             };
         };
 
-        // 主题下拉
         const themeSwitcherBtn = document.getElementById('themeSwitcherBtn');
         const themeDropdown = document.getElementById('themeDropdown');
         if (themeSwitcherBtn && themeDropdown) {
@@ -3348,13 +3478,23 @@
                         <h3><svg class="icon" style="width:1.4rem;height:1.4rem;"><use href="#icon-lock"/></svg> 设置主密码</h3>
                         <div class="warning-box">⚠️ 主密码需至少${CONFIG.MASTER_MIN_LEN}位，且包含大写、小写、数字、特殊符号四类。请务必牢记！</div>
                         <input type="password" id="newPw1" placeholder="至少${CONFIG.MASTER_MIN_LEN}位，含四类字符" autocomplete="off" autofocus>
-                        <input type="password" id="newPw2" placeholder="确认主密码" autocomplete="off">
+                        <div class="strength-indicator" id="setupPwStrengthIndicator">
+                            <div class="strength-segment" data-index="0"></div>
+                            <div class="strength-segment" data-index="1"></div>
+                            <div class="strength-segment" data-index="2"></div>
+                            <div class="strength-segment" data-index="3"></div>
+                        </div>
+                        <div class="strength-text" id="setupPwStrengthText">请输入主密码</div>
+                        <input type="password" id="newPw2" placeholder="确认主密码" autocomplete="off" style="margin-top:8px;">
                         <button id="confirmSetup" class="btn btn-primary" style="width:100%;margin-top:12px;">创建保险库</button>
                     </div>`;
                 document.body.appendChild(modal);
                 document.body.classList.add('modal-open');
                 const previousFocus = document.activeElement;
                 const passwordInput1 = modal.querySelector('#newPw1');
+                passwordInput1.addEventListener('input', function() {
+                    updateStrengthIndicator('setupPwStrengthIndicator', 'setupPwStrengthText', passwordInput1.value);
+                });
                 modal.querySelector('#confirmSetup').onclick = async function() {
                     const password1 = passwordInput1.value;
                     const password2 = modal.querySelector('#newPw2').value;
@@ -3362,6 +3502,8 @@
                     if (password1 !== password2) return showToast('两次输入不一致', true);
                     try {
                         await initializeNewVault(password1);
+                        passwordInput1.value = '';
+                        modal.querySelector('#newPw2').value = '';
                         modal.remove();
                         document.body.classList.remove('modal-open');
                         if (previousFocus && typeof previousFocus.focus === 'function') previousFocus.focus();
@@ -3392,6 +3534,32 @@
                     errorDiv.innerText = error.message;
                     loginPasswordInput.value = '';
                     loginPasswordInput.focus();
+                    if ((error.message.includes('数据损坏') || error.message.includes('解密失败') || error.message.includes('数据缺失')) && !document.getElementById('resetVaultBtn')) {
+                        const resetBtn = document.createElement('button');
+                        resetBtn.id = 'resetVaultBtn';
+                        resetBtn.className = 'btn btn-danger btn-sm';
+                        resetBtn.style.marginTop = '8px';
+                        resetBtn.style.width = '100%';
+                        resetBtn.innerText = '⚠️ 数据异常？重置保险库';
+                        resetBtn.onclick = function() {
+                            if (confirm('⚠️ 确定重置保险库吗？\n\n这将清除所有密码和设置，且不可恢复！') && prompt('请输入"重置"确认:') === '重置') {
+                                try {
+                                    localStorage.removeItem(CONFIG.STORAGE_VAULT);
+                                    localStorage.removeItem(CONFIG.STORAGE_SALT);
+                                    localStorage.removeItem(CONFIG.STORAGE_AUTH);
+                                    localStorage.removeItem(CONFIG.STORAGE_INIT);
+                                    localStorage.removeItem(CONFIG.LOG_STORAGE);
+                                    localStorage.removeItem(CONFIG.MIGRATION_BACKUP_KEY);
+                                    saveSecurityState({ bruteFailCount: 0, lockoutUntil: 0 });
+                                    showToast('保险库已重置，请重新设置主密码');
+                                    showAuth();
+                                } catch (error) {
+                                    showToast('重置失败：' + error.message, true);
+                                }
+                            }
+                        };
+                        errorDiv.after(resetBtn);
+                    }
                 }
             };
             loginButton.onclick = async function() {
