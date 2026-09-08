@@ -1,36 +1,23 @@
 <!--
 ====================================================================================
- 静谧·密钥 v6.9.0 — 深度优化与功能增强
+ 静谧·密钥 v6.10.0 — 深度修复与健壮性增强
  更新日期：2026-09-08
 ====================================================================================
- 更新内容（v6.8.1 → v6.9.0）：
+ 更新内容（v6.9.0 → v6.10.0）：
 
- 1. [优化] 自定义分类库布局重构：
-          - 分类数量以角标形式显示在卡片右上角，字体更小更精致。
-          - 分类网格由固定三列改为 auto-fill 自适应列宽，彻底消除水平滚动条，
-            在不同屏幕宽度下均能完整显示所有分类。
-          - 分类条目增加显式编辑按钮（铅笔图标），重命名更直观，
-            同时保留双击分类名称重命名的快捷操作。
- 2. [新增] 密码生成器：
-          - 添加密码表单与编辑模态框中均新增"生成强密码"按钮（🎲），
-            一键生成包含大写、小写、数字、特殊符号的 16 位强密码。
-          - 交易密码字段旁新增"生成6位数字"按钮（🎲），
-            快速生成符合要求的 6 位数字交易密码。
- 3. [修复] 批量删除后，可见密码状态集合未清理的问题。
- 4. [优化] 批量删除或批量移动完成后，自动退出批量模式，提升操作流畅性。
- 5. [修复] 导入明文数组格式时缺少重新认证的安全漏洞，现已与其他导入路径一致。
- 6. [修复] State.reset() 未完整清理所有状态字段的问题，现已覆盖全部临时状态。
- 7. [优化] 所有密码输入框添加 autocomplete 与 autocapitalize 属性，
-          防止浏览器自动填充或移动端首字母大写干扰密码输入。
- 8. [新增] 保存操作串行化队列，防止并发写入导致的数据不一致。
- 9. [优化] 以自定义模态对话框替换原生 confirm/prompt 弹窗，
-          统一视觉风格，改善移动端体验，避免浏览器拦截。
-10. [其他] 保持所有原有功能不变，代码完整无简写。
+ 1. [修复] 编辑保存前检查条目是否已被其他窗口删除，避免保存失效造成数据不一致。
+ 2. [修复] 分类编辑按钮快速双击导致重命名对话框重复打开的问题，
+          通过防抖标志忽略 500ms 内的重复点击。
+ 3. [优化] 暗色模式下分类数量角标背景对比度提升，增强可读性。
+ 4. [优化] 分类管理器模态框支持点击背景关闭及 ESC 键关闭，交互与其他模态框一致。
+ 5. [优化] showConfirmDialog 增加 allowHtml 参数，默认转义 message，防止潜在 XSS；
+          需要 HTML 格式的调用点已显式启用 allowHtml。
+ 6. [修复] 应用启动时若 localStorage 不可用（隐私模式/禁用存储），
+          显示友好错误提示而非白屏崩溃。
+ 7. [其他] 保持所有功能不变，代码完整无简写。
 
- 历史更新（v6.7.0 → v6.8.0）：
- 优化自定义分类库布局、双击重命名、关闭按钮位置等。
- 历史更新（v6.6.0 → v6.7.0）：
- 修复导入加密备份误清空分类等问题。
+ 历史更新（v6.8.1 → v6.9.0）：
+ 深度优化分类库布局、新增密码生成器、保存队列、自定义确认对话框等。
 ====================================================================================
 -->
 <!DOCTYPE html>
@@ -44,9 +31,9 @@
     <meta http-equiv="X-Frame-Options" content="DENY">
     <meta http-equiv="X-Content-Type-Options" content="nosniff">
     <meta http-equiv="Referrer-Policy" content="strict-origin-when-cross-origin">
-    <title>🔐 静谧·密钥 | 安全密码本 v6.9.0</title>
+    <title>🔐 静谧·密钥 | 安全密码本 v6.10.0</title>
     <style>
-        /* ===== 样式保持完整，基于 v6.8.1 优化 ===== */
+        /* ===== 样式保持完整，基于 v6.9.0 优化 ===== */
         :root {
             --bg-gradient: linear-gradient(135deg, #e0f2fe 0%, #bae6fd 50%, #e0e7ff 100%);
             --glass-bg: rgba(255, 255, 255, 0.75);
@@ -117,6 +104,10 @@
                 background: rgba(255, 255, 255, 0.08);
                 border-color: var(--primary);
                 box-shadow: 0 0 0 4px var(--primary-light);
+            }
+            .cat-tag .cat-count {
+                background: rgba(255, 255, 255, 0.18);
+                color: #e2e8f0;
             }
         }
 
@@ -688,7 +679,7 @@
             height: 1.1em;
         }
 
-        /* ===== 分类网格优化（v6.9.0） ===== */
+        /* ===== 分类网格优化（v6.9.0 起） ===== */
         .cat-grid {
             display: grid;
             grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
@@ -1146,7 +1137,7 @@
 </head>
 <body>
 <svg display="none" aria-hidden="true">
-    <!-- SVG symbols 完整保留 -->
+    <!-- SVG symbols 完整保留，包含新增 icon-dice -->
     <symbol id="icon-lock" viewBox="0 0 24 24"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></symbol>
     <symbol id="icon-unlock" viewBox="0 0 24 24"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 9.9-1"/></symbol>
     <symbol id="icon-eye" viewBox="0 0 24 24"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></symbol>
@@ -1176,7 +1167,7 @@
 
     // ===================== 常量与配置 =====================
     const CONFIG = {
-        APP_VERSION: '6.9.0',
+        APP_VERSION: '6.10.0',
         STORAGE_VAULT: 'serene_vault_enc_v3',
         STORAGE_SALT: 'serene_vault_salt_v3',
         STORAGE_AUTH: 'serene_vault_auth_v3',
@@ -1200,10 +1191,11 @@
         BASE_DELAY_MS: 1000,
         LOCK_DURATION_INCREMENT_MS: 60000,
         SEARCH_DEBOUNCE_MS: 300,
-        GENERATED_PASSWORD_LENGTH: 16
+        GENERATED_PASSWORD_LENGTH: 16,
+        EDIT_BUTTON_DEBOUNCE_MS: 500
     };
 
-    // 完整主题定义
+    // 完整主题定义（与 v6.9.0 相同，此处略去以节省篇幅但实际完整保留）
     const THEMES = {
         ocean: { name:'海洋微风', icon:'🌊', vars:{
             '--bg-gradient':'linear-gradient(135deg, #e0f2fe 0%, #bae6fd 50%, #e0e7ff 100%)',
@@ -1458,7 +1450,7 @@
         saveSecurityState(merged);
     }
 
-    // ===================== 保存操作串行化队列（v6.9.0 新增） =====================
+    // ===================== 保存操作串行化队列 =====================
     let saveOperationChain = Promise.resolve();
 
     function queueSaveOperation(operation) {
@@ -1502,6 +1494,7 @@
         searchDebounceTimer: null,
         globalEventController: null,
         renderFrameRequest: null,
+        lastCategoryEditClickTime: 0,
 
         rebuildIndex: function() {
             this.passwordIdIndex.clear();
@@ -1535,6 +1528,7 @@
             this.activeEditItemId = null;
             this.activeEditModalCleanup = null;
             this.activeCategoryModal = null;
+            this.lastCategoryEditClickTime = 0;
             if (this.clipboardTimer) {
                 clearTimeout(this.clipboardTimer);
                 this.clipboardTimer = null;
@@ -1929,7 +1923,7 @@
         }
     }
 
-    // ===================== 自定义确认对话框（v6.9.0 新增，替代原生 confirm/prompt） =====================
+    // ===================== 自定义确认对话框（带 allowHtml 支持） =====================
     function showConfirmDialog(options) {
         return new Promise(function(resolve) {
             const dialogTitle = options.title || '确认操作';
@@ -1938,6 +1932,7 @@
             const cancelButtonText = options.cancelText || '取消';
             const isDangerAction = options.isDanger || false;
             const requiredConfirmationText = options.requireConfirmationText || null;
+            const allowHtml = options.allowHtml || false;
             const confirmButtonClass = isDangerAction ? 'btn-danger' : 'btn-primary';
 
             const modal = document.createElement('div');
@@ -1950,10 +1945,12 @@
                     <input type="text" id="confirmDialogInput" autocomplete="off" autocapitalize="none" style="margin-top:8px;">`;
             }
 
+            const safeMessage = allowHtml ? dialogMessage : Util.escapeHtml(dialogMessage);
+
             modal.innerHTML = `
                 <div class="modal-card">
                     <h3>${Util.escapeHtml(dialogTitle)}</h3>
-                    <p style="color:var(--text-secondary);margin-bottom:12px;line-height:1.7;">${dialogMessage}</p>
+                    <p style="color:var(--text-secondary);margin-bottom:12px;line-height:1.7;">${safeMessage}</p>
                     ${confirmationInputHtml}
                     <div class="button-group">
                         <button id="confirmDialogCancel" class="btn btn-outline">${Util.escapeHtml(cancelButtonText)}</button>
@@ -2005,7 +2002,7 @@
         });
     }
 
-    // ===================== 密码生成器（v6.9.0 新增） =====================
+    // ===================== 密码生成器 =====================
     function generateSecurePassword(length) {
         if (!length) length = CONFIG.GENERATED_PASSWORD_LENGTH;
         if (length < CONFIG.LOGIN_PW_MIN) length = CONFIG.LOGIN_PW_MIN;
@@ -2214,7 +2211,7 @@
         });
     }
 
-    // ===================== CSV 解析器（增强版） =====================
+    // ===================== CSV 解析器 =====================
     function parseCSV(csvText) {
         const rows = [];
         let currentRow = [];
@@ -2265,7 +2262,7 @@
         return rows;
     }
 
-    // ===================== 分类列表渲染（v6.9.0 优化布局） =====================
+    // ===================== 分类列表渲染（带防抖编辑） =====================
     function renderCategoryList(container) {
         const categories = loadCategories();
         const countMap = new Map();
@@ -2296,7 +2293,6 @@
                 </span>`;
             container.appendChild(tag);
 
-            // 双击分类条目重命名（保留原有交互）
             tag.addEventListener('dblclick', function(event) {
                 if (event.target.closest('button')) return;
                 const oldCategory = category;
@@ -2340,10 +2336,15 @@
             });
         });
 
-        // 绑定编辑按钮事件（v6.9.0 新增）
+        // 绑定编辑按钮事件（带防抖）
         container.querySelectorAll('button[data-cat-edit]').forEach(function(button) {
             button.addEventListener('click', async function(event) {
                 event.stopPropagation();
+                const now = Date.now();
+                if (now - State.lastCategoryEditClickTime < CONFIG.EDIT_BUTTON_DEBOUNCE_MS) {
+                    return; // 忽略快速重复点击
+                }
+                State.lastCategoryEditClickTime = now;
                 const oldCategory = button.dataset.catEdit;
                 if (!oldCategory) return;
                 const newCategory = await promptRenameCategory(oldCategory);
@@ -2543,7 +2544,7 @@
         return Util.escapeHtml(text).replace(regex, '<span class="highlight">$1</span>');
     }
 
-    // ===================== 密码列表渲染（requestAnimationFrame 优化） =====================
+    // ===================== 密码列表渲染 =====================
     let renderListOnly = function() {
         if (State.renderFrameRequest) {
             cancelAnimationFrame(State.renderFrameRequest);
@@ -2765,7 +2766,6 @@
             tranDirty = true;
         });
 
-        // 密码生成器 - 登录密码（v6.9.0 新增）
         modal.querySelector('#generateEditLoginPwBtn').onclick = function() {
             const generatedPassword = generateSecurePassword(CONFIG.GENERATED_PASSWORD_LENGTH);
             editLoginPwInput.type = 'text';
@@ -2780,7 +2780,6 @@
             showToast('🎲 已生成强密码并填入');
         };
 
-        // 密码生成器 - 交易密码（v6.9.0 新增）
         modal.querySelector('#generateEditTranPwBtn').onclick = function() {
             const generatedTransactionPassword = generateTransactionPassword();
             const editTranPwInput = modal.querySelector('#editTranPw');
@@ -2839,6 +2838,13 @@
         categorySelect.addEventListener('change', function() { updateSelectPlaceholderColor(categorySelect); });
 
         modal.querySelector('#saveEdit').onclick = async function() {
+            // v6.10.0 修复：检查条目是否仍存在，防止其他窗口删除后保存失效
+            if (!State.passwordIdIndex.has(item.id)) {
+                showToast('⚠️ 该条目已被其他窗口删除，无法保存', true, 3000);
+                closeModal();
+                return;
+            }
+
             const newName = modal.querySelector('#editName').value.trim();
             let newLoginPassword = editLoginPwInput.value.trim();
             if (!loginDirty && !newLoginPassword) {
@@ -3144,7 +3150,6 @@
             });
             await applyImport(importedPasswords, importedCategories, replaceCategories, true);
         } else if (trustChecked && Array.isArray(parsed)) {
-            // v6.9.0 修复：导入明文数组格式时补充重新认证
             try {
                 await requireReauthentication('导入明文数组', true);
             } catch(e) { return; }
@@ -3159,7 +3164,8 @@
                 message: `预览前5条：<br><pre style="font-size:0.8rem;overflow-x:auto;white-space:pre-wrap;">${Util.escapeHtml(preview)}</pre>是否导入？`,
                 confirmText: '导入',
                 cancelText: '取消',
-                isDanger: false
+                isDanger: false,
+                allowHtml: true   // 显式允许 HTML，因为包含 <br> 和 <pre>
             });
             if (shouldImport) {
                 const baseTime = Date.now();
@@ -3183,7 +3189,8 @@
                 message: '覆盖当前所有密码？<br>确定 = 覆盖，取消 = 合并（跳过重名）',
                 confirmText: '覆盖',
                 cancelText: '合并',
-                isDanger: true
+                isDanger: true,
+                allowHtml: true
             });
         }
         const previousPasswords = State.passwords.map(function(p) { return {...p}; });
@@ -3301,7 +3308,6 @@
         const ids = Array.from(State.selectedIds);
         const oldPasswords = State.passwords.map(function(p) { return {...p}; });
         State.passwords = State.passwords.filter(function(item) { return !ids.includes(item.id); });
-        // v6.9.0 修复：清理可见密码状态集合
         ids.forEach(function(id) {
             State.visibleLoginPasswords.delete(id);
             State.visibleTransactionPasswords.delete(id);
@@ -3316,7 +3322,6 @@
             showToast('保存失败：' + error.message, true, 5000);
             return;
         }
-        // v6.9.0 优化：批量删除完成后自动退出批量模式
         State.batchMode = false;
         State.selectedIds.clear();
         renderListOnly();
@@ -3374,7 +3379,7 @@
             await requireReauthentication('批量移动分类', true);
         } catch(e) { return; }
 
-        const movedCount = State.selectedIds.size;   // 提前保存选中数量，避免清空后无法获取
+        const movedCount = State.selectedIds.size;
         const oldPasswords = State.passwords.map(function(p) { return {...p}; });
         State.passwords.forEach(function(item) { if (State.selectedIds.has(item.id)) item.category = targetCategory; });
         try {
@@ -3385,7 +3390,6 @@
             showToast('保存失败：' + error.message, true, 5000);
             return;
         }
-        // v6.9.0 优化：批量移动完成后自动退出批量模式
         State.batchMode = false;
         State.selectedIds.clear();
         renderListOnly();
@@ -3720,6 +3724,18 @@
         };
 
         modal.querySelector('#closeCatBtn').onclick = closeModal;
+
+        // v6.10.0 新增：点击背景关闭与 ESC 键关闭
+        modal.addEventListener('click', function(event) {
+            if (event.target === modal) closeModal();
+        });
+        const handleKeyDown = function(event) {
+            if (event.key === 'Escape') {
+                closeModal();
+                document.removeEventListener('keydown', handleKeyDown);
+            }
+        };
+        document.addEventListener('keydown', handleKeyDown);
 
         modal.querySelector('#addCatBtn').onclick = async function() {
             const name = modal.querySelector('#newCatName').value.trim();
@@ -4094,7 +4110,6 @@
             };
         }
 
-        // 密码生成器 - 添加表单登录密码（v6.9.0 新增）
         document.getElementById('generateLoginPwBtn').onclick = function() {
             const generatedPassword = generateSecurePassword(CONFIG.GENERATED_PASSWORD_LENGTH);
             const loginPwInput = document.getElementById('inpLoginPw');
@@ -4109,7 +4124,6 @@
             showToast('🎲 已生成强密码并填入');
         };
 
-        // 密码生成器 - 添加表单交易密码（v6.9.0 新增）
         document.getElementById('generateTranPwBtn').onclick = function() {
             const generatedTransactionPassword = generateTransactionPassword();
             const tranPwInput = document.getElementById('inpTranPw');
@@ -4543,12 +4557,27 @@
         });
     }
 
-    // ===================== 启动 =====================
+    // ===================== 启动（含存储可用性检查） =====================
+    function isStorageAvailable() {
+        try {
+            const testKey = '__serene_storage_test__';
+            localStorage.setItem(testKey, '1');
+            localStorage.removeItem(testKey);
+            return true;
+        } catch (e) {
+            return false;
+        }
+    }
+
     if (typeof crypto !== 'undefined' && crypto.subtle && (location.protocol === 'https:' || location.hostname === 'localhost' || location.hostname === '127.0.0.1')) {
-        bindIdleEvents();
-        const savedTheme = localStorage.getItem(CONFIG.THEME_STORAGE);
-        applyTheme(savedTheme && THEMES[savedTheme] ? savedTheme : 'ocean');
-        showAuth();
+        if (!isStorageAvailable()) {
+            document.getElementById('root').innerHTML = `<div class="card auth-card"><h2>⚠️ 存储不可用</h2><p>您的浏览器似乎禁用了本地存储（localStorage），静谧·密钥无法正常运行。</p><p style="color:var(--text-secondary);">请检查隐私设置或更换浏览器后重试。</p></div>`;
+        } else {
+            bindIdleEvents();
+            const savedTheme = localStorage.getItem(CONFIG.THEME_STORAGE);
+            applyTheme(savedTheme && THEMES[savedTheme] ? savedTheme : 'ocean');
+            showAuth();
+        }
     } else {
         document.getElementById('root').innerHTML = `<div class="card auth-card"><h2>⚠️ 环境不安全</h2><p>Web Crypto API 需要 HTTPS 或 localhost 环境才能正常工作。</p><p style="color:var(--text-secondary);">当前协议：${location.protocol}</p></div>`;
     }
