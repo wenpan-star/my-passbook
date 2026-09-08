@@ -1,22 +1,19 @@
 <!--
 ====================================================================================
- 静谧·密钥 v6.7.0 — 深度修复与体验优化
+ 静谧·密钥 v6.8.1 — 修复分类无法全部删除的问题
  更新日期：2026-09-08
 ====================================================================================
- 更新内容（v6.6.0 → v6.7.0）：
+ 更新内容（v6.8.0 → v6.8.1）：
 
- 1. [修复] 导入加密备份（数组格式）时不再误清空现有分类，统一默认保持。
- 2. [修复] 初始化保险库失败时正确回滚 State，避免半初始化状态。
- 3. [修复] DOM 查询改为属性选择器，避免潜在 ID 转义问题。
- 4. [优化] 删除未使用的变量，提升代码整洁度。
- 5. [优化] 下载文件增加异常处理，失败时提示用户。
- 6. [优化] 日志清空改用自定义确认对话框，与整体交互保持一致。
- 7. [优化] 导入分类处理逻辑统一：无分类信息时保持现有分类不变。
- 8. [兼容] 继续使用 ES5 风格函数，保持旧浏览器兼容。
- 9. [其他] 添加关键注释，提升可维护性。
+ 1. [修复] 修复删除所有自定义分类后，默认分类重新出现的问题。
+          - 修改 loadCategories() 函数：直接返回当前分类数组副本，不再自动回退默认分类。
+          - 初始化及解锁时若分类为空，仍会自动填充默认分类，保证首次使用体验。
+ 2. [其他] 保持其他功能不变，代码完整无简写。
 
- 历史更新（v6.5.0 → v6.6.0）：
- 修复覆盖导入清空可见密码集合等问题。
+ 历史更新（v6.7.0 → v6.8.0）：
+ 优化自定义分类库布局、双击重命名、关闭按钮位置等。
+ 历史更新（v6.6.0 → v6.7.0）：
+ 修复导入加密备份误清空分类等问题。
 ====================================================================================
 -->
 <!DOCTYPE html>
@@ -30,7 +27,7 @@
     <meta http-equiv="X-Frame-Options" content="DENY">
     <meta http-equiv="X-Content-Type-Options" content="nosniff">
     <meta http-equiv="Referrer-Policy" content="strict-origin-when-cross-origin">
-    <title>🔐 静谧·密钥 | 安全密码本 v6.7.0</title>
+    <title>🔐 静谧·密钥 | 安全密码本 v6.8.1</title>
     <style>
         /* ===== 样式保持不变，完整复制自 v6.6.0 ===== */
         :root {
@@ -676,7 +673,7 @@
 
         .cat-grid {
             display: grid;
-            grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+            grid-template-columns: repeat(3, 1fr);
             gap: 12px;
             max-height: 320px;
             overflow-y: auto;
@@ -1124,7 +1121,7 @@
 
     // ===================== 常量与配置 =====================
     const CONFIG = {
-        APP_VERSION: '6.7.0',
+        APP_VERSION: '6.8.1',
         STORAGE_VAULT: 'serene_vault_enc_v3',
         STORAGE_SALT: 'serene_vault_salt_v3',
         STORAGE_AUTH: 'serene_vault_auth_v3',
@@ -1806,7 +1803,8 @@
 
     // ===================== 分类管理 =====================
     function loadCategories() {
-        return State.customCategories.length ? [...State.customCategories] : ['E-Mail','工作','社交','银行','购物','娱乐','其他'];
+        // 直接返回当前分类数组的副本，允许为空数组（用户可删除所有自定义分类）
+        return [...State.customCategories];
     }
     function saveCategories(categories) { State.customCategories = [...new Set(categories)]; }
     function addCategory(name) {
@@ -2110,6 +2108,52 @@
                     <svg class="icon"><use href="#icon-trash"/></svg>
                 </button>`;
             container.appendChild(tag);
+
+            // 双击分类条目重命名
+            tag.addEventListener('dblclick', function(event) {
+                if (event.target.closest('button[data-cat]')) return; // 忽略删除按钮上的双击
+                const oldCategory = category;
+                promptRenameCategory(oldCategory).then(async function(newCategory) {
+                    if (!newCategory || newCategory === oldCategory) return;
+                    const oldPasswords = State.passwords.map(function(p) { return {...p}; });
+                    const oldCategories = [...State.customCategories];
+                    // 检查新名称是否与其他分类重复（排除自己）
+                    const exists = State.customCategories.some(function(c) { return c === newCategory; });
+                    if (exists) {
+                        showToast('分类名称已存在', true);
+                        return;
+                    }
+                    // 更新自定义分类数组
+                    const index = State.customCategories.indexOf(oldCategory);
+                    if (index !== -1) {
+                        State.customCategories.splice(index, 1, newCategory);
+                        State.customCategories.sort(function(a, b) { return a.localeCompare(b); });
+                    }
+                    // 更新所有关联密码条目的分类字段
+                    State.passwords.forEach(function(item) {
+                        if (item.category === oldCategory) {
+                            item.category = newCategory;
+                        }
+                    });
+                    State.rebuildIndex();
+                    try {
+                        await saveEncrypted();
+                    } catch (error) {
+                        State.passwords = oldPasswords;
+                        State.customCategories = oldCategories;
+                        State.rebuildIndex();
+                        renderCategoryList(container);
+                        renderListOnly();
+                        refreshDatalist();
+                        showToast('保存失败：' + error.message, true, 5000);
+                        return;
+                    }
+                    renderListOnly();
+                    refreshDatalist();
+                    renderCategoryList(container);
+                    showToast(`分类已重命名为「${newCategory}」`);
+                });
+            });
         });
         container.querySelectorAll('button[data-cat]').forEach(function(button) {
             button.onclick = async function(event) {
@@ -2189,6 +2233,53 @@
                 }
             };
             input.addEventListener('keypress', function(e) { if (e.key === 'Enter') modal.querySelector('#confirmCategoryDeletion').click(); });
+        });
+    }
+    // 自定义分类重命名对话框
+    function promptRenameCategory(oldCategory) {
+        return new Promise(function(resolve) {
+            const modal = document.createElement('div');
+            modal.className = 'modal';
+            modal.innerHTML = `
+                <div class="modal-card">
+                    <h3><svg class="icon" style="width:1.4rem;height:1.4rem;"><use href="#icon-edit"/></svg> 重命名分类</h3>
+                    <p style="color:var(--text-secondary);margin-bottom:12px;">将「${Util.escapeHtml(oldCategory)}」重命名为：</p>
+                    <input type="text" id="renameCategoryInput" value="${Util.escapeAttr(oldCategory)}" autocomplete="off" autofocus>
+                    <div class="button-group">
+                        <button id="cancelRenameCategory" class="btn btn-outline">取消</button>
+                        <button id="confirmRenameCategory" class="btn btn-primary">确认重命名</button>
+                    </div>
+                </div>`;
+            document.body.appendChild(modal);
+            document.body.classList.add('modal-open');
+            const previousFocus = document.activeElement;
+            const input = modal.querySelector('#renameCategoryInput');
+            input.focus();
+            input.select();
+            const cleanup = function(result) {
+                input.value = '';
+                modal.remove();
+                document.body.classList.remove('modal-open');
+                if (previousFocus && typeof previousFocus.focus === 'function') previousFocus.focus();
+                resolve(result);
+            };
+            modal.querySelector('#cancelRenameCategory').onclick = function() { cleanup(null); };
+            modal.querySelector('#confirmRenameCategory').onclick = function() {
+                const newName = input.value.trim();
+                if (!newName) {
+                    showToast('分类名称不能为空', true);
+                    input.focus();
+                    return;
+                }
+                if (newName === oldCategory) {
+                    cleanup(null); // 未改变
+                    return;
+                }
+                cleanup(newName);
+            };
+            input.addEventListener('keypress', function(e) {
+                if (e.key === 'Enter') modal.querySelector('#confirmRenameCategory').click();
+            });
         });
     }
 
@@ -3278,14 +3369,20 @@
         modal.className = 'modal';
         modal.innerHTML = `
             <div class="modal-card">
-                <h3><svg class="icon" style="width:1.4rem;height:1.4rem;"><use href="#icon-folder"/></svg> 自定义分类库</h3>
-                <div class="info-badge">✨ 共 <span id="catCount">0</span> 个分类 | 数字为密码条目数量</div>
-                <div id="catListManage" class="cat-grid"></div>
-                <div class="form-row" style="margin-top:12px;">
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:1.2rem;">
+                    <h3 style="margin:0; display:flex; align-items:center; gap:8px;">
+                        <svg class="icon" style="width:1.4rem;height:1.4rem;"><use href="#icon-folder"/></svg> 自定义分类库
+                    </h3>
+                    <div style="display:flex; align-items:center; gap:12px;">
+                        <span style="font-size:0.8rem; color:var(--text-secondary);">共 <span id="catCount">0</span> 个分类</span>
+                        <button id="closeCatBtn" class="pw-action" style="font-size:1.4rem; line-height:1; padding:4px 8px;" aria-label="关闭" title="关闭">✕</button>
+                    </div>
+                </div>
+                <div class="form-row" style="margin-bottom:12px;">
                     <input type="text" id="newCatName" placeholder="新分类名称" autocomplete="off">
                     <button id="addCatBtn" class="btn btn-outline btn-sm"><svg class="icon"><use href="#icon-plus"/></svg> 添加</button>
                 </div>
-                <div class="button-group"><button id="closeCat" class="btn btn-primary">关闭</button></div>
+                <div id="catListManage" class="cat-grid"></div>
             </div>`;
         document.body.appendChild(modal);
         document.body.classList.add('modal-open');
@@ -3293,6 +3390,16 @@
         State.activeCategoryModal = modal;
         const container = modal.querySelector('#catListManage');
         renderCategoryList(container);
+
+        const closeModal = function() {
+            modal.remove();
+            document.body.classList.remove('modal-open');
+            State.activeCategoryModal = null;
+            if (previousFocus && typeof previousFocus.focus === 'function') previousFocus.focus();
+        };
+
+        modal.querySelector('#closeCatBtn').onclick = closeModal;
+
         modal.querySelector('#addCatBtn').onclick = async function() {
             const name = modal.querySelector('#newCatName').value.trim();
             if (!name) { showToast('请输入分类名称', true); return; }
@@ -3313,12 +3420,6 @@
             } else {
                 showToast('分类已存在或无效', true);
             }
-        };
-        modal.querySelector('#closeCat').onclick = function() {
-            modal.remove();
-            document.body.classList.remove('modal-open');
-            State.activeCategoryModal = null;
-            if (previousFocus && typeof previousFocus.focus === 'function') previousFocus.focus();
         };
     }
 
