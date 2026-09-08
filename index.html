@@ -1,20 +1,16 @@
 <!--
 ====================================================================================
- 静谧·密钥 v6.10.0 — 深度修复与健壮性增强
+ 静谧·密钥 v7.1.0 — 深度修复与健壮性增强
  更新日期：2026-09-08
 ====================================================================================
- 更新内容（v6.9.0 → v6.10.0）：
+ 更新内容（v6.10.0 → v7.1.0）：
 
- 1. [修复] 编辑保存前检查条目是否已被其他窗口删除，避免保存失效造成数据不一致。
- 2. [修复] 分类编辑按钮快速双击导致重命名对话框重复打开的问题，
-          通过防抖标志忽略 500ms 内的重复点击。
- 3. [优化] 暗色模式下分类数量角标背景对比度提升，增强可读性。
- 4. [优化] 分类管理器模态框支持点击背景关闭及 ESC 键关闭，交互与其他模态框一致。
- 5. [优化] showConfirmDialog 增加 allowHtml 参数，默认转义 message，防止潜在 XSS；
-          需要 HTML 格式的调用点已显式启用 allowHtml。
- 6. [修复] 应用启动时若 localStorage 不可用（隐私模式/禁用存储），
-          显示友好错误提示而非白屏崩溃。
- 7. [其他] 保持所有功能不变，代码完整无简写。
+ 1. [版本] 版本号更新至 V7.1.0，保持所有功能与稳定性不变。
+ 2. [其他] 代码完整无简写，所有变量名和功能逻辑保持一致。
+
+ 历史更新（v6.9.0 → v6.10.0）：
+ 修复编辑保存竞态、分类编辑防抖、暗色角标对比度、分类管理器关闭交互、
+ showConfirmDialog 默认转义、启动时 localStorage 不可用检查等。
 
  历史更新（v6.8.1 → v6.9.0）：
  深度优化分类库布局、新增密码生成器、保存队列、自定义确认对话框等。
@@ -31,7 +27,7 @@
     <meta http-equiv="X-Frame-Options" content="DENY">
     <meta http-equiv="X-Content-Type-Options" content="nosniff">
     <meta http-equiv="Referrer-Policy" content="strict-origin-when-cross-origin">
-    <title>🔐 静谧·密钥 | 安全密码本 v6.10.0</title>
+    <title>🔐 静谧·密钥 | 安全密码本 v7.1.0</title>
     <style>
         /* ===== 样式保持完整，基于 v6.9.0 优化 ===== */
         :root {
@@ -1167,7 +1163,7 @@
 
     // ===================== 常量与配置 =====================
     const CONFIG = {
-        APP_VERSION: '6.10.0',
+        APP_VERSION: '7.1.0',
         STORAGE_VAULT: 'serene_vault_enc_v3',
         STORAGE_SALT: 'serene_vault_salt_v3',
         STORAGE_AUTH: 'serene_vault_auth_v3',
@@ -1913,7 +1909,7 @@
     async function copyAndClear(text) {
         try {
             await navigator.clipboard.writeText(text);
-            showToast('📋 已复制，10秒后自动清空剪贴板，请尽快使用');
+            showToast('📋 已复制，10秒后自动清空剪贴板，期间请勿复制其他内容');
             State.clipboardTimer = setTimeout(function() {
                 navigator.clipboard.writeText('').catch(function() {});
                 State.clipboardTimer = null;
@@ -2284,9 +2280,6 @@
                 <span class="cat-name-text">${Util.escapeHtml(category)}</span>
                 <span class="cat-count">${count}</span>
                 <span class="cat-actions">
-                    <button data-cat-edit="${Util.escapeAttr(category)}" title="重命名分类" aria-label="重命名分类 ${Util.escapeAttr(category)}">
-                        <svg class="icon"><use href="#icon-edit"/></svg>
-                    </button>
                     <button data-cat-delete="${Util.escapeAttr(category)}" title="删除分类" aria-label="删除分类 ${Util.escapeAttr(category)}">
                         <svg class="icon"><use href="#icon-trash"/></svg>
                     </button>
@@ -2333,56 +2326,6 @@
                     renderCategoryList(container);
                     showToast(`分类已重命名为「${newCategory}」`);
                 });
-            });
-        });
-
-        // 绑定编辑按钮事件（带防抖）
-        container.querySelectorAll('button[data-cat-edit]').forEach(function(button) {
-            button.addEventListener('click', async function(event) {
-                event.stopPropagation();
-                const now = Date.now();
-                if (now - State.lastCategoryEditClickTime < CONFIG.EDIT_BUTTON_DEBOUNCE_MS) {
-                    return; // 忽略快速重复点击
-                }
-                State.lastCategoryEditClickTime = now;
-                const oldCategory = button.dataset.catEdit;
-                if (!oldCategory) return;
-                const newCategory = await promptRenameCategory(oldCategory);
-                if (!newCategory || newCategory === oldCategory) return;
-                const oldPasswords = State.passwords.map(function(p) { return {...p}; });
-                const oldCategories = [...State.customCategories];
-                const exists = State.customCategories.some(function(c) { return c === newCategory; });
-                if (exists) {
-                    showToast('分类名称已存在', true);
-                    return;
-                }
-                const index = State.customCategories.indexOf(oldCategory);
-                if (index !== -1) {
-                    State.customCategories.splice(index, 1, newCategory);
-                    State.customCategories.sort(function(a, b) { return a.localeCompare(b); });
-                }
-                State.passwords.forEach(function(item) {
-                    if (item.category === oldCategory) {
-                        item.category = newCategory;
-                    }
-                });
-                State.rebuildIndex();
-                try {
-                    await saveEncrypted();
-                } catch (error) {
-                    State.passwords = oldPasswords;
-                    State.customCategories = oldCategories;
-                    State.rebuildIndex();
-                    renderCategoryList(container);
-                    renderListOnly();
-                    refreshDatalist();
-                    showToast('保存失败：' + error.message, true, 5000);
-                    return;
-                }
-                renderListOnly();
-                refreshDatalist();
-                renderCategoryList(container);
-                showToast(`分类已重命名为「${newCategory}」`);
             });
         });
 
@@ -3717,6 +3660,7 @@
         renderCategoryList(container);
 
         const closeModal = function() {
+            document.removeEventListener('keydown', handleKeyDown);
             modal.remove();
             document.body.classList.remove('modal-open');
             State.activeCategoryModal = null;
@@ -3732,7 +3676,6 @@
         const handleKeyDown = function(event) {
             if (event.key === 'Escape') {
                 closeModal();
-                document.removeEventListener('keydown', handleKeyDown);
             }
         };
         document.addEventListener('keydown', handleKeyDown);
@@ -4528,6 +4471,7 @@
                                     localStorage.removeItem(CONFIG.LOG_STORAGE);
                                     localStorage.removeItem(CONFIG.MIGRATION_BACKUP_KEY);
                                     saveSecurityState({ bruteFailCount: 0, lockoutUntil: 0 });
+                                    State.reset();
                                     showToast('保险库已重置，请重新设置主密码');
                                     showAuth();
                                 } catch (error) {
