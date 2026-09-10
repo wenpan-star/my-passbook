@@ -1,7 +1,7 @@
 /**
  * clipboard.js — 剪贴板保护
  *
- * 复制文本到剪贴板，并在指定时间后自动清空（仅当剪贴板内容未被其他内容覆盖时）。
+ * 复制文本到剪贴板，并在指定时间后自动清空（仅当未被其他内容覆盖时）。
  */
 
 import { CONFIG } from './config.js';
@@ -11,14 +11,12 @@ import { Toast } from './toast.js';
 export const Clipboard = {
     /**
      * 复制文本并在 10 秒后自动清空。
-     * 若剪贴板内容已被用户手动覆盖，则不清空。
      * @param {string} text
      */
     async copyAndClear(text) {
         if (text === null || text === undefined) return;
         const stringValue = String(text);
 
-        // 取消之前的清空定时器
         if (UiState.clipboardTimer) {
             clearTimeout(UiState.clipboardTimer);
             UiState.clipboardTimer = null;

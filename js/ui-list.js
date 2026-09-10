@@ -1,24 +1,12 @@
 /**
  * ui-list.js — 虚拟滚动 + 列表渲染 + 键盘导航
  *
- * 职责：
- *   - VirtualScroll：虚拟滚动布局计算与元素池
- *   - ListRenderer：列表过滤、排序、渲染、事件处理
- *   - 键盘导航（ArrowUp/Down/Home/End/PageUp/PageDown）
+ * VirtualScroll：虚拟滚动布局与元素池。
+ * ListRenderer：列表过滤、排序、渲染、事件处理。
+ * 键盘导航：ArrowUp/Down/Home/End/PageUp/PageDown。
  *
- * 【跨模块依赖】
- *   - DataState / UiState / CONFIG：静态 import
- *   - Util / EventBus：静态 import
- *   - Clipboard / Toast：静态 import
- *   - EditModal：通过 window.EditModal 动态访问（避免循环）
- *   - Session：通过 window.Session 动态访问
- *   - Dialog：静态 import
- *   - Save：通过 window.Save 动态访问
- *
- * v9.0.2 健壮性加固：
- *   - 新增 saveEncrypted() 内部辅助函数，统一通过 window.Save 动态访问，
- *     与 views.js / ui-toolbar.js / import-export.js / batch.js 同口径；
- *     未挂载时抛出明确错误，避免隐式 "Cannot read properties"。
+ * v9.2.1：getFilteredAndSorted 从 UiState.sortField 读排序字段，
+ *         不再每次渲染都读 DOM select 元素（滚动时高频触发）。
  */
 
 import { CONFIG } from './config.js';
@@ -27,19 +15,10 @@ import { DataState, UiState } from './state.js';
 import { Clipboard } from './clipboard.js';
 import { Toast } from './toast.js';
 import { Dialog } from './modal.js';
-
-// ==================== 内部辅助 ====================
-
-/**
- * 通过 window 动态访问 Save 模块，避免循环 import。
- * 未挂载时抛出明确错误，上层统一 catch 后回滚并 Toast 提示。
- */
-async function saveEncrypted() {
-    if (window.Save && typeof window.Save.saveEncrypted === 'function') {
-        return window.Save.saveEncrypted();
-    }
-    throw new Error('Save 模块未加载');
-}
+import { Session } from './session.js';
+import { EditModal } from './ui-edit-modal.js';
+import { mutateVault } from './mutation.js';
+import { Events } from './events.js';
 
 // ==================== 虚拟滚动 ====================
 export const VirtualScroll = {
@@ -60,6 +39,10 @@ export const VirtualScroll = {
     elementPool: [],
     renderedItemElements: new Map(),
 
+    /**
+     * 读取 CSS 中的 --item-height（可缓存）。
+     * @param {boolean} force
+     */
     readItemHeightFromCSS(force) {
         if (!force && this.cachedItemHeightFromCSS !== null) {
             this.itemHeight = this.cachedItemHeightFromCSS;
@@ -81,12 +64,22 @@ export const VirtualScroll = {
         this.cachedItemHeightFromCSS = null;
     },
 
+    /**
+     * 计算列数。
+     * @param {number} containerWidth
+     * @returns {number}
+     */
     computeColumns(containerWidth) {
         if (containerWidth <= 0) return 1;
         if (window.innerWidth <= CONFIG.VIRTUAL_MOBILE_BREAKPOINT) return 1;
         return Math.max(1, Math.floor((containerWidth + CONFIG.VIRTUAL_GAP) / (CONFIG.VIRTUAL_MIN_ITEM_WIDTH + CONFIG.VIRTUAL_GAP)));
     },
 
+    /**
+     * 计算布局。
+     * @param {number} containerWidth
+     * @param {number} itemCount
+     */
     computeLayout(containerWidth, itemCount) {
         this.readItemHeightFromCSS(false);
         this.columns = this.computeColumns(containerWidth);
@@ -147,7 +140,7 @@ export const ListRenderer = {
     _renderFrameRequest: null,
 
     /**
-     * 调度一次列表渲染（合并同一帧内的多次请求）。
+     * 调度一次列表渲染（合并同帧多次请求）。
      */
     renderList() {
         if (this._renderFrameRequest) {
@@ -161,6 +154,7 @@ export const ListRenderer = {
 
     /**
      * 获取过滤 + 排序后的条目列表。
+     * @returns {Array}
      */
     getFilteredAndSorted() {
         let filteredItems = [...DataState.passwords];
@@ -184,8 +178,7 @@ export const ListRenderer = {
             });
         }
 
-        const sortFieldSelect = document.getElementById('sortFieldSelect');
-        const sortField = sortFieldSelect ? sortFieldSelect.value : 'name';
+        const sortField = UiState.sortField || 'name';
 
         filteredItems.sort((a, b) => {
             let comparison = 0;
@@ -270,6 +263,9 @@ export const ListRenderer = {
         ListRenderer.renderVisibleItems(listContainer, grid, filteredItems, UiState.searchQuery.trim());
     },
 
+    /**
+     * 渲染可见条目。
+     */
     renderVisibleItems(listContainer, grid, items, keyword) {
         const scrollTop = listContainer.scrollTop;
         const containerHeight = listContainer.clientHeight;
@@ -351,6 +347,9 @@ export const ListRenderer = {
 
     /**
      * 搜索高亮。
+     * @param {string} text
+     * @param {string} keyword
+     * @returns {string}
      */
     highlightText(text, keyword) {
         if (!keyword || !text) return Util.escapeHtml(text);
@@ -454,7 +453,7 @@ export const ListRenderer = {
         VirtualScroll.scrollRAF = requestAnimationFrame(() => {
             VirtualScroll.scrollRAF = null;
             UiState.lastActivity = Date.now();
-            if (DataState.masterKey && window.Session) window.Session.scheduleIdleLock();
+            if (DataState.masterKey) Session.scheduleIdleLock();
 
             const listContainer = document.getElementById('listContainer');
             if (!listContainer) return;
@@ -464,6 +463,9 @@ export const ListRenderer = {
         });
     },
 
+    /**
+     * 键盘导航。
+     */
     handleKeydown(event) {
         const listContainer = document.getElementById('listContainer');
         if (!listContainer || event.target !== listContainer) return;
@@ -535,10 +537,9 @@ export const ListRenderer = {
     },
 
     /**
-     * 处理列表内的点击（编辑 / 删除 / 密码显示隐藏 / 复制）。
+     * 处理列表内点击。
      */
     async handleItemClick(event) {
-        // 清除键盘焦点
         if (UiState.keyboardFocusedItemId) {
             UiState.keyboardFocusedItemId = null;
             const currentFocused = document.querySelector('.password-item.keyboard-focus');
@@ -550,7 +551,7 @@ export const ListRenderer = {
 
         if (editButton) {
             const item = DataState.passwordIdIndex.get(editButton.dataset.id);
-            if (item && window.EditModal) window.EditModal.open(item);
+            if (item) EditModal.open(item);
             return;
         }
 
@@ -567,15 +568,11 @@ export const ListRenderer = {
             });
             if (!confirmed) return;
 
-            const previousPasswords = DataState.passwords.map(p => Object.assign({}, p));
-            DataState.passwords = DataState.passwords.filter(p => p.id !== item.id);
-            DataState.rebuildIndex();
-
             try {
-                await saveEncrypted();
+                await mutateVault(() => {
+                    DataState.passwords = DataState.passwords.filter(passwordItem => passwordItem.id !== item.id);
+                });
             } catch (error) {
-                DataState.passwords = previousPasswords;
-                DataState.rebuildIndex();
                 Toast.show('保存失败：' + error.message, { isError: true, duration: 5000 });
                 return;
             }
@@ -585,7 +582,7 @@ export const ListRenderer = {
             UiState.selectedIds.delete(item.id);
             if (UiState.keyboardFocusedItemId === item.id) UiState.keyboardFocusedItemId = null;
 
-            EventBus.emit('vault:changed', { source: 'delete' });
+            EventBus.emit(Events.VAULT_CHANGED, { source: 'delete' });
             Toast.show('已删除');
             return;
         }
@@ -613,6 +610,9 @@ export const ListRenderer = {
         }
     },
 
+    /**
+     * 切换单个密码的可见性。
+     */
     togglePasswordVisibility(inputElement, toggleButton, itemId, passwordType) {
         if (!inputElement || !toggleButton) return;
         const item = DataState.passwordIdIndex.get(itemId);
@@ -638,7 +638,3 @@ export const ListRenderer = {
         }
     }
 };
-
-// 挂载
-window.ListRenderer = ListRenderer;
-window.VirtualScroll = VirtualScroll;

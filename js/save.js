@@ -1,9 +1,7 @@
 /**
  * save.js — 保存串行化队列
  *
- * 所有对保险库的写入都通过 Save.saveEncrypted() 排队，避免并发写入冲突。
- * 独立文件的原因：ui-edit-modal / batch / import-export 都需要调用它，
- * 但它又依赖 state / crypto / storage —— 独立出来避免循环 import。
+ * 所有保险库写入都通过 Save.saveEncrypted() 排队，避免并发冲突。
  */
 
 import { CONFIG } from './config.js';
@@ -11,12 +9,15 @@ import { Crypto } from './crypto.js';
 import { Storage } from './storage.js';
 import { DataState, UiState } from './state.js';
 import { EventBus } from './util.js';
+import { Events } from './events.js';
 
 let saveOperationChain = Promise.resolve();
 
 export const Save = {
     /**
      * 将操作排入串行队列。
+     * @param {Function} operation
+     * @returns {Promise<*>}
      */
     queue(operation) {
         const result = saveOperationChain.then(operation, operation);
@@ -56,14 +57,12 @@ export const Save = {
     },
 
     /**
-     * 排队保存。所有 UI 层的写操作都通过这个入口。
+     * 排队保存。
      */
     async saveEncrypted() {
         return this.queue(async () => {
             await this.saveVault();
-            EventBus.emit('vault:saved');
+            EventBus.emit(Events.VAULT_SAVED);
         });
     }
 };
-
-window.Save = Save;

@@ -2,7 +2,10 @@
  * security.js — 安全锁定状态持久化
  *
  * 持久化：暴力破解失败次数、锁定截止时间、重新认证失败次数。
- * 当 localStorage 不可用时降级到内存存储。
+ * localStorage 不可用时降级到内存存储。
+ *
+ * v9.2.1：修复 applyRateLimit 中被误插入的 `Con\n` 语法错误，
+ *         该错误会导致整个模块解析失败、应用启动白屏。
  */
 
 import { CONFIG } from './config.js';
@@ -16,9 +19,6 @@ const DEFAULT_SECURITY_STATE = Object.freeze({
 let inMemorySecurityState = null;
 
 export const Security = {
-    /**
-     * 读取安全状态。优先从 localStorage 读，失败时使用内存值。
-     */
     load() {
         let loadedState = null;
         try {
@@ -34,9 +34,6 @@ export const Security = {
         return Object.assign({}, DEFAULT_SECURITY_STATE);
     },
 
-    /**
-     * 写入安全状态。
-     */
     save(securityData) {
         inMemorySecurityState = securityData;
         try {
@@ -46,18 +43,12 @@ export const Security = {
         }
     },
 
-    /**
-     * 部分更新安全状态。
-     */
     update(updates) {
         const currentState = this.load();
         const mergedState = Object.assign({}, currentState, updates);
         this.save(mergedState);
     },
 
-    /**
-     * 重置为默认状态。
-     */
     reset() {
         this.save(Object.assign({}, DEFAULT_SECURITY_STATE));
     }
@@ -65,10 +56,9 @@ export const Security = {
 
 /**
  * 计算锁定截止时间。
- * 前 MAX_FAIL_COUNT 次失败不锁定；超过后按指数退避累加锁定时间。
- * @param {number} failCount 当前失败次数
- * @param {number} currentLockoutUntil 当前锁定截止时间
- * @returns {number} 新的锁定截止时间
+ * @param {number} failCount
+ * @param {number} currentLockoutUntil
+ * @returns {number}
  */
 export function computeLockoutUntil(failCount, currentLockoutUntil) {
     if (failCount >= CONFIG.MAX_FAIL_COUNT) {
@@ -80,7 +70,7 @@ export function computeLockoutUntil(failCount, currentLockoutUntil) {
 
 /**
  * 应用指数退避的限速延迟。
- * @param {number} failCount 当前失败次数
+ * @param {number} failCount
  */
 export async function applyRateLimit(failCount) {
     if (failCount <= 0) return;

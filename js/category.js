@@ -7,10 +7,12 @@
 
 import { DataState } from './state.js';
 import { EventBus } from './util.js';
+import { Events } from './events.js';
 
 export const Category = {
     /**
      * 读取所有分类（返回副本）。
+     * @returns {string[]}
      */
     load() {
         return [...DataState.customCategories];
@@ -18,6 +20,7 @@ export const Category = {
 
     /**
      * 保存分类（去重）。
+     * @param {string[]} categories
      */
     save(categories) {
         DataState.customCategories = [...new Set(categories)];
@@ -25,7 +28,8 @@ export const Category = {
 
     /**
      * 添加分类。
-     * @returns {boolean} 是否添加成功（已存在或空则返回 false）
+     * @param {string} name
+     * @returns {boolean}
      */
     add(name) {
         const trimmedName = name.trim();
@@ -40,7 +44,8 @@ export const Category = {
 
     /**
      * 删除分类。
-     * @returns {boolean} 是否成功删除
+     * @param {string} name
+     * @returns {boolean}
      */
     remove(name) {
         const currentCategories = Category.load();
@@ -55,7 +60,7 @@ export const Category = {
     /**
      * 批量添加分类。
      * @param {string[]} newCategories
-     * @param {boolean} replaceExisting true 时替换全部
+     * @param {boolean} replaceExisting
      * @returns {boolean}
      */
     batchAdd(newCategories, replaceExisting) {
@@ -98,7 +103,6 @@ export const Category = {
             Category.batchAdd(newCategories, false);
         }
 
-        // 通知 UI 层刷新所有下拉框（避免 category.js 依赖 UI 层）
-        EventBus.emit('selects:refresh');
+        EventBus.emit(Events.SELECTS_REFRESH);
     }
 };

@@ -1,7 +1,7 @@
 ﻿/* ==================================================================================
-   静谧·密钥 v9.0.0 — 样式表
-   从 v8.5.0 单文件的 <style> 标签原样迁移，未做任何修改。
-   所有 CSS 变量、媒体查询、动画、主题定义均保持一致。
+   静谧·密钥 — 样式表
+   v9.3.0：密码本样式（6 套主题变量 + 玻璃态 + 响应式）。
+   v9.3.0 仅同步版本号，所有 CSS 变量、媒体查询、动画、主题定义保持不变。
 ================================================================================== */
 
 :root {
@@ -175,7 +175,6 @@ body.modal-open {
     position: relative;
 }
 
-/* v8.3.3：桌面端认证卡片保持原设计；移动端覆盖见 media query */
 .auth-card {
     max-width: 460px;
     text-align: center;
@@ -210,8 +209,6 @@ input, select, textarea,
     width: 100%;
     height: var(--input-height);
     padding: 0 var(--input-padding-x);
-    /* v8.3.4：字体固定 16px，避免 iOS Safari / 部分 Android 在输入框
-       聚焦时自动放大页面（< 16px 会触发自动缩放） */
     font-size: 16px;
     font-family: inherit;
     border: 1px solid var(--input-border);
@@ -261,7 +258,6 @@ input:focus, select:focus, textarea:focus {
     font-weight: 400;
 }
 
-/* v8.3.3：清理重复的 font-weight 声明；移除无谓的 backdrop-filter: blur(4px) */
 .btn {
     display: inline-flex;
     align-items: center;
@@ -318,8 +314,6 @@ input:focus, select:focus, textarea:focus {
     background: var(--btn-bg-active);
 }
 
-/* v8.3.3：.btn-primary 有意使用 0.4px letter-spacing（略宽于普通按钮 0.3px），
-   视觉上强化 CTA 层级 */
 .btn-primary {
     background: linear-gradient(135deg, var(--primary) 0%, var(--primary-hover) 100%);
     color: #fff;
@@ -342,7 +336,6 @@ input:focus, select:focus, textarea:focus {
     color: #fff;
 }
 
-/* v8.3.4：增加 letter-spacing: 0.4px，与 .btn-primary 保持一致的 CTA 强化 */
 .btn-danger {
     background: var(--danger);
     color: #fff;
@@ -357,6 +350,12 @@ input:focus, select:focus, textarea:focus {
     box-shadow: 0 8px 20px rgba(220, 38, 38, 0.45);
     transform: translateY(-1px);
     color: #fff;
+}
+
+.btn-outline {
+    background: var(--btn-bg);
+    color: var(--text);
+    border: 1px solid var(--btn-border);
 }
 
 .btn-sm {
@@ -419,7 +418,6 @@ input:focus, select:focus, textarea:focus {
     background: rgba(0, 0, 0, 0.04);
 }
 
-/* v8.5.0：主题下拉菜单标记当前主题 */
 .theme-option.active {
     background: var(--primary-light);
     font-weight: 700;
@@ -431,7 +429,6 @@ input:focus, select:focus, textarea:focus {
     font-weight: 700;
 }
 
-/* v8.3.3：深色模式下 hover 背景改用浅色叠加，保证可见 */
 html[data-theme-resolved="midnight"] .theme-option:hover {
     background: rgba(255, 255, 255, 0.08);
 }
@@ -498,9 +495,6 @@ html[data-theme-resolved="midnight"] .theme-option:hover {
     flex-shrink: 0;
 }
 
-/* v8.3.3：折叠状态下 app-header 强制 row 布局（覆盖移动端 column），
-   logo 保持与展开状态一致的外观（1.8rem / 2.4rem svg / 12px gap），
-   始终位于左侧 */
 .top-collapsed .app-header {
     display: flex !important;
     flex-direction: row !important;
@@ -520,10 +514,6 @@ html[data-theme-resolved="midnight"] .theme-option:hover {
 .top-collapsed .app-header .header-actions {
     display: none !important;
 }
-
-/* v8.3.3：折叠状态 logo 完全继承全局 .logo 样式（字号 1.8rem、
-   gap 12px、svg 2.4rem、drop-shadow 与展开状态一致）。
-   不再有任何局部尺寸覆盖，保证两种状态外观完全一致。 */
 
 .top-collapsed .add-section {
     display: none !important;
@@ -639,8 +629,6 @@ html[data-theme-resolved="midnight"] .theme-option:hover {
     align-items: center;
 }
 
-/* v8.3.3：搜索栏 hover 从"外发光"改为"内阴影+边框色"，
-   与内部输入框聚焦光晕不再叠加。focus-within 状态反馈更精准。 */
 .search-bar {
     display: flex;
     gap: 12px;
@@ -668,7 +656,6 @@ html[data-theme-resolved="midnight"] .theme-option:hover {
     border-radius: 12px;
     border: 1px solid var(--input-border);
     background: var(--input-bg);
-    /* v8.3.4：字体固定 16px，避免 iOS Safari 聚焦搜索框时自动放大 */
     font-size: 16px;
     font-weight: 500;
     letter-spacing: 0.15px;
@@ -703,8 +690,6 @@ html[data-theme-resolved="midnight"] .theme-option:hover {
     padding-right: 40px;
 }
 
-/* v8.3.4：移除多余的 margin-top 及其对应过渡项，垂直节奏统一由
-   .app-sticky-top 的 gap 控制 */
 .add-section {
     background: var(--btn-bg);
     backdrop-filter: blur(12px);
@@ -889,9 +874,6 @@ html[data-theme-resolved="midnight"] .theme-option:hover {
     -webkit-overflow-scrolling: touch;
 }
 
-/* v8.3.4：右侧内边距 80px，为 .cat-actions（两个 32px 按钮 + 4px gap +
-   4px padding-left + 6px right ≈ 76px）预留 4px 视觉缓冲，
-   避免中文分类名较长时省略号与操作按钮在临界宽度下重叠 */
 .cat-tag {
     position: relative;
     display: flex;
@@ -931,7 +913,6 @@ html[data-theme-resolved="midnight"] .theme-option:hover {
     pointer-events: none;
 }
 
-/* v8.3.4：删除绝对定位下无实际作用的 margin-left: auto */
 .cat-tag .cat-actions {
     display: flex;
     gap: 2px;
@@ -987,8 +968,6 @@ html[data-theme-resolved="midnight"] .theme-option:hover {
     grid-column: 1 / -1;
 }
 
-/* v8.3.3：.modal 移除 backdrop-filter，仅由 .modal-card 承担单层玻璃态，
-   消除双层模糊叠加带来的视觉伪影与 GPU 双倍开销 */
 .modal {
     position: fixed;
     top: 0;
@@ -1042,7 +1021,6 @@ html[data-theme-resolved="midnight"] .theme-option:hover {
     min-width: 120px;
 }
 
-/* v8.5.0：Toast 使用主题变量，午夜蓝下自动切换深色底 + 浅色字 */
 .toast {
     position: fixed;
     bottom: calc(36px + var(--safe-area-bottom));
@@ -1188,9 +1166,6 @@ html[data-theme-resolved="midnight"] .modal-card {
     margin: 8px 0;
 }
 
-/* v8.3.4：空段背景由硬编码 #e2e8f0 改为 CSS 变量 var(--border)，
-   使初始渲染在深色模式（midnight #475569）下与卡片底色协调，
-   避免浅灰色段在深色卡片上刺眼 */
 .strength-segment {
     flex: 1;
     height: 6px;
@@ -1251,7 +1226,6 @@ html[data-theme-resolved="midnight"] .modal-card {
     font-size: 0.8rem;
 }
 
-/* v8.5.0：迁移备份恢复提示条 */
 .migration-backup-banner {
     background: var(--warning-box-bg);
     border-left: 5px solid var(--warning);
@@ -1277,8 +1251,6 @@ html[data-theme-resolved="midnight"] .modal-card {
         font-size: 0.74rem;
         gap: 4px;
     }
-    /* v8.3.3：移动端折叠状态强制 row 布局，logo 继承全局样式（不再缩小），
-       保持与展开状态一致的外观，始终位于左侧 */
     .top-collapsed .app-header {
         flex-direction: row !important;
     }
@@ -1293,7 +1265,6 @@ html[data-theme-resolved="midnight"] .modal-card {
         padding: 1.2rem 1rem;
         border-radius: 24px;
     }
-    /* v8.3.3：移动端认证卡片补齐 padding/字号覆盖，避免 320px 屏挤压 */
     .auth-card {
         padding: 2.5rem 1.5rem;
         max-width: 100%;
@@ -1345,7 +1316,6 @@ html[data-theme-resolved="midnight"] .modal-card {
         font-size: 0.85rem;
         min-height: 44px;
     }
-    /* v8.3.3：移动端弹窗底部按钮组间距缩小 */
     .modal-card {
         max-width: 92vw;
         max-height: 90vh;
@@ -1376,7 +1346,6 @@ html[data-theme-resolved="midnight"] .modal-card {
     .password-list-scroll { scrollbar-width: none; }
     .password-list-scroll::-webkit-scrollbar { display: none; }
     .virtual-list-grid { will-change: auto; }
-    /* v8.3.3：移动端空状态 padding 缩小 */
     .virtual-empty-state { padding: 24px 16px; }
 }
 
@@ -1416,9 +1385,6 @@ html[data-theme-resolved="midnight"] .modal-card {
         position: relative;
     }
     :root { --item-height: 270px; }
-    /* v8.3.3：超小屏折叠状态保持 row，logo 继承全局样式（在 380px 断点内 logo 全局尺寸略小，
-       但折叠/展开状态保持一致） */
-    /* v8.3.4：min-height 由 44px 降为 36px，匹配 380px 断点下 logo 实际高度 */
     .top-collapsed .app-header {
         flex-direction: row !important;
         min-height: 36px;
@@ -1432,20 +1398,16 @@ html[data-theme-resolved="midnight"] .modal-card {
     .collapse-top-btn .collapse-text {
         display: none;
     }
-
     .top-collapsed #expandTopBar .btn {
         min-height: 30px;
         padding: 3px 10px;
         font-size: 0.72rem;
         gap: 3px;
     }
-
-    /* v8.3.3：横屏折叠状态保持 row，logo 与展开状态一致 */
     .top-collapsed .app-header {
         flex-direction: row !important;
         margin-bottom: 0;
     }
-
     .app-container.card {
         padding: 1rem 1.2rem;
     }
@@ -1463,7 +1425,6 @@ html[data-theme-resolved="midnight"] .modal-card {
     .search-bar select {
         height: 40px;
         border-radius: 10px;
-        /* v8.3.4：横屏也保持 16px，避免 iOS Safari 聚焦缩放 */
         font-size: 16px;
     }
     .btn-sm {
@@ -1505,10 +1466,6 @@ html[data-theme-resolved="midnight"] .modal-card {
     }
 }
 
-/* v8.3.3：触屏设备上禁用所有非必要的 hover 视觉状态，
-   避免点击后状态滞留 */
-/* v8.3.4：补齐深色模式（midnight）下的高特异性覆盖 + 补齐浅色模式下
-   cat-tag button / pw-action / collapse-top-btn 的 hover 残留 */
 @media (hover: none) and (pointer: coarse) {
     .btn:hover {
         transform: none;
@@ -1534,7 +1491,6 @@ html[data-theme-resolved="midnight"] .modal-card {
     .search-bar:hover {
         border-color: var(--border);
     }
-    /* v8.3.4：补齐 cat-tag 操作按钮在浅色模式下的 hover 残留 */
     .cat-tag button:hover {
         color: var(--text-secondary);
         background: none;
@@ -1543,7 +1499,6 @@ html[data-theme-resolved="midnight"] .modal-card {
         color: var(--text-secondary);
         background: none;
     }
-    /* v8.3.4：补齐 pw-action 与 collapse-top-btn 的 hover 残留 */
     .pw-action:hover {
         background: transparent;
     }

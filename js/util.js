@@ -1,12 +1,11 @@
 /**
  * util.js — 通用工具函数 + 事件总线
  *
- * 本模块只导出工具，无 DOM 依赖（除了 safeRestoreFocus 的 element.isConnected 检查）。
- * EventBus 用于跨模块解耦：例如 ui-edit-modal 保存后不直接调用 ui-list，
- * 而是 emit('vault:changed')，由 views 监听后统一重渲染。
+ * 本模块只导出工具，无 DOM 依赖（除 safeRestoreFocus 的 isConnected 检查）。
+ * EventBus 用于跨模块解耦，事件名走 events.js 的 Events 常量。
  *
- * v9.0.1：isStrongMasterPassword 改用 CONFIG.MASTER_MIN_LEN，
- * 避免硬编码 12 与配置不同步。
+ * v9.2.1：新增 Util.generateUniqueName，供 ui-edit-modal.js 与
+ *         views/add-form-events.js 的 keepBoth 分支复用。
  */
 
 import { CONFIG } from './config.js';
@@ -14,23 +13,23 @@ import { CONFIG } from './config.js';
 // ==================== 工具函数 ====================
 export const Util = {
     /**
-     * 转义 HTML 特殊字符，用于任何插入 innerHTML 的用户数据。
+     * 转义 HTML 特殊字符。
+     * @param {*} text
+     * @returns {string}
      */
     escapeHtml(text) {
         if (text === null || text === undefined) return '';
         const escapeMap = {
-            '&': '&amp;',
-            '<': '&lt;',
-            '>': '&gt;',
-            '"': '&quot;',
-            "'": '&#39;',
-            '`': '&#96;'
+            '&': '&amp;', '<': '&lt;', '>': '&gt;',
+            '"': '&quot;', "'": '&#39;', '`': '&#96;'
         };
         return String(text).replace(/[&<>"'`]/g, character => escapeMap[character]);
     },
 
     /**
-     * 转义 HTML 属性值，用于任何插入 HTML 属性（如 value=""、data-xxx=""）的用户数据。
+     * 转义 HTML 属性值。
+     * @param {*} text
+     * @returns {string}
      */
     escapeAttr(text) {
         if (text === null || text === undefined) return '';
@@ -45,6 +44,8 @@ export const Util = {
 
     /**
      * 格式化时间戳为 YYYY-MM-DD。
+     * @param {number|undefined} timestamp
+     * @returns {string}
      */
     formatDate(timestamp) {
         if (!timestamp) return '';
@@ -56,7 +57,9 @@ export const Util = {
     },
 
     /**
-     * 格式化当前时间为文件名安全的字符串：YYYYMMDD_HHMMSS。
+     * 格式化时间为 YYYYMMDD_HHMMSS。
+     * @param {number} [date]
+     * @returns {string}
      */
     formatTimestampForFilename(date) {
         const safeDate = new Date(date || Date.now());
@@ -70,15 +73,17 @@ export const Util = {
     },
 
     /**
-     * 转义正则表达式中的特殊字符，用于搜索高亮。
+     * 转义正则表达式中的特殊字符。
+     * @param {*} text
+     * @returns {string}
      */
     escapeRegex(text) {
         return String(text).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
     },
 
     /**
-     * 生成 128 位随机 ID（32 位十六进制字符串）。
-     * 使用 crypto.getRandomValues，加密安全的随机源。
+     * 生成 128 位随机 ID。
+     * @returns {string}
      */
     generateId() {
         const randomBytes = new Uint8Array(16);
@@ -89,8 +94,38 @@ export const Util = {
     },
 
     /**
+     * 为给定基础名称生成一个与现有条目不冲突的新名称。
+     *
+     * 规则：baseName → baseName (1) → baseName (2) → ...
+     * 若 baseName 本身未被占用则原样返回。
+     *
+     * v9.2.1：新增。供 ui-edit-modal.js 与 views/add-form-events.js 的
+     *         keepBoth（另存为 / 保留两者）分支使用，避免出现两个同名条目。
+     *
+     * @param {string} baseName 基础名称
+     * @param {string|null} excludeId 排除当前编辑条目的 ID（编辑场景用）
+     * @param {Array} existingItems DataState.passwords
+     * @returns {string}
+     */
+    generateUniqueName(baseName, excludeId, existingItems) {
+        const items = Array.isArray(existingItems) ? existingItems : [];
+        const excludedId = excludeId || null;
+        const isNameTaken = candidateName => items.some(item => item.name === candidateName && item.id !== excludedId);
+        if (!isNameTaken(baseName)) return baseName;
+        let suffixIndex = 1;
+        let candidateName = `${baseName} (${suffixIndex})`;
+        while (isNameTaken(candidateName)) {
+            suffixIndex++;
+            if (suffixIndex > 100000) return `${baseName} (${Date.now()})`;
+            candidateName = `${baseName} (${suffixIndex})`;
+        }
+        return candidateName;
+    },
+
+    /**
      * 计算密码强度等级（0-4）。
-     * 4 类字符 + 长度 + 重复惩罚 + 键盘序列惩罚 + 弱密码清单。
+     * @param {string} password
+     * @returns {number}
      */
     getPasswordStrength(password) {
         if (!password) return 0;
@@ -134,9 +169,9 @@ export const Util = {
     },
 
     /**
-     * 主密码强度校验：至少 CONFIG.MASTER_MIN_LEN 位，含大写、小写、数字、特殊符号四类。
-     *
-     * v9.0.1：改用 CONFIG.MASTER_MIN_LEN，与配置保持单一数据源。
+     * 主密码强度校验。
+     * @param {string} password
+     * @returns {boolean}
      */
     isStrongMasterPassword(password) {
         if (!password || password.length < CONFIG.MASTER_MIN_LEN) return false;
@@ -148,6 +183,8 @@ export const Util = {
 
     /**
      * 强度等级的文本描述。
+     * @param {number} level
+     * @returns {string}
      */
     strengthText(level) {
         return ['❌ 太弱', '⚠️ 弱', '📈 中等', '✅ 强', '💪 非常强'][level] || '未知';
@@ -155,13 +192,16 @@ export const Util = {
 
     /**
      * 强度等级对应的颜色。
+     * @param {number} level
+     * @returns {string}
      */
     strengthColor(level) {
         return ['#dc2626', '#f59e0b', '#f59e0b', '#059669', '#059669'][level] || '#dc2626';
     },
 
     /**
-     * 安全地把焦点还给某个元素（可能已被移除）。
+     * 安全地把焦点还给某个元素。
+     * @param {HTMLElement|null} element
      */
     safeRestoreFocus(element) {
         if (!element) return;
@@ -170,12 +210,14 @@ export const Util = {
         try {
             element.focus();
         } catch (error) {
-            // 忽略焦点恢复失败（例如在 iOS 某些状态下 focus 会抛异常）
+            // 忽略
         }
     },
 
     /**
-     * 判断元素是否是顶层模态框（用于 ESC 只关闭最上层）。
+     * 判断元素是否是顶层模态框。
+     * @param {HTMLElement} modalElement
+     * @returns {boolean}
      */
     isTopmostModal(modalElement) {
         const allModals = document.querySelectorAll('.modal');
@@ -187,15 +229,7 @@ export const Util = {
 // ==================== 事件总线 ====================
 /**
  * 轻量事件总线，用于跨模块解耦。
- *
- * 使用场景：
- *   - ui-edit-modal 保存成功后 emit('vault:changed')，
- *     由 views 监听后统一调用 ui-list 重渲染、刷新下拉框等。
- *   - session 锁定后 emit('session:locked')，
- *     由 views 监听后切换到登录界面。
- *
- * 这样 ui-edit-modal 不需要 import ui-list，
- * 避免了循环依赖。
+ * 所有事件名必须来自 events.js 的 Events 常量。
  */
 export const EventBus = {
     /** @type {Map<string, Set<Function>>} */
@@ -203,6 +237,9 @@ export const EventBus = {
 
     /**
      * 订阅事件，返回取消订阅的函数。
+     * @param {string} eventName
+     * @param {Function} listener
+     * @returns {Function}
      */
     on(eventName, listener) {
         if (!this._listeners.has(eventName)) {
@@ -214,6 +251,8 @@ export const EventBus = {
 
     /**
      * 取消订阅。
+     * @param {string} eventName
+     * @param {Function} listener
      */
     off(eventName, listener) {
         const listeners = this._listeners.get(eventName);
@@ -226,7 +265,9 @@ export const EventBus = {
     },
 
     /**
-     * 触发事件。所有监听器同步执行，异常被捕获并记录，不影响其他监听器。
+     * 触发事件。所有监听器同步执行，异常被捕获并记录。
+     * @param {string} eventName
+     * @param {*} [payload]
      */
     emit(eventName, payload) {
         const listeners = this._listeners.get(eventName);
@@ -241,7 +282,7 @@ export const EventBus = {
     },
 
     /**
-     * 清空所有监听器（用于会话锁定后重置）。
+     * 清空所有监听器。
      */
     clear() {
         this._listeners.clear();

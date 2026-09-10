@@ -1,29 +1,8 @@
 /**
  * modal.js — 模态框核心抽象 + 语义化对话框
  *
- * 【重构核心】
- * 原代码有 10 个手写模态框，每个都重复实现：
- *   - pushModalOpen / popModalOpen 计数
- *   - attachEscapeToClose 监听
- *   - safeRestoreFocus 焦点恢复
- *   - cleanup 清理函数
- *   - remove + unregister
- *
- * 本模块提供统一的 Modal.open() 抽象，所有模态框只写一次生命周期。
- * 上层通过 Dialog.* 语义化接口调用。
- *
- * 【设计要点】
- *   - _stack：模态框栈，ESC 只关闭最顶层
- *   - _openCount：body.modal-open 计数，避免多层叠加时提前解除滚动锁
- *   - handle.close(result)：关闭并触发 onClose(result)
- *   - onOpen(handle)：模态框插入 DOM 后立即调用，用于 focus / 绑定事件
- *
- * 【依赖方向】
- *   modal.js → toast.js（错误提示）
- *   modal.js → util.js（焦点恢复、转义）
- *   modal.js → security.js（重新认证的失败计数）
- *   modal.js → state.js（AuthState）
- *   modal.js 通过 window.Auth 动态访问认证模块（避免循环 import）
+ * 统一实现：模态框栈、ESC 只关闭最顶层、焦点恢复、生命周期。
+ * 重新认证时动态 import('./auth.js') 打破循环依赖。
  */
 
 import { Util } from './util.js';
@@ -41,22 +20,12 @@ export const Modal = {
     /**
      * 打开一个模态框。
      * @param {object} options
-     * @param {string} [options.title] 标题 HTML（已转义）
-     * @param {string} [options.bodyHtml] 正文 HTML（调用方负责转义）
-     * @param {Array<{text:string, className?:string, onClick:Function, style?:string, id?:string}>} [options.buttons] 按钮数组
-     * @param {string} [options.buttonGroupStyle] 按钮组额外样式
-     * @param {string} [options.size] 'small' | 'default' | 'large'
-     * @param {boolean} [options.closeOnEscape] 默认 true
-     * @param {boolean} [options.closeOnBackdrop] 默认 true
-     * @param {Function} [options.onOpen] (handle) => void
-     * @param {Function} [options.onClose] (result) => void
-     * @returns {object} handle 对象
+     * @returns {object} handle
      */
     open(options) {
         const optionObject = options || {};
         const previousFocus = document.activeElement;
 
-        // ---- 构建 DOM ----
         const modalElement = document.createElement('div');
         modalElement.className = 'modal';
 
@@ -105,13 +74,11 @@ export const Modal = {
         modalElement.appendChild(modalCard);
         document.body.appendChild(modalElement);
 
-        // ---- body.modal-open 计数 ----
         Modal._openCount++;
         if (Modal._openCount === 1) {
             document.body.classList.add('modal-open');
         }
 
-        // ---- 关闭逻辑 ----
         let isClosed = false;
         let removeEscapeListener = null;
 
@@ -157,7 +124,6 @@ export const Modal = {
 
         Modal._stack.push(handle);
 
-        // ---- ESC 关闭（仅最顶层） ----
         if (optionObject.closeOnEscape !== false) {
             const keydownHandler = function(event) {
                 if (event.key !== 'Escape') return;
@@ -171,7 +137,6 @@ export const Modal = {
             removeEscapeListener = () => document.removeEventListener('keydown', keydownHandler);
         }
 
-        // ---- 点击 backdrop 关闭 ----
         if (optionObject.closeOnBackdrop !== false) {
             modalElement.addEventListener('click', function(event) {
                 if (event.target === modalElement) {
@@ -180,7 +145,6 @@ export const Modal = {
             });
         }
 
-        // ---- 打开回调 ----
         if (typeof optionObject.onOpen === 'function') {
             try {
                 optionObject.onOpen(handle);
@@ -194,7 +158,8 @@ export const Modal = {
 
     /**
      * 为输入框绑定 Enter 键触发某个点击目标。
-     * 会正确处理中文输入法的组合输入状态。
+     * @param {HTMLElement} inputElement
+     * @param {HTMLElement|Function} clickTarget
      */
     bindEnter(inputElement, clickTarget) {
         if (!inputElement) return;
@@ -212,7 +177,7 @@ export const Modal = {
     },
 
     /**
-     * 强制关闭所有模态框（用于会话锁定时的清理）。
+     * 强制关闭所有模态框。
      */
     closeAll() {
         const currentStack = Modal._stack.slice();
@@ -229,15 +194,6 @@ export const Modal = {
 export const Dialog = {
     /**
      * 通用确认对话框。
-     * @param {object} options
-     * @param {string} [options.title]
-     * @param {string} [options.message]
-     * @param {string} [options.confirmText]
-     * @param {string} [options.cancelText]
-     * @param {boolean} [options.isDanger]
-     * @param {string} [options.requireConfirmationText] 需要用户输入此文本才能确认
-     * @param {boolean} [options.allowHtml] message 是否作为 HTML 渲染
-     * @returns {Promise<boolean>}
      */
     confirm(options) {
         const optionObject = options || {};
@@ -266,10 +222,7 @@ export const Dialog = {
                         id: 'confirmDialogCancel',
                         text: cancelButtonText,
                         className: 'btn-outline',
-                        onClick: modalHandle => {
-                            result = false;
-                            modalHandle.close();
-                        }
+                        onClick: modalHandle => { result = false; modalHandle.close(); }
                     },
                     {
                         id: 'confirmDialogConfirm',
@@ -278,11 +231,7 @@ export const Dialog = {
                         onClick: modalHandle => {
                             if (requiredConfirmationText) {
                                 const inputElement = modalHandle.querySelector('#confirmDialogInput');
-                                if (!inputElement) {
-                                    result = true;
-                                    modalHandle.close();
-                                    return;
-                                }
+                                if (!inputElement) { result = true; modalHandle.close(); return; }
                                 if (inputElement.value.trim() !== requiredConfirmationText) {
                                     Toast.show('输入不匹配，请重新输入', { isError: true });
                                     inputElement.value = '';
@@ -300,7 +249,7 @@ export const Dialog = {
                         const inputElement = modalHandle.querySelector('#confirmDialogInput');
                         if (inputElement) {
                             requestAnimationFrame(() => {
-                                try { inputElement.focus(); } catch (error) { /* iOS 兼容 */ }
+                                try { inputElement.focus(); } catch (error) { /* iOS */ }
                             });
                             Modal.bindEnter(inputElement, modalHandle.querySelector('#confirmDialogConfirm'));
                         }
@@ -313,8 +262,6 @@ export const Dialog = {
 
     /**
      * 密码输入对话框。
-     * @param {string} message 提示文本
-     * @returns {Promise<string|null>} 用户输入的密码或 null（取消）
      */
     password(message) {
         return new Promise(resolve => {
@@ -326,17 +273,11 @@ export const Dialog = {
                            <input type="password" id="modalPw" placeholder="主密码" autocomplete="off" autocapitalize="none">`,
                 buttons: [
                     {
-                        text: '取消',
-                        className: 'btn-outline',
-                        onClick: modalHandle => {
-                            result = null;
-                            modalHandle.close();
-                        }
+                        text: '取消', className: 'btn-outline',
+                        onClick: modalHandle => { result = null; modalHandle.close(); }
                     },
                     {
-                        text: '确认',
-                        className: 'btn-primary',
-                        id: 'modalOkBtn',
+                        text: '确认', className: 'btn-primary', id: 'modalOkBtn',
                         onClick: modalHandle => {
                             const inputElement = modalHandle.querySelector('#modalPw');
                             result = inputElement ? inputElement.value : null;
@@ -348,7 +289,7 @@ export const Dialog = {
                     const inputElement = modalHandle.querySelector('#modalPw');
                     if (inputElement) {
                         requestAnimationFrame(() => {
-                            try { inputElement.focus(); } catch (error) { /* iOS 兼容 */ }
+                            try { inputElement.focus(); } catch (error) { /* iOS */ }
                         });
                         Modal.bindEnter(inputElement, modalHandle.querySelector('#modalOkBtn'));
                     }
@@ -360,7 +301,6 @@ export const Dialog = {
 
     /**
      * 导入方式三态对话框。
-     * @returns {Promise<'overwrite'|'merge'|'cancel'>}
      */
     importMode() {
         return new Promise(resolve => {
@@ -391,9 +331,6 @@ export const Dialog = {
 
     /**
      * 名称重复处理对话框。
-     * @param {string} existingName 冲突的名称
-     * @param {boolean} isNewItem 是否是新建场景
-     * @returns {Promise<'overwrite'|'keepBoth'|'cancel'>}
      */
     duplicateName(existingName, isNewItem) {
         return new Promise(resolve => {
@@ -424,8 +361,6 @@ export const Dialog = {
 
     /**
      * 重命名分类对话框。
-     * @param {string} oldCategory 原分类名
-     * @returns {Promise<string|null>} 新名称或 null（取消 / 无变化）
      */
     renameCategory(oldCategory) {
         return new Promise(resolve => {
@@ -438,17 +373,11 @@ export const Dialog = {
                     <input type="text" id="renameCategoryInput" value="${Util.escapeAttr(oldCategory)}" autocomplete="off" autocapitalize="none">`,
                 buttons: [
                     {
-                        text: '取消',
-                        className: 'btn-outline',
-                        onClick: modalHandle => {
-                            result = null;
-                            modalHandle.close();
-                        }
+                        text: '取消', className: 'btn-outline',
+                        onClick: modalHandle => { result = null; modalHandle.close(); }
                     },
                     {
-                        text: '确认重命名',
-                        className: 'btn-primary',
-                        id: 'confirmRenameCategoryBtn',
+                        text: '确认重命名', className: 'btn-primary', id: 'confirmRenameCategoryBtn',
                         onClick: modalHandle => {
                             const inputElement = modalHandle.querySelector('#renameCategoryInput');
                             const newName = inputElement ? inputElement.value.trim() : '';
@@ -457,11 +386,7 @@ export const Dialog = {
                                 if (inputElement) inputElement.focus();
                                 return;
                             }
-                            if (newName === oldCategory) {
-                                result = null;
-                                modalHandle.close();
-                                return;
-                            }
+                            if (newName === oldCategory) { result = null; modalHandle.close(); return; }
                             result = newName;
                             modalHandle.close();
                         }
@@ -471,10 +396,7 @@ export const Dialog = {
                     const inputElement = modalHandle.querySelector('#renameCategoryInput');
                     if (inputElement) {
                         requestAnimationFrame(() => {
-                            try {
-                                inputElement.focus();
-                                inputElement.select();
-                            } catch (error) { /* iOS 兼容 */ }
+                            try { inputElement.focus(); inputElement.select(); } catch (error) { /* iOS */ }
                         });
                         Modal.bindEnter(inputElement, modalHandle.querySelector('#confirmRenameCategoryBtn'));
                     }
@@ -486,9 +408,6 @@ export const Dialog = {
 
     /**
      * 删除分类确认对话框。
-     * @param {string} category 分类名
-     * @param {number} affectedCount 受影响条目数
-     * @returns {Promise<boolean>}
      */
     deleteCategory(category, affectedCount) {
         return new Promise(resolve => {
@@ -502,17 +421,11 @@ export const Dialog = {
                     <input type="text" id="confirmCategoryDeleteInput" autocomplete="off" autocapitalize="none">`,
                 buttons: [
                     {
-                        text: '取消',
-                        className: 'btn-outline',
-                        onClick: modalHandle => {
-                            result = false;
-                            modalHandle.close();
-                        }
+                        text: '取消', className: 'btn-outline',
+                        onClick: modalHandle => { result = false; modalHandle.close(); }
                     },
                     {
-                        text: '确认删除',
-                        className: 'btn-danger',
-                        id: 'confirmCategoryDeleteBtn',
+                        text: '确认删除', className: 'btn-danger', id: 'confirmCategoryDeleteBtn',
                         onClick: modalHandle => {
                             const inputElement = modalHandle.querySelector('#confirmCategoryDeleteInput');
                             if (inputElement && inputElement.value.trim() === category) {
@@ -520,10 +433,7 @@ export const Dialog = {
                                 modalHandle.close();
                             } else {
                                 Toast.show('输入不匹配，请重新输入', { isError: true });
-                                if (inputElement) {
-                                    inputElement.value = '';
-                                    inputElement.focus();
-                                }
+                                if (inputElement) { inputElement.value = ''; inputElement.focus(); }
                             }
                         }
                     }
@@ -532,7 +442,7 @@ export const Dialog = {
                     const inputElement = modalHandle.querySelector('#confirmCategoryDeleteInput');
                     if (inputElement) {
                         requestAnimationFrame(() => {
-                            try { inputElement.focus(); } catch (error) { /* iOS 兼容 */ }
+                            try { inputElement.focus(); } catch (error) { /* iOS */ }
                         });
                         Modal.bindEnter(inputElement, modalHandle.querySelector('#confirmCategoryDeleteBtn'));
                     }
@@ -544,8 +454,6 @@ export const Dialog = {
 
     /**
      * 批量删除确认对话框。
-     * @param {number} count 选中条目数
-     * @returns {Promise<boolean>}
      */
     batchDelete(count) {
         const confirmationPhrase = `删除${count}条`;
@@ -560,17 +468,11 @@ export const Dialog = {
                     <input type="text" id="confirmBatchDeleteInput" autocomplete="off" autocapitalize="none">`,
                 buttons: [
                     {
-                        text: '取消',
-                        className: 'btn-outline',
-                        onClick: modalHandle => {
-                            result = false;
-                            modalHandle.close();
-                        }
+                        text: '取消', className: 'btn-outline',
+                        onClick: modalHandle => { result = false; modalHandle.close(); }
                     },
                     {
-                        text: '确认删除',
-                        className: 'btn-danger',
-                        id: 'confirmBatchDeleteBtn',
+                        text: '确认删除', className: 'btn-danger', id: 'confirmBatchDeleteBtn',
                         onClick: modalHandle => {
                             const inputElement = modalHandle.querySelector('#confirmBatchDeleteInput');
                             if (inputElement && inputElement.value.trim() === confirmationPhrase) {
@@ -578,10 +480,7 @@ export const Dialog = {
                                 modalHandle.close();
                             } else {
                                 Toast.show('输入不匹配，请重新输入', { isError: true });
-                                if (inputElement) {
-                                    inputElement.value = '';
-                                    inputElement.focus();
-                                }
+                                if (inputElement) { inputElement.value = ''; inputElement.focus(); }
                             }
                         }
                     }
@@ -590,7 +489,7 @@ export const Dialog = {
                     const inputElement = modalHandle.querySelector('#confirmBatchDeleteInput');
                     if (inputElement) {
                         requestAnimationFrame(() => {
-                            try { inputElement.focus(); } catch (error) { /* iOS 兼容 */ }
+                            try { inputElement.focus(); } catch (error) { /* iOS */ }
                         });
                         Modal.bindEnter(inputElement, modalHandle.querySelector('#confirmBatchDeleteBtn'));
                     }
@@ -602,7 +501,6 @@ export const Dialog = {
 
     /**
      * 清空全部密码确认。
-     * @returns {Promise<boolean>}
      */
     wipeAll() {
         return new Promise(resolve => {
@@ -616,17 +514,11 @@ export const Dialog = {
                     <input type="text" id="confirmWipeAllInput" autocomplete="off" autocapitalize="none">`,
                 buttons: [
                     {
-                        text: '取消',
-                        className: 'btn-outline',
-                        onClick: modalHandle => {
-                            result = false;
-                            modalHandle.close();
-                        }
+                        text: '取消', className: 'btn-outline',
+                        onClick: modalHandle => { result = false; modalHandle.close(); }
                     },
                     {
-                        text: '确认清空',
-                        className: 'btn-danger',
-                        id: 'confirmWipeAllBtn',
+                        text: '确认清空', className: 'btn-danger', id: 'confirmWipeAllBtn',
                         onClick: modalHandle => {
                             const inputElement = modalHandle.querySelector('#confirmWipeAllInput');
                             if (inputElement && inputElement.value.trim() === '清空全部') {
@@ -634,10 +526,7 @@ export const Dialog = {
                                 modalHandle.close();
                             } else {
                                 Toast.show('输入不匹配，请重新输入', { isError: true });
-                                if (inputElement) {
-                                    inputElement.value = '';
-                                    inputElement.focus();
-                                }
+                                if (inputElement) { inputElement.value = ''; inputElement.focus(); }
                             }
                         }
                     }
@@ -646,7 +535,7 @@ export const Dialog = {
                     const inputElement = modalHandle.querySelector('#confirmWipeAllInput');
                     if (inputElement) {
                         requestAnimationFrame(() => {
-                            try { inputElement.focus(); } catch (error) { /* iOS 兼容 */ }
+                            try { inputElement.focus(); } catch (error) { /* iOS */ }
                         });
                         Modal.bindEnter(inputElement, modalHandle.querySelector('#confirmWipeAllBtn'));
                     }
@@ -658,7 +547,6 @@ export const Dialog = {
 
     /**
      * 清空日志确认。
-     * @returns {Promise<boolean>}
      */
     clearLog() {
         return new Promise(resolve => {
@@ -669,20 +557,12 @@ export const Dialog = {
                 bodyHtml: `<p>确定清空所有操作日志吗？此操作不可恢复。</p>`,
                 buttons: [
                     {
-                        text: '取消',
-                        className: 'btn-outline',
-                        onClick: modalHandle => {
-                            result = false;
-                            modalHandle.close();
-                        }
+                        text: '取消', className: 'btn-outline',
+                        onClick: modalHandle => { result = false; modalHandle.close(); }
                     },
                     {
-                        text: '清空',
-                        className: 'btn-danger',
-                        onClick: modalHandle => {
-                            result = true;
-                            modalHandle.close();
-                        }
+                        text: '清空', className: 'btn-danger',
+                        onClick: modalHandle => { result = true; modalHandle.close(); }
                     }
                 ],
                 onClose: () => resolve(result)
@@ -692,12 +572,7 @@ export const Dialog = {
 
     /**
      * 重新认证。
-     * 若距离上次成功认证在有效期内且不需要返回密码，直接返回成功。
-     *
-     * @param {string} actionDescription 正在执行的操作描述
-     * @param {boolean} [returnPassword] true 时成功返回密码字符串，失败返回 null
-     * @param {boolean} [forceReauth] true 时忽略有效期内免认证
-     * @returns {Promise<boolean|string|null>}
+     * 动态 import('./auth.js') 打破与 auth.js 的循环依赖。
      */
     async reauthenticate(actionDescription, returnPassword, forceReauth) {
         const shouldReturnPassword = !!returnPassword;
@@ -726,17 +601,14 @@ export const Dialog = {
                     <input type="password" id="verifyMasterPasswordInput" placeholder="请输入当前主密码" autocomplete="off" autocapitalize="none">`,
                 buttons: [
                     {
-                        text: '取消',
-                        className: 'btn-outline',
+                        text: '取消', className: 'btn-outline',
                         onClick: modalHandle => {
                             result = shouldReturnPassword ? null : false;
                             modalHandle.close();
                         }
                     },
                     {
-                        text: '确认',
-                        className: 'btn-primary',
-                        id: 'verifyMasterPasswordBtn',
+                        text: '确认', className: 'btn-primary', id: 'verifyMasterPasswordBtn',
                         onClick: async modalHandle => {
                             const inputElement = modalHandle.querySelector('#verifyMasterPasswordInput');
                             if (!inputElement) return;
@@ -746,15 +618,23 @@ export const Dialog = {
                                 return;
                             }
 
-                            // 动态查找 Auth 模块，避免循环 import
-                            const authModule = window.Auth;
-                            if (!authModule || typeof authModule.verifyMasterPassword !== 'function') {
+                            let authModule;
+                            try {
+                                authModule = await import('./auth.js');
+                            } catch (error) {
+                                console.error('认证模块动态加载失败:', error);
+                                Toast.show('认证模块加载失败，请稍后重试', { isError: true });
+                                return;
+                            }
+
+                            const authObject = authModule && authModule.Auth;
+                            if (!authObject || typeof authObject.verifyMasterPassword !== 'function') {
                                 Toast.show('认证模块未加载，请稍后重试', { isError: true });
                                 return;
                             }
 
                             try {
-                                const isValid = await authModule.verifyMasterPassword(password);
+                                const isValid = await authObject.verifyMasterPassword(password);
 
                                 if (!isValid) {
                                     const securityState = Security.load();
@@ -777,7 +657,6 @@ export const Dialog = {
                                     return;
                                 }
 
-                                // 成功
                                 AuthState.verifyFailCount = 0;
                                 Security.update({ verifyFailCount: 0, lockoutUntil: 0 });
                                 AuthState.lastReauthenticationTime = Date.now();
@@ -795,7 +674,7 @@ export const Dialog = {
                     const inputElement = modalHandle.querySelector('#verifyMasterPasswordInput');
                     if (inputElement) {
                         requestAnimationFrame(() => {
-                            try { inputElement.focus(); } catch (error) { /* iOS 兼容 */ }
+                            try { inputElement.focus(); } catch (error) { /* iOS */ }
                         });
                         Modal.bindEnter(inputElement, modalHandle.querySelector('#verifyMasterPasswordBtn'));
                     }
@@ -805,9 +684,3 @@ export const Dialog = {
         });
     }
 };
-
-// ==================== 挂载到 window（供 ui-toolbar.js 等模块动态访问）====================
-// v9.0.1 修复：ui-toolbar.js 使用 window.Modal.open() 打开对话框，
-// 之前未挂载导致「分类 / 日志 / 导出 / 导入」按钮点击后无反应。
-window.Modal = Modal;
-window.Dialog = Dialog;

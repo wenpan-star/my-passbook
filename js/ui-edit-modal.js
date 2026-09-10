@@ -1,18 +1,12 @@
 /**
  * ui-edit-modal.js — 编辑密码模态框
  *
- * 【跨模块依赖】
- *   - DataState / UiState / CONFIG：静态 import
- *   - Util / EventBus：静态 import
- *   - Modal / Dialog / Toast：静态 import
- *   - Category：静态 import
- *   - Save：通过 window.Save 动态访问
+ * 使用共享的 updateStrengthIndicator；写操作走 mutateVault 事务。
  *
- * 版本历史：
- *   - v9.0.1：模块化重构
- *   - v9.0.2：新增 saveEncrypted() 内部辅助函数，统一通过 window.Save 动态访问
- *   - v9.0.3：对 categorySelect 增加 null 检查，防止未来模板调整时
- *             在 onOpen 中因元素缺失而抛错中断模态框初始化
+ * v9.2.1：修复 Dialog.duplicateName 返回 keepBoth（另存为）时未处理的分支。
+ *         此前若用户选择「保留两者（另存为）」，代码会直接把 currentItem.name
+ *         改成 newName，导致两个条目同名。现引入 finalName，通过
+ *         Util.generateUniqueName 生成不冲突的新名称（如 "name (1)"）。
  */
 
 import { CONFIG } from './config.js';
@@ -21,44 +15,17 @@ import { DataState, UiState } from './state.js';
 import { Modal, Dialog } from './modal.js';
 import { Toast } from './toast.js';
 import { Category } from './category.js';
+import { mutateVault } from './mutation.js';
+import { Events } from './events.js';
 import { generateSecurePassword, generateTransactionPassword } from './generator.js';
-
-// ==================== 内部辅助 ====================
-
-/**
- * 通过 window 动态访问 Save 模块，避免循环 import。
- * 未挂载时抛出明确错误，上层统一 catch 后回滚并 Toast 提示。
- */
-async function saveEncrypted() {
-    if (window.Save && typeof window.Save.saveEncrypted === 'function') {
-        return window.Save.saveEncrypted();
-    }
-    throw new Error('Save 模块未加载');
-}
-
-function updateStrengthIndicator(indicatorId, textId, password) {
-    const container = document.getElementById(indicatorId);
-    if (!container) return;
-    const level = Util.getPasswordStrength(password);
-    const segments = container.querySelectorAll('.strength-segment');
-    const textElement = document.getElementById(textId);
-    const colorPalette = ['#dc2626', '#f59e0b', '#f59e0b', '#059669', '#059669'];
-
-    segments.forEach((segment, index) => {
-        if (index < level) {
-            segment.style.background = colorPalette[level] || '#dc2626';
-        } else {
-            segment.style.removeProperty('background');
-        }
-    });
-
-    if (textElement) {
-        textElement.innerText = Util.strengthText(level);
-        textElement.style.color = Util.strengthColor(level);
-    }
-}
+import { updateStrengthIndicator } from './password-strength.js';
 
 export const EditModal = {
+    /**
+     * 打开编辑模态框。
+     * @param {object} item
+     * @returns {object} modalHandle
+     */
     open(item) {
         const categories = Category.load();
         let optionsHtml = '<option value="">选择分类…</option>';
@@ -66,7 +33,6 @@ export const EditModal = {
             optionsHtml += `<option value="${Util.escapeAttr(cat)}" ${item.category === cat ? 'selected' : ''}>${Util.escapeHtml(cat)}</option>`;
         });
 
-        // 编辑状态对象
         const editState = {
             loginDirty: false,
             tranDirty: false
@@ -125,10 +91,9 @@ export const EditModal = {
 
                 const firstInput = handle.querySelector('#editName');
                 requestAnimationFrame(() => {
-                    try { firstInput.focus(); } catch (e) { /* iOS 兼容 */ }
+                    try { firstInput.focus(); } catch (e) { /* iOS */ }
                 });
 
-                // 密码输入：跟踪 dirty 状态 + 更新强度指示器
                 const editLoginPwInput = handle.querySelector('#editLoginPw');
                 editLoginPwInput.addEventListener('input', () => {
                     editState.loginDirty = true;
@@ -138,7 +103,6 @@ export const EditModal = {
                     editState.tranDirty = true;
                 });
 
-                // 生成密码
                 handle.querySelector('#generateEditLoginPwBtn').onclick = () => {
                     const generated = generateSecurePassword(CONFIG.GENERATED_PASSWORD_LENGTH);
                     editLoginPwInput.type = 'text';
@@ -164,7 +128,6 @@ export const EditModal = {
                     Toast.show('🎲 已生成6位数字交易密码');
                 };
 
-                // 显示/隐藏密码
                 handle.querySelector('#toggleEditLoginVis').onclick = function() {
                     if (editLoginPwInput.type === 'password') {
                         if (!editState.loginDirty) editLoginPwInput.value = item.loginPassword;
@@ -195,7 +158,6 @@ export const EditModal = {
                     tranInput.focus();
                 };
 
-                // 分类选择颜色（v9.0.3：增加 null 检查）
                 const categorySelect = handle.querySelector('#editCategory');
                 if (categorySelect) {
                     const updateColor = () => {
@@ -205,7 +167,6 @@ export const EditModal = {
                     categorySelect.addEventListener('change', updateColor);
                 }
 
-                // 关闭时清空密码字段（安全）
                 const originalClose = handle.close.bind(handle);
                 handle.close = function(result) {
                     const loginPwField = this.querySelector('#editLoginPw');
@@ -215,7 +176,6 @@ export const EditModal = {
                     originalClose(result);
                 };
 
-                // 绑定 Enter 到保存按钮（在名称输入框中）
                 Modal.bindEnter(handle.querySelector('#editName'), handle.querySelector('#saveEditBtn'));
             },
             onClose: () => {
@@ -227,6 +187,14 @@ export const EditModal = {
         return modalHandle;
     },
 
+    /**
+     * 处理保存（走 mutateVault 事务）。
+     *
+     * v9.2.1：修复 keepBoth 分支。
+     * @param {object} handle
+     * @param {object} originalItem
+     * @param {object} editState
+     */
     async _handleSave(handle, originalItem, editState) {
         const currentItem = DataState.passwordIdIndex.get(originalItem.id);
         if (!currentItem) {
@@ -255,9 +223,6 @@ export const EditModal = {
             return;
         }
 
-        // 快照
-        const previousPasswords = DataState.passwords.slice();
-        const previousCategories = [...DataState.customCategories];
         const previousFields = {
             name: currentItem.name,
             username: currentItem.username,
@@ -270,47 +235,44 @@ export const EditModal = {
         };
 
         let overwrittenItemIdToCleanup = null;
+        // v9.2.1：引入 finalName，处理 keepBoth（另存为）分支。
+        let finalName = newName;
 
-        // 名称重复处理
         const existingItem = DataState.passwords.find(p => p.name === newName && p.id !== currentItem.id);
         if (existingItem) {
             const resolution = await Dialog.duplicateName(newName, false);
             if (resolution === 'cancel') return;
             if (resolution === 'overwrite') {
                 overwrittenItemIdToCleanup = existingItem.id;
-                DataState.passwords = DataState.passwords.filter(p => p.id !== existingItem.id);
+            } else if (resolution === 'keepBoth') {
+                // 为当前条目生成不冲突的新名称，避免出现两个同名条目
+                finalName = Util.generateUniqueName(newName, currentItem.id, DataState.passwords);
             }
         }
 
-        // 应用修改
-        currentItem.name = newName;
-        currentItem.username = handle.querySelector('#editUsername').value.trim();
-        currentItem.loginPassword = newLoginPassword;
-        currentItem.transactionPassword = newTransactionPassword;
-        currentItem.email = handle.querySelector('#editEmail').value.trim();
-        currentItem.phone = handle.querySelector('#editPhone').value.trim();
         const categorySelectElement = handle.querySelector('#editCategory');
-        currentItem.category = categorySelectElement ? (categorySelectElement.value || '') : '';
-        currentItem.note = handle.querySelector('#editNote').value.trim();
-
-        DataState.rebuildIndex();
+        const finalCategoryValue = categorySelectElement ? (categorySelectElement.value || '') : '';
+        const finalUsernameValue = handle.querySelector('#editUsername').value.trim();
+        const finalEmailValue = handle.querySelector('#editEmail').value.trim();
+        const finalPhoneValue = handle.querySelector('#editPhone').value.trim();
+        const finalNoteValue = handle.querySelector('#editNote').value.trim();
 
         try {
-            await saveEncrypted();
-            if (overwrittenItemIdToCleanup) {
-                UiState.visibleLoginPasswords.delete(overwrittenItemIdToCleanup);
-                UiState.visibleTransactionPasswords.delete(overwrittenItemIdToCleanup);
-                UiState.selectedIds.delete(overwrittenItemIdToCleanup);
-            }
-            handle.close();
-            EventBus.emit('vault:changed', { source: 'edit' });
-            Toast.show('✅ 已更新');
+            await mutateVault(() => {
+                if (overwrittenItemIdToCleanup) {
+                    DataState.passwords = DataState.passwords.filter(p => p.id !== overwrittenItemIdToCleanup);
+                }
+                currentItem.name = finalName;
+                currentItem.username = finalUsernameValue;
+                currentItem.loginPassword = newLoginPassword;
+                currentItem.transactionPassword = newTransactionPassword;
+                currentItem.email = finalEmailValue;
+                currentItem.phone = finalPhoneValue;
+                currentItem.category = finalCategoryValue;
+                currentItem.note = finalNoteValue;
+            });
         } catch (error) {
-            // 回滚
             Object.assign(currentItem, previousFields);
-            DataState.passwords = previousPasswords;
-            DataState.customCategories = previousCategories;
-            DataState.rebuildIndex();
 
             const loginPwField = handle.querySelector('#editLoginPw');
             if (loginPwField && loginPwField.type === 'text') {
@@ -324,8 +286,16 @@ export const EditModal = {
             }
 
             Toast.show('保存失败：' + error.message + '，请重试或取消', { isError: true, duration: 5000 });
+            return;
         }
+
+        if (overwrittenItemIdToCleanup) {
+            UiState.visibleLoginPasswords.delete(overwrittenItemIdToCleanup);
+            UiState.visibleTransactionPasswords.delete(overwrittenItemIdToCleanup);
+            UiState.selectedIds.delete(overwrittenItemIdToCleanup);
+        }
+        handle.close();
+        EventBus.emit(Events.VAULT_CHANGED, { source: 'edit' });
+        Toast.show('✅ 已更新');
     }
 };
-
-window.EditModal = EditModal;

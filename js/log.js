@@ -1,8 +1,7 @@
 /**
  * log.js — 操作日志
  *
- * 最多保留 200 条，最新的在前。
- * 本模块只负责数据读写，导出按钮由 UI 层处理。
+ * 最多保留 200 条，最新的在前。只负责数据读写。
  */
 
 import { CONFIG } from './config.js';
@@ -14,8 +13,8 @@ const MAX_DETAILS_LENGTH = 200;
 export const Log = {
     /**
      * 追加一条日志。
-     * @param {string} action 操作类型
-     * @param {string} details 详情
+     * @param {string} action
+     * @param {string} details
      */
     add(action, details) {
         try {

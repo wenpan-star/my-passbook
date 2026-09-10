@@ -2,14 +2,19 @@
  * main.js — 应用启动引导
  *
  * 加载所有模块，订阅跨模块事件，启动应用。
+ * SESSION_UNLOCKED → 渲染主界面 + 启动跨窗口同步 + 空闲监控。
+ * SESSION_LOCKED → 切换登录界面。
+ *
+ * v9.3.0：版本号更新至 9.3.0；日志仅保留关键说明。
  */
 
 import { CONFIG, THEMES } from './config.js';
 import { Util, EventBus } from './util.js';
 import { Storage } from './storage.js';
-import { DataState, AuthState, UiState } from './state.js';
+import { UiState } from './state.js';
+import { Events } from './events.js';
 
-// 触发副作用 import（模块会自行挂载到 window）
+// 触发副作用 import（模块间依赖由 ES Module 自动处理）
 import './crypto.js';
 import './security.js';
 import './toast.js';
@@ -19,6 +24,8 @@ import './log.js';
 import './category.js';
 import './clipboard.js';
 import './save.js';
+import './mutation.js';
+import './password-strength.js';
 import './auth.js';
 import './session.js';
 import './import-export.js';
@@ -28,29 +35,46 @@ import './ui-edit-modal.js';
 import './ui-toolbar.js';
 import './views.js';
 
-// 拿到关键模块
 import { Session } from './session.js';
 import { Views } from './views.js';
 import { ListRenderer, VirtualScroll } from './ui-list.js';
 
 /**
- * 订阅跨模块事件，解耦视图与业务。
+ * 订阅跨模块事件。
  */
 function setupEventListeners() {
-    // vault 数据变化 → 刷新列表
-    EventBus.on('vault:changed', () => {
+    // 会话解锁 → 渲染主界面 + 启动跨窗口同步与空闲监控
+    EventBus.on(Events.SESSION_UNLOCKED, () => {
+        if (!document.getElementById('appContainer')) {
+            Views.renderApp();
+        }
+        if (typeof Session.setupCrossWindowSync === 'function') {
+            Session.setupCrossWindowSync();
+        }
+        if (typeof Session.startIdleMonitor === 'function') {
+            Session.startIdleMonitor();
+        }
+    });
+
+    // 会话锁定 → 切换到登录界面
+    EventBus.on(Events.SESSION_LOCKED, () => {
+        Views.showAuth();
+    });
+
+    // 保险库数据变化 → 刷新列表
+    EventBus.on(Events.VAULT_CHANGED, () => {
         VirtualScroll.reset();
         ListRenderer.renderList();
         Views.refreshAllSelects();
     });
 
     // 分类下拉刷新
-    EventBus.on('selects:refresh', () => {
+    EventBus.on(Events.SELECTS_REFRESH, () => {
         Views.refreshAllSelects();
     });
 
     // 批量模式切换 → 更新批量栏显示
-    EventBus.on('batch:modeChanged', ({ enabled }) => {
+    EventBus.on(Events.BATCH_MODE_CHANGED, ({ enabled }) => {
         const batchBar = document.getElementById('batchBar');
         if (batchBar) batchBar.style.display = enabled ? 'flex' : 'none';
         VirtualScroll.reset();
@@ -58,7 +82,7 @@ function setupEventListeners() {
     });
 
     // 批量选择变化 → 更新计数
-    EventBus.on('batch:selectionChanged', ({ count }) => {
+    EventBus.on(Events.BATCH_SELECTION_CHANGED, ({ count }) => {
         const batchCountElement = document.getElementById('batchCount');
         if (batchCountElement) batchCountElement.innerText = count;
     });
@@ -94,7 +118,6 @@ function bootstrap() {
         return;
     }
 
-    // 环境检测
     const webCryptoAvailable = typeof crypto !== 'undefined'
         && typeof crypto.subtle !== 'undefined'
         && typeof crypto.subtle.deriveKey === 'function';
@@ -135,20 +158,15 @@ function bootstrap() {
         return;
     }
 
-    // 应用初始主题
     applyInitialTheme();
-
-    // 绑定全局空闲事件
     Session.bindIdleEvents();
-
-    // 订阅跨模块事件
     setupEventListeners();
-
-    // 渲染认证界面（根据初始化状态自动判断）
     Views.showAuth();
 
-    console.log('%c静谧·密钥 v' + CONFIG.APP_VERSION, 'color:#0284c7;font-weight:bold;font-size:14px;');
-    console.log('模块化重构完成，所有模块已加载。');
+    console.log(
+        '%c静谧·密钥 v' + CONFIG.APP_VERSION,
+        'color:#0284c7;font-weight:bold;font-size:14px;'
+    );
 }
 
 if (document.readyState === 'loading') {
