@@ -1,24 +1,41 @@
 <!--
 ====================================================================================
- 静谧·密钥 v7.9.0 — 手机端收起后保留搜索栏
+ 静谧·密钥 v8.3.0 — 修复 v8.2.0 审核问题（P1/P2/P5/P6/P9/P10）
  更新日期：2026-09-10
 ====================================================================================
- 本次改进（基于 v7.8.0）：
+ 本次改进（基于 v8.2.0 深度审核报告）：
 
- 1. [优化] 收起逻辑精细化：不再整体隐藏 .app-sticky-top，
-     改为精准隐藏 .app-header（logo/badge/按钮组）和 .add-section（添加表单），
-     保留 .search-bar（搜索框 + 搜索字段选择器）。
- 2. [新增] .top-collapsed .search-bar { padding-right: ... } 为右上角
-     浮动"展开"按钮让出空间，避免搜索框被按钮遮挡。
- 3. [新增] 手机端收起状态下搜索栏内部布局自适应：
-     input flex:2 + select flex:1，字体保持 16px 不触发 iOS 缩放。
- 4. [新增] 横屏手机同样适用上述收起规则（保留搜索栏、让出按钮空间）。
- 5. [保留] .middle-toolbar（排序/导出/导入/批量/清空）在收起状态下依旧隐藏。
- 6. [保留] #expandTopBar 右上角绝对定位浮动按钮（无外框、仅按钮本体）。
+ 【必修 — P1 高优先级】
+ 1. [修复] 删除 4 处多余的 .top-collapsed .search-bar { padding-right: 72/82/66px }。
+     该规则原意是"给右上角浮动按钮让位"，但按钮实际位于卡片顶部（top: 8px），
+     与下方搜索栏不重叠，规则反而挤压了手机端搜索栏可用宽度（约 -72px）。
 
- 保留不变：全部 v7.8.0 功能（虚拟滚动、元素池、键盘导航、拒绝采样、模态守卫、
- 跨窗口同步、自动锁定、日志、重新认证、ESC 关闭、模态栈、剪贴板保护、
- handleResize isMobileLandscape 判断等）。
+ 【同行对齐 — P2】
+ 2. [重构] #expandTopBar 从 .app-container.card 的直接子元素移到 .app-header 内部。
+     .app-header 增加 position: relative；#expandTopBar 绝对定位 top:50%; right:0;
+     transform: translateY(-50%)，实现"标题（左）+ 展开（右上）"真正同一水平行。
+     所有断点（桌面 / 手机 / 超小屏 / 横屏）同步微调按钮尺寸。
+
+ 【视觉层次 — P5】
+ 3. [优化] 搜索栏容器背景由 --glass-bg 改为 --surface-alt（凹陷面板外观），
+     边框由 --glass-border 改为 --border，配合 inset 阴影，与卡片形成层次区分。
+
+ 【输入框轮廓 — P6】
+ 4. [优化] 搜索栏内 input / select 未聚焦时保留 1px --input-border 边框（原为透明），
+     hover 时提升为 --border，聚焦时切 --primary + 4px 光晕，边界更清晰。
+
+ 【清理 — P9】
+ 5. [修复] 删除 .top-collapsed .app-header { padding-right: 84px } 及所有变体
+     （72/66px），标题右侧不再有多余空白。
+
+ 【性能 — P10】
+ 6. [优化] 移除 .search-bar 的 backdrop-filter: blur(16px)，
+     搜索栏背景已改为近似纯色面板，无需玻璃态叠加，避免双层模糊在低端设备上的开销。
+
+ 保留不变：全部 v8.2.0 功能与修复（虚拟滚动、元素池、键盘导航、拒绝采样、
+ 模态守卫、跨窗口同步、自动锁定、日志、重新认证、ESC 关闭、模态栈、
+ 剪贴板保护、收起保留标题与搜索栏、hasUnsavedAddContent 提示、
+ layoutRecomputeDebounceTimer 去抖等）。
 ====================================================================================
 -->
 <!DOCTYPE html>
@@ -35,7 +52,7 @@
     <meta http-equiv="X-Frame-Options" content="DENY">
     <meta http-equiv="X-Content-Type-Options" content="nosniff">
     <meta http-equiv="Referrer-Policy" content="strict-origin-when-cross-origin">
-    <title>🔐 静谧·密钥 | 安全密码本 v7.9.0</title>
+    <title>🔐 静谧·密钥 | 安全密码本 v8.3.0</title>
     <style>
         :root {
             --bg-gradient: linear-gradient(135deg, #e0f2fe 0%, #bae6fd 50%, #e0e7ff 100%);
@@ -187,7 +204,7 @@
             min-height: 0;
         }
 
-        /* v7.8.0：为 #expandTopBar 绝对定位提供参考坐标系 */
+        /* v7.8.0：为 #expandTopBar 绝对定位提供参考坐标系（保留兼容） */
         .app-container.card {
             position: relative;
         }
@@ -479,7 +496,7 @@
             padding-bottom: 0.8rem;
         }
 
-        /* v7.8.0：中间工具栏（排序/导出/导入/批量/清空）加入 .middle-toolbar 类以便统一控制 */
+        /* v7.8.0：中间工具栏（排序/导出/导入/批量/清空） */
         .middle-toolbar {
             display: flex;
             flex-wrap: wrap;
@@ -490,9 +507,43 @@
             flex-shrink: 0;
         }
 
-        /* v7.9.0：收起状态隐藏 app-header（logo/badge/按钮组） */
+        /* v8.2.0：收起状态保留 app-header 并显示 logo（v8.3.0 微调：去 padding-right） */
         .top-collapsed .app-header {
+            display: flex !important;
+            flex-wrap: nowrap !important;
+            align-items: center !important;
+            justify-content: flex-start !important;
+            gap: 0 !important;
+            min-height: 40px;
+            margin-bottom: 2px;
+            position: relative;
+            /* v8.3.0：移除 padding-right: 84px，标题右侧不再有多余空白 */
+        }
+
+        /* v8.2.0：收起状态隐藏 badge */
+        .top-collapsed .app-header .badge {
             display: none !important;
+        }
+
+        /* v8.2.0：收起状态隐藏 header-actions（含收起按钮，展开按钮由 #expandTopBar 顶替） */
+        .top-collapsed .app-header .header-actions {
+            display: none !important;
+        }
+
+        /* v8.2.0：收起状态精简 logo 样式 */
+        .top-collapsed .app-header .logo {
+            font-size: 1.15rem;
+            font-weight: 700;
+            letter-spacing: -0.3px;
+            gap: 8px;
+            color: var(--text);
+            filter: none;
+        }
+
+        .top-collapsed .app-header .logo svg {
+            width: 1.6rem;
+            height: 1.6rem;
+            filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.08));
         }
 
         /* v7.9.0：收起状态隐藏 add-section（添加表单） */
@@ -507,14 +558,12 @@
 
         /* v7.9.0：收起状态保留 search-bar，但整体间距收窄 */
         .top-collapsed .app-sticky-top {
-            gap: 0.5rem;
+            gap: 0.6rem;
             padding-bottom: 0.5rem;
         }
 
-        /* v7.9.0：收起状态搜索栏为右上角浮动"展开"按钮让出空间，避免遮挡 */
-        .top-collapsed .search-bar {
-            padding-right: 82px;
-        }
+        /* v8.3.0：删除 .top-collapsed .search-bar { padding-right: ... }（共 4 处）
+           按钮已移入 .app-header 内部同行对齐，与搜索栏无重叠，无需让位。 */
 
         .password-list-scroll {
             flex: 1 1 auto;
@@ -614,15 +663,63 @@
             align-items: center;
         }
 
+        /* v8.2.0：搜索栏商务化 —— v8.3.0 优化层次感 + 输入框边框可见 + 移除 backdrop-filter */
         .search-bar {
             display: flex;
-            gap: 14px;
+            gap: 12px;
             flex-wrap: wrap;
-            align-items: center;
+            align-items: stretch;
+            padding: 8px;
+            background: var(--surface-alt);
+            border-radius: 18px;
+            border: 1px solid var(--border);
+            box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.04);
+            transition: border-color 0.25s ease, box-shadow 0.25s ease;
         }
 
-        .search-bar input { flex: 1; min-width: 200px; }
-        .search-bar select { width: auto; min-width: 120px; max-width: 150px; flex: 0 0 auto; }
+        .search-bar:hover {
+            box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.04), 0 0 0 3px var(--primary-light);
+        }
+
+        .search-bar input,
+        .search-bar select {
+            height: 48px;
+            border-radius: 12px;
+            border: 1px solid var(--input-border);
+            background: var(--input-bg);
+            font-size: 0.92rem;
+            font-weight: 500;
+            letter-spacing: 0.15px;
+            transition: all 0.2s ease;
+            box-shadow: none;
+        }
+
+        .search-bar input:hover,
+        .search-bar select:hover {
+            background: var(--input-focus-bg);
+            border-color: var(--border);
+        }
+
+        .search-bar input:focus,
+        .search-bar select:focus {
+            background: var(--input-focus-bg);
+            border-color: var(--primary);
+            box-shadow: 0 0 0 4px var(--primary-light);
+        }
+
+        .search-bar input {
+            flex: 1;
+            min-width: 200px;
+            padding: 0 18px;
+        }
+
+        .search-bar select {
+            width: auto;
+            min-width: 130px;
+            max-width: 170px;
+            flex: 0 0 auto;
+            padding-right: 40px;
+        }
 
         .add-section {
             background: var(--btn-bg);
@@ -1110,7 +1207,7 @@
             background: rgba(0,0,0,0.06);
         }
 
-        /* v7.8.0：#expandTopBar 默认隐藏，收起时以绝对定位浮动按钮形式出现在卡片右上角 */
+        /* v8.3.0：#expandTopBar 默认隐藏，收起时以绝对定位浮动按钮形式出现在 .app-header 内右侧 */
         #expandTopBar {
             display: none;
         }
@@ -1118,10 +1215,10 @@
         .top-collapsed #expandTopBar {
             display: flex;
             position: absolute;
-            top: 8px;
-            right: 8px;
+            top: 50%;
+            right: 0;
+            transform: translateY(-50%);
             z-index: 60;
-            /* 移除原有的长条形外框（background / border / box-shadow / border-radius / padding / sticky） */
         }
 
         .top-collapsed #expandTopBar .btn {
@@ -1137,29 +1234,34 @@
             .collapse-top-btn .collapse-text {
                 display: none;
             }
-            .top-collapsed #expandTopBar {
-                top: 6px;
-                right: 6px;
-            }
             .top-collapsed #expandTopBar .btn {
                 min-height: 32px;
                 padding: 3px 10px;
                 font-size: 0.74rem;
                 gap: 4px;
             }
-            /* v7.9.0：手机端收起后搜索栏让出浮动按钮空间 */
-            .top-collapsed .search-bar {
-                padding-right: 72px;
+            /* v8.2.0：手机端收起状态精简标题栏 */
+            .top-collapsed .app-header {
+                min-height: 36px;
             }
+            .top-collapsed .app-header .logo {
+                font-size: 1.05rem;
+                gap: 6px;
+            }
+            .top-collapsed .app-header .logo svg {
+                width: 1.4rem;
+                height: 1.4rem;
+            }
+            /* v8.3.0：删除 .top-collapsed .search-bar { padding-right: 72px } */
         }
 
         @media (max-width: 640px) {
             html { font-size: 17px; }
             body { padding: calc(8px + var(--safe-area-top)) calc(8px + var(--safe-area-right)) calc(8px + var(--safe-area-bottom)) calc(8px + var(--safe-area-left)); }
             .app-container.card { padding: 1.2rem 1rem; border-radius: 24px; }
-            .search-bar { flex-wrap: nowrap; gap: 10px; }
-            .search-bar input { flex: 2; min-width: 0; font-size: 16px; }
-            .search-bar select { flex: 1; min-width: 90px; max-width: 120px; font-size: 16px; }
+            .search-bar { flex-wrap: nowrap; gap: 8px; padding: 6px; border-radius: 16px; }
+            .search-bar input { flex: 2; min-width: 0; font-size: 16px; padding: 0 16px; height: 46px; border-radius: 12px; }
+            .search-bar select { flex: 1; min-width: 90px; max-width: 130px; font-size: 16px; height: 46px; border-radius: 12px; }
             .app-header { flex-direction: column; align-items: stretch; gap: 12px; }
             .header-actions { justify-content: flex-start; }
             .badge { align-self: center; }
@@ -1187,16 +1289,25 @@
             .logo svg { width: 2rem; height: 2rem; }
             .pw-text-input { min-width: 10ch; }
             .cat-grid { grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); }
-            .search-bar { flex-wrap: wrap; }
+            .search-bar { flex-wrap: wrap; padding: 6px; }
             .search-bar input { flex: 1 1 100%; }
             .search-bar select { flex: 1 1 auto; max-width: none; min-width: 0; }
             .export-import-group { display: none !important; }
             .export-more-wrapper { display: inline-block !important; position: relative; }
             :root { --item-height: 270px; }
-            /* v7.9.0：超小屏收起后搜索栏换行时，浮动按钮让出更少空间 */
-            .top-collapsed .search-bar {
-                padding-right: 66px;
+            /* v8.2.0：超小屏收起状态标题进一步缩小 */
+            .top-collapsed .app-header {
+                min-height: 34px;
             }
+            .top-collapsed .app-header .logo {
+                font-size: 0.95rem;
+                gap: 5px;
+            }
+            .top-collapsed .app-header .logo svg {
+                width: 1.3rem;
+                height: 1.3rem;
+            }
+            /* v8.3.0：删除 .top-collapsed .search-bar { padding-right: 66px } */
         }
 
         /* v7.9.0：横屏手机显示收起按钮，收起后保留搜索栏 */
@@ -1208,10 +1319,6 @@
                 display: none;
             }
 
-            .top-collapsed #expandTopBar {
-                top: 4px;
-                right: 4px;
-            }
             .top-collapsed #expandTopBar .btn {
                 min-height: 30px;
                 padding: 3px 10px;
@@ -1219,9 +1326,21 @@
                 gap: 3px;
             }
 
-            .top-collapsed .search-bar {
-                padding-right: 66px;
+            /* v8.2.0：横屏收起状态标题微调 */
+            .top-collapsed .app-header {
+                min-height: 32px;
+                margin-bottom: 0;
             }
+            .top-collapsed .app-header .logo {
+                font-size: 0.95rem;
+                gap: 5px;
+            }
+            .top-collapsed .app-header .logo svg {
+                width: 1.2rem;
+                height: 1.2rem;
+            }
+
+            /* v8.3.0：删除 .top-collapsed .search-bar { padding-right: 66px } */
 
             .app-container.card {
                 padding: 1rem 1.2rem;
@@ -1235,6 +1354,14 @@
             }
             .search-bar {
                 gap: 6px;
+                padding: 6px;
+                border-radius: 14px;
+            }
+            .search-bar input,
+            .search-bar select {
+                height: 40px;
+                border-radius: 10px;
+                font-size: 0.85rem;
             }
             .btn-sm {
                 padding: 6px 10px;
@@ -1342,7 +1469,7 @@
 
     // ===================== 常量与配置 =====================
     const CONFIG = {
-        APP_VERSION: '7.9.0',
+        APP_VERSION: '8.3.0',
         STORAGE_VAULT: 'serene_vault_enc_v3',
         STORAGE_SALT: 'serene_vault_salt_v3',
         STORAGE_AUTH: 'serene_vault_auth_v3',
@@ -1376,7 +1503,8 @@
         VIRTUAL_MOBILE_BREAKPOINT: 640,
         VIRTUAL_RESIZE_DEBOUNCE_MS: 150,
         VIRTUAL_ELEMENT_POOL_MAX: 100,
-        VIRTUAL_LAYOUT_RECOMPUTE_DELAY_MS: 320
+        VIRTUAL_LAYOUT_RECOMPUTE_DELAY_MS: 320,
+        ADD_SECTION_UNSAVED_HINT_DURATION_MS: 2500
     };
 
     // ===================== 主题定义 =====================
@@ -1659,7 +1787,7 @@
         };
     }
 
-    // v7.7.0：安全聚焦辅助，避免焦点目标已被移除时静默失败
+    // 安全聚焦辅助
     function safeRestoreFocus(element) {
         if (!element) return;
         if (typeof element.focus !== 'function') return;
@@ -1667,11 +1795,11 @@
         try {
             element.focus();
         } catch (error) {
-            // 忽略焦点恢复失败（例如元素隐藏、disabled 等）
+            // 忽略焦点恢复失败
         }
     }
 
-    // v7.7.0：keydown Enter 统一判断
+    // Enter 键统一处理
     function attachEnterToClick(inputElement, clickHandler) {
         if (!inputElement) return;
         inputElement.addEventListener('keydown', function(event) {
@@ -1759,11 +1887,10 @@
         }
     };
 
-    // ===================== 安全随机整数（拒绝采样，消除模偏差） =====================
+    // ===================== 安全随机整数 =====================
     function secureRandomInt(maxExclusive) {
         if (maxExclusive <= 0) return 0;
         if (maxExclusive === 1) return 0;
-        // v7.7.0：增加断言，避免未来扩展字符集时的静默错误
         if (maxExclusive > 256) {
             throw new Error('secureRandomInt 不支持 maxExclusive > 256，请使用扩展实现');
         }
@@ -1916,7 +2043,6 @@
         elementPool: [],
         renderedItemElements: new Map(),
 
-        // v7.7.0：缓存行高，forceRefresh 时重新读取
         readItemHeightFromCSS: function(forceRefresh) {
             if (!forceRefresh && this.cachedItemHeightFromCSS !== null) {
                 this.itemHeight = this.cachedItemHeightFromCSS;
@@ -2049,6 +2175,8 @@
         renderFrameRequest: null,
         lastCategoryEditClickTime: 0,
 
+        layoutRecomputeDebounceTimer: null,
+
         keyboardFocusedItemId: null,
 
         rebuildIndex: function() {
@@ -2124,6 +2252,10 @@
             if (this.renderFrameRequest) {
                 cancelAnimationFrame(this.renderFrameRequest);
                 this.renderFrameRequest = null;
+            }
+            if (this.layoutRecomputeDebounceTimer) {
+                clearTimeout(this.layoutRecomputeDebounceTimer);
+                this.layoutRecomputeDebounceTimer = null;
             }
             if (this.channel) {
                 this.channel.close();
@@ -2653,7 +2785,7 @@
         });
     }
 
-    // ===================== 密码生成器（拒绝采样，消除模偏差） =====================
+    // ===================== 密码生成器 =====================
     function generateSecurePassword(length) {
         if (!length) length = CONFIG.GENERATED_PASSWORD_LENGTH;
         if (length < CONFIG.LOGIN_PW_MIN) length = CONFIG.LOGIN_PW_MIN;
@@ -3201,8 +3333,20 @@
         return Util.escapeHtml(text).replace(regex, '<span class="highlight">$1</span>');
     }
 
-    // ===================== 密码列表渲染（虚拟滚动 + 元素池 + 键盘导航） =====================
+    // ===================== 添加表单未保存内容检测 =====================
+    function hasUnsavedAddContent() {
+        if (!State.addSectionVisible) return false;
+        const checkFieldIds = ['inpName', 'inpUsername', 'inpLoginPw', 'inpTranPw', 'inpEmail', 'inpPhone', 'inpNote'];
+        for (let i = 0; i < checkFieldIds.length; i++) {
+            const el = document.getElementById(checkFieldIds[i]);
+            if (el && String(el.value || '').trim()) {
+                return true;
+            }
+        }
+        return false;
+    }
 
+    // ===================== 密码列表渲染 =====================
     function fillPasswordItemElement(element, item, keyword) {
         const loginVisible = State.visibleLoginPasswords.has(item.id);
         const transactionVisible = State.visibleTransactionPasswords.has(item.id);
@@ -4831,6 +4975,11 @@
             State.searchDebounceTimer = null;
         }
 
+        if (State.layoutRecomputeDebounceTimer) {
+            clearTimeout(State.layoutRecomputeDebounceTimer);
+            State.layoutRecomputeDebounceTimer = null;
+        }
+
         if (State.globalEventController) {
             State.globalEventController.abort();
         }
@@ -4841,11 +4990,6 @@
         if (!root) return;
         root.innerHTML = `
         <div class="app-container card" id="appContainer">
-            <div id="expandTopBar">
-                <button class="btn btn-outline btn-sm" id="expandTopBarBtn" aria-label="展开顶部工具栏">
-                    <svg class="icon"><use href="#icon-chevron-down"/></svg> 展开
-                </button>
-            </div>
             <div class="app-sticky-top" id="appStickyTop">
                 <div class="app-header">
                     <div class="logo">
@@ -4869,6 +5013,11 @@
                         <button class="collapse-top-btn" id="collapseTopBarBtn" aria-label="折叠顶部工具栏">
                             <svg class="icon"><use href="#icon-chevron-up"/></svg>
                             <span class="collapse-text">收起</span>
+                        </button>
+                    </div>
+                    <div id="expandTopBar">
+                        <button class="btn btn-outline btn-sm" id="expandTopBarBtn" aria-label="展开顶部工具栏">
+                            <svg class="icon"><use href="#icon-chevron-down"/></svg> 展开
                         </button>
                     </div>
                 </div>
@@ -4974,18 +5123,33 @@
         const expandBtn = document.getElementById('expandTopBarBtn');
 
         const scheduleVirtualReRender = function() {
-            VirtualScroll.invalidateItemHeightCache();
-            VirtualScroll.reset();
-            renderListOnly();
+            if (State.layoutRecomputeDebounceTimer) {
+                clearTimeout(State.layoutRecomputeDebounceTimer);
+            }
+            State.layoutRecomputeDebounceTimer = setTimeout(function() {
+                State.layoutRecomputeDebounceTimer = null;
+                VirtualScroll.invalidateItemHeightCache();
+                VirtualScroll.reset();
+                renderListOnly();
+            }, CONFIG.VIRTUAL_LAYOUT_RECOMPUTE_DELAY_MS);
         };
 
         const toggleTopBar = (collapse) => {
             if (collapse === undefined) {
                 collapse = !appContainer.classList.contains('top-collapsed');
             }
+            if (collapse === true && !appContainer.classList.contains('top-collapsed')) {
+                if (State.addSectionVisible && hasUnsavedAddContent()) {
+                    showToast(
+                        '✏️ 添加内容已暂存，展开后可继续编辑',
+                        false,
+                        CONFIG.ADD_SECTION_UNSAVED_HINT_DURATION_MS
+                    );
+                }
+            }
             appContainer.classList.toggle('top-collapsed', collapse);
             requestAnimationFrame(function() {
-                setTimeout(scheduleVirtualReRender, CONFIG.VIRTUAL_LAYOUT_RECOMPUTE_DELAY_MS);
+                scheduleVirtualReRender();
             });
         };
 
@@ -5003,7 +5167,6 @@
         }
 
         const handleResize = function() {
-            // v7.8.0：横屏手机不被误判为"桌面"，避免自动展开
             const isMobileLandscape = window.matchMedia('(max-height: 500px) and (orientation: landscape)').matches;
             const isDesktopLayout = window.innerWidth > 640 && !isMobileLandscape;
             if (isDesktopLayout && appContainer.classList.contains('top-collapsed')) {
@@ -5023,7 +5186,6 @@
         }, { signal });
 
         appContainer.addEventListener('click', async function(event) {
-            // v7.7.0：鼠标/触摸点击后清除键盘导航视觉残留
             if (State.keyboardFocusedItemId) {
                 State.keyboardFocusedItemId = null;
                 const currentFocused = document.querySelector('.password-item.keyboard-focus');
@@ -5164,7 +5326,7 @@
                     if (toggleOptionalBtn) toggleOptionalBtn.textContent = '更多信息';
                 }
                 requestAnimationFrame(function() {
-                    setTimeout(scheduleVirtualReRender, CONFIG.VIRTUAL_LAYOUT_RECOMPUTE_DELAY_MS);
+                    scheduleVirtualReRender();
                 });
             };
         }
