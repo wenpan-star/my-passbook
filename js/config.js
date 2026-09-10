@@ -3,13 +3,11 @@
  *
  * 本模块只导出纯数据，无任何副作用、无任何 DOM 依赖。
  *
- * v9.3.0：
- *   - 版本号更新至 9.3.0。
- *   - 收敛版本注释，仅保留关键说明。
+ * v9.4.1：版本号更新至 9.4.1。
  */
 
 export const CONFIG = Object.freeze({
-    APP_VERSION: '9.3.0',
+    APP_VERSION: '9.4.1',
 
     // ---- localStorage 键名 ----
     STORAGE_VAULT: 'serene_vault_enc_v3',

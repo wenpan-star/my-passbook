@@ -3,8 +3,7 @@
  *
  * 全部是纯字符串模板函数：无副作用、无事件绑定、无状态。
  *
- * v9.2.1：renderToolbar 的排序字段下拉框使用 UiState.sortField 决定
- *         初始 selected 项，避免 renderApp 时用户之前选择被重置。
+ * v9.4.0：搜索框占位文案更新，明确提示支持中文拼音首字母搜索。
  */
 
 import { CONFIG, THEMES } from '../config.js';
@@ -50,12 +49,14 @@ export function renderAppHeader() {
 
 /**
  * 渲染搜索栏。
+ *
+ * v9.4.0：占位文案更新，明确提示支持中文拼音首字母。
  * @returns {string}
  */
 export function renderSearchBar() {
     return `
         <div class="search-bar">
-            <input type="text" id="searchInput" placeholder="🔍 搜索名称/账号/分类..." autocomplete="off" autocapitalize="none" aria-label="搜索密码">
+            <input type="text" id="searchInput" placeholder="🔍 搜索名称/账号/分类/拼音首字母..." autocomplete="off" autocapitalize="none" aria-label="搜索密码，支持中文拼音首字母，如 zfb 匹配支付宝">
             <select id="searchFieldSelect" aria-label="搜索字段">
                 <option value="all">全部字段</option>
                 <option value="name">名称</option>
@@ -120,8 +121,6 @@ export function renderAddSection() {
 
 /**
  * 渲染中部工具栏。
- *
- * v9.2.1：排序字段下拉框根据 UiState.sortField 设置初始选中项。
  * @returns {string}
  */
 export function renderToolbar() {

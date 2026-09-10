@@ -3,10 +3,13 @@
  *
  * 三个独立的状态对象：DataState / AuthState / UiState。
  *
- * v9.2.1：新增 UiState.sortField，使排序字段成为应用状态的一部分。
- *         此前 ListRenderer.getFilteredAndSorted() 每次渲染都读 DOM
- *         select 元素，滚动时频繁触发；改为从 UiState 读，性能更优。
+ * v9.4.0：rebuildIndex 为每个条目构建中文拼音首字母索引
+ *         （nameInitials / usernameInitials / categoryInitials /
+ *           emailInitials / phoneInitials / noteInitials / allInitials）。
+ *         英文/数字/标点不参与首字母生成，仅中文汉字生成拼音首字母。
  */
+
+import { getInitials } from './pinyin-initials.js';
 
 export const DataState = {
     masterKey: null,
@@ -17,20 +20,53 @@ export const DataState = {
     passwordPositionIndex: new Map(),
 
     /**
-     * 重建 ID 索引与搜索索引。
+     * 重建 ID 索引、搜索索引与中文拼音首字母索引。
+     * 每次保存 / 导入 / 跨窗口同步后均会调用。
      */
     rebuildIndex() {
         this.passwordIdIndex.clear();
         this.searchableIndex.clear();
+
         this.passwords.forEach(item => {
+            const nameLower = String(item.name || '').toLowerCase();
+            const usernameLower = String(item.username || '').toLowerCase();
+            const categoryLower = String(item.category || '').toLowerCase();
+            const emailLower = String(item.email || '').toLowerCase();
+            const phoneLower = String(item.phone || '').toLowerCase();
+            const noteLower = String(item.note || '').toLowerCase();
+
+            const nameInitials = getInitials(item.name);
+            const usernameInitials = getInitials(item.username);
+            const categoryInitials = getInitials(item.category);
+            const emailInitials = getInitials(item.email);
+            const phoneInitials = getInitials(item.phone);
+            const noteInitials = getInitials(item.note);
+
             this.passwordIdIndex.set(item.id, item);
+
             this.searchableIndex.set(item.id, {
-                name: String(item.name || '').toLowerCase(),
-                username: String(item.username || '').toLowerCase(),
-                category: String(item.category || '').toLowerCase(),
-                email: String(item.email || '').toLowerCase(),
-                phone: String(item.phone || '').toLowerCase(),
-                note: String(item.note || '').toLowerCase()
+                name: nameLower,
+                username: usernameLower,
+                category: categoryLower,
+                email: emailLower,
+                phone: phoneLower,
+                note: noteLower,
+
+                nameInitials: nameInitials,
+                usernameInitials: usernameInitials,
+                categoryInitials: categoryInitials,
+                emailInitials: emailInitials,
+                phoneInitials: phoneInitials,
+                noteInitials: noteInitials,
+
+                allInitials: [
+                    nameInitials,
+                    usernameInitials,
+                    categoryInitials,
+                    emailInitials,
+                    phoneInitials,
+                    noteInitials
+                ].join(' ')
             });
         });
     },

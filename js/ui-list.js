@@ -5,8 +5,9 @@
  * ListRenderer：列表过滤、排序、渲染、事件处理。
  * 键盘导航：ArrowUp/Down/Home/End/PageUp/PageDown。
  *
- * v9.2.1：getFilteredAndSorted 从 UiState.sortField 读排序字段，
- *         不再每次渲染都读 DOM select 元素（滚动时高频触发）。
+ * v9.4.0：getFilteredAndSorted 支持中文拼音首字母匹配。
+ *         纯 ASCII 查询词（如 zfb）会同时匹配普通文本与中文首字母索引；
+ *         含中文的查询词仅走普通文本匹配。
  */
 
 import { CONFIG } from './config.js';
@@ -154,6 +155,13 @@ export const ListRenderer = {
 
     /**
      * 获取过滤 + 排序后的条目列表。
+     *
+     * 匹配规则：
+     *   - 查询词含中文：仅普通文本匹配（首字母索引本身只含 ASCII）
+     *   - 查询词为纯 ASCII（a-z / 0-9）：普通文本匹配 + 中文首字母匹配
+     *     首字母匹配在"全部字段"下使用 allInitials，
+     *     在具体字段下使用 ${field}Initials
+     *
      * @returns {Array}
      */
     getFilteredAndSorted() {
@@ -162,19 +170,41 @@ export const ListRenderer = {
 
         if (query) {
             const searchField = UiState.searchField;
+            const queryIsAsciiOnly = /^[a-z0-9]+$/.test(query);
+
             filteredItems = filteredItems.filter(item => {
                 const indexEntry = DataState.searchableIndex.get(item.id);
                 if (!indexEntry) return false;
+
                 if (searchField === 'all') {
-                    return indexEntry.name.includes(query)
-                        || indexEntry.username.includes(query)
-                        || indexEntry.category.includes(query)
-                        || indexEntry.email.includes(query)
-                        || indexEntry.phone.includes(query)
-                        || indexEntry.note.includes(query);
+                    const normalFieldMatch =
+                        indexEntry.name.includes(query) ||
+                        indexEntry.username.includes(query) ||
+                        indexEntry.category.includes(query) ||
+                        indexEntry.email.includes(query) ||
+                        indexEntry.phone.includes(query) ||
+                        indexEntry.note.includes(query);
+
+                    if (normalFieldMatch) return true;
+
+                    if (queryIsAsciiOnly && indexEntry.allInitials) {
+                        return indexEntry.allInitials.includes(query);
+                    }
+                    return false;
                 }
-                const target = indexEntry[searchField];
-                return target ? target.includes(query) : false;
+
+                const normalTargetValue = indexEntry[searchField];
+                if (normalTargetValue && normalTargetValue.includes(query)) return true;
+
+                if (queryIsAsciiOnly) {
+                    const initialsFieldName = searchField + 'Initials';
+                    const initialsTargetValue = indexEntry[initialsFieldName];
+                    if (initialsTargetValue && initialsTargetValue.includes(query)) {
+                        return true;
+                    }
+                }
+
+                return false;
             });
         }
 

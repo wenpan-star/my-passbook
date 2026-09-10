@@ -5,7 +5,7 @@
  * SESSION_UNLOCKED → 渲染主界面 + 启动跨窗口同步 + 空闲监控。
  * SESSION_LOCKED → 切换登录界面。
  *
- * v9.3.0：版本号更新至 9.3.0；日志仅保留关键说明。
+ * v9.4.1：版本号更新至 9.4.1。
  */
 
 import { CONFIG, THEMES } from './config.js';
@@ -26,6 +26,7 @@ import './clipboard.js';
 import './save.js';
 import './mutation.js';
 import './password-strength.js';
+import './pinyin-initials.js';
 import './auth.js';
 import './session.js';
 import './import-export.js';
