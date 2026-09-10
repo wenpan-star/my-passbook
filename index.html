@@ -1,24 +1,24 @@
 <!--
 ====================================================================================
- 静谧·密钥 v7.8.0 — 手机竖屏 + 横屏折叠工具栏优化
+ 静谧·密钥 v7.9.0 — 手机端收起后保留搜索栏
  更新日期：2026-09-10
 ====================================================================================
- 本次改进（基于 v7.7.0）：
+ 本次改进（基于 v7.8.0）：
 
- 1. [新增] .middle-toolbar 类包裹排序/导出/导入/批量/清空工具栏；
-     .top-collapsed .middle-toolbar { display: none !important } 让它与顶部工具栏一起收起。
- 2. [优化] #expandTopBar 改为卡片右上角绝对定位浮动按钮：
-     - 移除原有的长条形背景框（background / border / box-shadow / border-radius / sticky）
-     - 仅保留按钮本体
-     - 通过 .app-container.card { position: relative } 提供参考坐标系
- 3. [新增] 移动端横屏（max-height:500px + orientation:landscape）也显示收起按钮，
-     收起逻辑与竖屏一致（.middle-toolbar 一并隐藏）。
- 4. [优化] handleResize 使用 isMobileLandscape 判断，
-     避免横屏手机在 resize 时被误判为"桌面布局"而自动展开。
- 5. [优化] 手机端/横屏端 #expandTopBar 定位微调（top:6px / right:6px / 32px 高度）。
+ 1. [优化] 收起逻辑精细化：不再整体隐藏 .app-sticky-top，
+     改为精准隐藏 .app-header（logo/badge/按钮组）和 .add-section（添加表单），
+     保留 .search-bar（搜索框 + 搜索字段选择器）。
+ 2. [新增] .top-collapsed .search-bar { padding-right: ... } 为右上角
+     浮动"展开"按钮让出空间，避免搜索框被按钮遮挡。
+ 3. [新增] 手机端收起状态下搜索栏内部布局自适应：
+     input flex:2 + select flex:1，字体保持 16px 不触发 iOS 缩放。
+ 4. [新增] 横屏手机同样适用上述收起规则（保留搜索栏、让出按钮空间）。
+ 5. [保留] .middle-toolbar（排序/导出/导入/批量/清空）在收起状态下依旧隐藏。
+ 6. [保留] #expandTopBar 右上角绝对定位浮动按钮（无外框、仅按钮本体）。
 
- 保留不变：全部 v7.7.0 功能（虚拟滚动、元素池、键盘导航、拒绝采样、模态守卫、
- 跨窗口同步、自动锁定、日志、重新认证、ESC 关闭、模态栈、剪贴板保护等）。
+ 保留不变：全部 v7.8.0 功能（虚拟滚动、元素池、键盘导航、拒绝采样、模态守卫、
+ 跨窗口同步、自动锁定、日志、重新认证、ESC 关闭、模态栈、剪贴板保护、
+ handleResize isMobileLandscape 判断等）。
 ====================================================================================
 -->
 <!DOCTYPE html>
@@ -35,7 +35,7 @@
     <meta http-equiv="X-Frame-Options" content="DENY">
     <meta http-equiv="X-Content-Type-Options" content="nosniff">
     <meta http-equiv="Referrer-Policy" content="strict-origin-when-cross-origin">
-    <title>🔐 静谧·密钥 | 安全密码本 v7.8.0</title>
+    <title>🔐 静谧·密钥 | 安全密码本 v7.9.0</title>
     <style>
         :root {
             --bg-gradient: linear-gradient(135deg, #e0f2fe 0%, #bae6fd 50%, #e0e7ff 100%);
@@ -121,8 +121,19 @@
             }
         }
 
-        * { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
-        html { -webkit-text-size-adjust: 100%; text-size-adjust: 100%; height: 100%; overflow: hidden; }
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            -webkit-tap-highlight-color: transparent;
+        }
+
+        html {
+            -webkit-text-size-adjust: 100%;
+            text-size-adjust: 100%;
+            height: 100%;
+            overflow: hidden;
+        }
 
         body {
             font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Inter', Roboto, 'Helvetica Neue', Arial, 'Noto Sans', 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', sans-serif;
@@ -145,8 +156,21 @@
             touch-action: manipulation;
         }
 
-        body.modal-open { overflow: hidden; position: fixed; width: 100%; height: 100%; height: 100dvh; }
-        #root { flex: 1; min-height: 0; display: flex; flex-direction: column; width: 100%; }
+        body.modal-open {
+            overflow: hidden;
+            position: fixed;
+            width: 100%;
+            height: 100%;
+            height: 100dvh;
+        }
+
+        #root {
+            flex: 1;
+            min-height: 0;
+            display: flex;
+            flex-direction: column;
+            width: 100%;
+        }
 
         .card {
             background: var(--glass-bg);
@@ -164,12 +188,38 @@
         }
 
         /* v7.8.0：为 #expandTopBar 绝对定位提供参考坐标系 */
-        .app-container.card { position: relative; }
+        .app-container.card {
+            position: relative;
+        }
 
-        .auth-card { max-width: 460px; text-align: center; padding: 3.5rem 2.8rem; margin: auto; flex-direction: column; justify-content: center; }
-        .auth-icon { font-size: 4rem; margin-bottom: 1.2rem; filter: drop-shadow(0 6px 12px rgba(0, 0, 0, 0.1)); }
-        .auth-card h2 { font-size: 2.2rem; margin-bottom: 0.6rem; font-weight: 700; letter-spacing: -0.5px; }
-        .auth-card p { color: var(--text-secondary); margin-bottom: 1.6rem; font-size: 1rem; line-height: 1.7; }
+        .auth-card {
+            max-width: 460px;
+            text-align: center;
+            padding: 3.5rem 2.8rem;
+            margin: auto;
+            flex-direction: column;
+            justify-content: center;
+        }
+
+        .auth-icon {
+            font-size: 4rem;
+            margin-bottom: 1.2rem;
+            filter: drop-shadow(0 6px 12px rgba(0, 0, 0, 0.1));
+        }
+
+        .auth-card h2 {
+            font-size: 2.2rem;
+            margin-bottom: 0.6rem;
+            font-weight: 700;
+            letter-spacing: -0.5px;
+        }
+
+        .auth-card p {
+            color: var(--text-secondary);
+            margin-bottom: 1.6rem;
+            font-size: 1rem;
+            line-height: 1.7;
+        }
 
         input, select, textarea,
         .app-container input, .app-container select, .app-container textarea {
@@ -190,7 +240,14 @@
             touch-action: manipulation;
         }
 
-        textarea { height: auto; min-height: 90px; padding: 14px var(--input-padding-x); line-height: 1.5; resize: vertical; }
+        textarea {
+            height: auto;
+            min-height: 90px;
+            padding: 14px var(--input-padding-x);
+            line-height: 1.5;
+            resize: vertical;
+        }
+
         select {
             background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='14' height='14' viewBox='0 0 24 24' fill='none' stroke='%23334155' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'%3E%3C/polyline%3E%3C/svg%3E");
             background-repeat: no-repeat;
@@ -200,9 +257,23 @@
             cursor: pointer;
             color: var(--placeholder-color);
         }
-        select option { color: var(--text); background: var(--surface); }
-        input:focus, select:focus, textarea:focus { border-color: var(--primary); box-shadow: 0 0 0 4px var(--primary-light); background: var(--input-focus-bg); }
-        ::placeholder { color: var(--placeholder-color); opacity: 1; font-weight: 400; }
+
+        select option {
+            color: var(--text);
+            background: var(--surface);
+        }
+
+        input:focus, select:focus, textarea:focus {
+            border-color: var(--primary);
+            box-shadow: 0 0 0 4px var(--primary-light);
+            background: var(--input-focus-bg);
+        }
+
+        ::placeholder {
+            color: var(--placeholder-color);
+            opacity: 1;
+            font-weight: 400;
+        }
 
         .btn {
             display: inline-flex;
@@ -232,11 +303,35 @@
             font-weight: 500;
         }
 
-        .btn svg.icon { vertical-align: middle; display: inline-block; }
-        .btn::after { content: ''; position: absolute; inset: 0; background: rgba(255, 255, 255, 0.15); opacity: 0; transition: opacity 0.2s; }
-        .btn:active::after { opacity: 1; }
-        .btn:hover { background: var(--btn-bg-hover); border-color: var(--primary); box-shadow: 0 6px 18px rgba(0, 0, 0, 0.06); transform: translateY(-1px); }
-        .btn:active { transform: scale(0.98); background: var(--btn-bg-active); }
+        .btn svg.icon {
+            vertical-align: middle;
+            display: inline-block;
+        }
+
+        .btn::after {
+            content: '';
+            position: absolute;
+            inset: 0;
+            background: rgba(255, 255, 255, 0.15);
+            opacity: 0;
+            transition: opacity 0.2s;
+        }
+
+        .btn:active::after {
+            opacity: 1;
+        }
+
+        .btn:hover {
+            background: var(--btn-bg-hover);
+            border-color: var(--primary);
+            box-shadow: 0 6px 18px rgba(0, 0, 0, 0.06);
+            transform: translateY(-1px);
+        }
+
+        .btn:active {
+            transform: scale(0.98);
+            background: var(--btn-bg-active);
+        }
 
         .btn-primary {
             background: linear-gradient(135deg, var(--primary) 0%, var(--primary-hover) 100%);
@@ -246,8 +341,19 @@
             font-weight: 600;
             letter-spacing: 0.4px;
         }
-        .btn-primary:hover { background: linear-gradient(135deg, var(--primary-hover) 0%, var(--primary-hover) 100%); box-shadow: 0 8px 22px rgba(2, 132, 199, 0.45); transform: translateY(-2px); color: #fff; }
-        .btn-primary:active { transform: scale(0.98); box-shadow: 0 4px 14px rgba(2, 132, 199, 0.35); color: #fff; }
+
+        .btn-primary:hover {
+            background: linear-gradient(135deg, var(--primary-hover) 0%, var(--primary-hover) 100%);
+            box-shadow: 0 8px 22px rgba(2, 132, 199, 0.45);
+            transform: translateY(-2px);
+            color: #fff;
+        }
+
+        .btn-primary:active {
+            transform: scale(0.98);
+            box-shadow: 0 4px 14px rgba(2, 132, 199, 0.35);
+            color: #fff;
+        }
 
         .btn-danger {
             background: var(--danger);
@@ -256,12 +362,35 @@
             border: 1px solid rgba(255, 255, 255, 0.15);
             font-weight: 600;
         }
-        .btn-danger:hover { background: var(--danger-hover); box-shadow: 0 8px 20px rgba(220, 38, 38, 0.45); transform: translateY(-1px); color: #fff; }
 
-        .btn-sm { padding: 10px 16px; font-size: 0.82rem; min-height: 40px; border-radius: 12px; gap: 6px; font-weight: 500; }
-        .btn:disabled { opacity: 0.45; cursor: not-allowed; pointer-events: none; filter: grayscale(0.2); }
+        .btn-danger:hover {
+            background: var(--danger-hover);
+            box-shadow: 0 8px 20px rgba(220, 38, 38, 0.45);
+            transform: translateY(-1px);
+            color: #fff;
+        }
 
-        .theme-switcher { position: relative; display: inline-block; }
+        .btn-sm {
+            padding: 10px 16px;
+            font-size: 0.82rem;
+            min-height: 40px;
+            border-radius: 12px;
+            gap: 6px;
+            font-weight: 500;
+        }
+
+        .btn:disabled {
+            opacity: 0.45;
+            cursor: not-allowed;
+            pointer-events: none;
+            filter: grayscale(0.2);
+        }
+
+        .theme-switcher {
+            position: relative;
+            display: inline-block;
+        }
+
         .theme-dropdown {
             display: none;
             position: absolute;
@@ -277,13 +406,45 @@
             z-index: 1500;
             min-width: 220px;
         }
-        .theme-dropdown.show { display: block; animation: fadeIn 0.2s ease; }
-        .theme-option { display: flex; align-items: center; gap: 12px; padding: 10px 14px; border-radius: 12px; cursor: pointer; transition: all 0.2s; font-size: 0.9rem; font-weight: 500; color: var(--text); touch-action: manipulation; }
-        .theme-option:hover { background: rgba(0, 0, 0, 0.04); }
-        .theme-color-preview { width: 24px; height: 24px; border-radius: 50%; box-shadow: 0 0 0 2px rgba(0, 0, 0, 0.1); }
-        @keyframes fadeIn { from { opacity: 0; transform: translateY(-5px); } to { opacity: 1; transform: translateY(0); } }
 
-        .export-more-wrapper { display: none; }
+        .theme-dropdown.show {
+            display: block;
+            animation: fadeIn 0.2s ease;
+        }
+
+        .theme-option {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 10px 14px;
+            border-radius: 12px;
+            cursor: pointer;
+            transition: all 0.2s;
+            font-size: 0.9rem;
+            font-weight: 500;
+            color: var(--text);
+            touch-action: manipulation;
+        }
+
+        .theme-option:hover {
+            background: rgba(0, 0, 0, 0.04);
+        }
+
+        .theme-color-preview {
+            width: 24px;
+            height: 24px;
+            border-radius: 50%;
+            box-shadow: 0 0 0 2px rgba(0, 0, 0, 0.1);
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(-5px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        .export-more-wrapper {
+            display: none;
+        }
         .export-dropdown {
             display: none;
             position: absolute;
@@ -301,12 +462,24 @@
             flex-direction: column;
             gap: 4px;
         }
-        .export-dropdown.show { display: flex; }
-        .export-dropdown .btn { width: 100%; justify-content: flex-start; white-space: nowrap; }
+        .export-dropdown.show {
+            display: flex;
+        }
+        .export-dropdown .btn {
+            width: 100%;
+            justify-content: flex-start;
+            white-space: nowrap;
+        }
 
-        .app-sticky-top { flex-shrink: 0; display: flex; flex-direction: column; gap: 1.8rem; padding-bottom: 0.8rem; }
+        .app-sticky-top {
+            flex-shrink: 0;
+            display: flex;
+            flex-direction: column;
+            gap: 1.8rem;
+            padding-bottom: 0.8rem;
+        }
 
-        /* 中间工具栏（排序/导出/导入/批量/清空）—— v7.8.0 加入 .middle-toolbar 类以便统一控制 */
+        /* v7.8.0：中间工具栏（排序/导出/导入/批量/清空）加入 .middle-toolbar 类以便统一控制 */
         .middle-toolbar {
             display: flex;
             flex-wrap: wrap;
@@ -317,8 +490,31 @@
             flex-shrink: 0;
         }
 
-        /* v7.8.0：收起状态隐藏中间工具栏 */
-        .top-collapsed .middle-toolbar { display: none !important; }
+        /* v7.9.0：收起状态隐藏 app-header（logo/badge/按钮组） */
+        .top-collapsed .app-header {
+            display: none !important;
+        }
+
+        /* v7.9.0：收起状态隐藏 add-section（添加表单） */
+        .top-collapsed .add-section {
+            display: none !important;
+        }
+
+        /* v7.9.0：收起状态隐藏 middle-toolbar（排序/导出/导入/批量/清空） */
+        .top-collapsed .middle-toolbar {
+            display: none !important;
+        }
+
+        /* v7.9.0：收起状态保留 search-bar，但整体间距收窄 */
+        .top-collapsed .app-sticky-top {
+            gap: 0.5rem;
+            padding-bottom: 0.5rem;
+        }
+
+        /* v7.9.0：收起状态搜索栏为右上角浮动"展开"按钮让出空间，避免遮挡 */
+        .top-collapsed .search-bar {
+            padding-right: 82px;
+        }
 
         .password-list-scroll {
             flex: 1 1 auto;
@@ -334,12 +530,27 @@
             touch-action: pan-y;
             outline: none;
         }
-        .password-list-scroll::-webkit-scrollbar { width: 8px; height: 8px; }
-        .password-list-scroll::-webkit-scrollbar-track { background: transparent; }
-        .password-list-scroll::-webkit-scrollbar-thumb { background: var(--border); border-radius: 4px; }
-        .password-list-scroll::-webkit-scrollbar-thumb:hover { background: var(--text-secondary); }
 
-        .virtual-list-spacer { position: relative; width: 100%; }
+        .password-list-scroll::-webkit-scrollbar {
+            width: 8px;
+            height: 8px;
+        }
+        .password-list-scroll::-webkit-scrollbar-track {
+            background: transparent;
+        }
+        .password-list-scroll::-webkit-scrollbar-thumb {
+            background: var(--border);
+            border-radius: 4px;
+        }
+        .password-list-scroll::-webkit-scrollbar-thumb:hover {
+            background: var(--text-secondary);
+        }
+
+        .virtual-list-spacer {
+            position: relative;
+            width: 100%;
+        }
+
         .virtual-list-grid {
             position: absolute;
             left: 0;
@@ -350,11 +561,37 @@
             backface-visibility: hidden;
             -webkit-backface-visibility: hidden;
         }
-        .virtual-empty-state { text-align: center; padding: 40px 20px; color: var(--text-secondary); }
 
-        .app-header { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 20px; }
-        .logo { display: flex; align-items: center; gap: 12px; font-size: 1.8rem; font-weight: 700; color: var(--text); letter-spacing: -0.5px; }
-        .logo svg { width: 2.4rem; height: 2.4rem; filter: drop-shadow(0 4px 6px rgba(0, 0, 0, 0.1)); }
+        .virtual-empty-state {
+            text-align: center;
+            padding: 40px 20px;
+            color: var(--text-secondary);
+        }
+
+        .app-header {
+            display: flex;
+            flex-wrap: wrap;
+            justify-content: space-between;
+            align-items: center;
+            gap: 20px;
+        }
+
+        .logo {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            font-size: 1.8rem;
+            font-weight: 700;
+            color: var(--text);
+            letter-spacing: -0.5px;
+        }
+
+        .logo svg {
+            width: 2.4rem;
+            height: 2.4rem;
+            filter: drop-shadow(0 4px 6px rgba(0, 0, 0, 0.1));
+        }
+
         .badge {
             background: var(--btn-bg);
             backdrop-filter: blur(8px);
@@ -369,9 +606,21 @@
             align-items: center;
             gap: 8px;
         }
-        .header-actions { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
 
-        .search-bar { display: flex; gap: 14px; flex-wrap: wrap; align-items: center; }
+        .header-actions {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+            align-items: center;
+        }
+
+        .search-bar {
+            display: flex;
+            gap: 14px;
+            flex-wrap: wrap;
+            align-items: center;
+        }
+
         .search-bar input { flex: 1; min-width: 200px; }
         .search-bar select { width: auto; min-width: 120px; max-width: 150px; flex: 0 0 auto; }
 
@@ -387,14 +636,36 @@
             overflow: hidden;
         }
 
-        .form-row { display: flex; flex-wrap: wrap; gap: 14px; margin-bottom: 16px; align-items: center; }
+        .form-row {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 14px;
+            margin-bottom: 16px;
+            align-items: center;
+        }
+
         .form-row input, .form-row textarea, .form-row select { flex: 1; min-width: 140px; }
 
-        .optional-fields { display: grid; grid-template-rows: 0fr; transition: grid-template-rows 0.3s ease; }
-        .optional-fields.show { grid-template-rows: 1fr; }
-        .optional-fields > div { overflow: hidden; }
+        .optional-fields {
+            display: grid;
+            grid-template-rows: 0fr;
+            transition: grid-template-rows 0.3s ease;
+        }
+        .optional-fields.show {
+            grid-template-rows: 1fr;
+        }
+        .optional-fields > div {
+            overflow: hidden;
+        }
 
-        .form-actions { display: flex; justify-content: space-between; align-items: center; gap: 14px; flex-wrap: wrap; margin-top: 8px; }
+        .form-actions {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 14px;
+            flex-wrap: wrap;
+            margin-top: 8px;
+        }
 
         .password-item {
             display: flex;
@@ -414,9 +685,18 @@
             contain: layout style;
             touch-action: manipulation;
         }
-        .password-item:hover { box-shadow: var(--shadow-lg); border-color: var(--primary); }
 
-        .item-info { min-width: 0; flex-shrink: 0; overflow: hidden; }
+        .password-item:hover {
+            box-shadow: var(--shadow-lg);
+            border-color: var(--primary);
+        }
+
+        .item-info {
+            min-width: 0;
+            flex-shrink: 0;
+            overflow: hidden;
+        }
+
         .item-cat {
             display: inline-block;
             background: rgba(2, 132, 199, 0.08);
@@ -428,10 +708,39 @@
             margin-bottom: 4px;
             border: 1px solid rgba(2, 132, 199, 0.15);
         }
-        .item-actions { display: flex; gap: 8px; align-items: center; justify-content: flex-end; margin-top: auto; flex-shrink: 0; }
-        .password-group { display: flex; flex-direction: column; gap: 8px; flex-shrink: 0; }
-        .pw-field { display: flex; align-items: center; gap: 2px; background: var(--surface-alt); border: 1px solid var(--border); border-radius: 12px; padding: 2px 2px 2px 8px; }
-        .pw-icon { font-size: 0.9rem; opacity: 0.7; margin-right: 4px; flex-shrink: 0; }
+
+        .item-actions {
+            display: flex;
+            gap: 8px;
+            align-items: center;
+            justify-content: flex-end;
+            margin-top: auto;
+            flex-shrink: 0;
+        }
+
+        .password-group {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            flex-shrink: 0;
+        }
+
+        .pw-field {
+            display: flex;
+            align-items: center;
+            gap: 2px;
+            background: var(--surface-alt);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 2px 2px 2px 8px;
+        }
+
+        .pw-icon {
+            font-size: 0.9rem;
+            opacity: 0.7;
+            margin-right: 4px;
+            flex-shrink: 0;
+        }
 
         .pw-text-input {
             flex: 1;
@@ -452,7 +761,11 @@
             user-select: none;
             -webkit-user-select: none;
         }
-        .pw-text-input:focus { box-shadow: none; background: transparent; }
+
+        .pw-text-input:focus {
+            box-shadow: none;
+            background: transparent;
+        }
 
         .pw-action {
             background: transparent;
@@ -470,8 +783,15 @@
             min-width: 38px;
             touch-action: manipulation;
         }
-        .pw-action:hover { background: rgba(0,0,0,0.05); }
-        .pw-action svg.icon { width: 1.1em; height: 1.1em; }
+
+        .pw-action:hover {
+            background: rgba(0,0,0,0.05);
+        }
+
+        .pw-action svg.icon {
+            width: 1.1em;
+            height: 1.1em;
+        }
 
         .cat-grid {
             display: grid;
@@ -483,6 +803,7 @@
             padding: 6px;
             -webkit-overflow-scrolling: touch;
         }
+
         .cat-tag {
             position: relative;
             display: flex;
@@ -501,7 +822,9 @@
             white-space: nowrap;
             text-overflow: ellipsis;
         }
+
         .cat-tag:hover { background: var(--btn-bg-hover); box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05); }
+
         .cat-tag .cat-count {
             position: absolute;
             top: 4px;
@@ -515,6 +838,7 @@
             line-height: 1.2;
             pointer-events: none;
         }
+
         .cat-tag .cat-actions {
             display: flex;
             gap: 2px;
@@ -526,7 +850,15 @@
             right: 6px;
             bottom: 6px;
         }
-        .cat-tag .cat-name-text { flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+        .cat-tag .cat-name-text {
+            flex: 0 1 auto;
+            min-width: 0;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
         .cat-tag button {
             background: none;
             border: none;
@@ -544,9 +876,17 @@
             flex-shrink: 0;
             touch-action: manipulation;
         }
+
         .cat-tag button:hover { color: var(--danger); background: rgba(220, 38, 38, 0.08); }
         .cat-tag button[data-cat-edit]:hover { color: var(--primary); background: rgba(2, 132, 199, 0.1); }
-        .cat-empty { text-align: center; padding: 30px 20px; color: var(--text-secondary); font-size: 0.9rem; grid-column: 1 / -1; }
+
+        .cat-empty {
+            text-align: center;
+            padding: 30px 20px;
+            color: var(--text-secondary);
+            font-size: 0.9rem;
+            grid-column: 1 / -1;
+        }
 
         .modal {
             position: fixed;
@@ -565,6 +905,7 @@
             padding: 20px;
             padding: calc(20px + var(--safe-area-top)) calc(20px + var(--safe-area-right)) calc(20px + var(--safe-area-bottom)) calc(20px + var(--safe-area-left));
         }
+
         .modal-card {
             background: var(--glass-bg);
             backdrop-filter: blur(24px);
@@ -583,8 +924,16 @@
             overscroll-behavior: contain;
             touch-action: pan-y;
         }
+
         .modal-card h3 { margin-bottom: 1.4rem; font-size: 1.4rem; font-weight: 700; }
-        .modal-card .button-group { display: flex; gap: 14px; margin-top: 28px; flex-wrap: wrap; }
+
+        .modal-card .button-group {
+            display: flex;
+            gap: 14px;
+            margin-top: 28px;
+            flex-wrap: wrap;
+        }
+
         .modal-card .button-group button { flex: 1; min-width: 120px; }
 
         .toast {
@@ -606,7 +955,11 @@
             backdrop-filter: blur(8px);
             pointer-events: none;
         }
-        @keyframes fadeUp { from { opacity: 0; transform: translateX(-50%) translateY(16px); } to { opacity: 1; transform: translateX(-50%) translateY(0); } }
+
+        @keyframes fadeUp {
+            from { opacity: 0; transform: translateX(-50%) translateY(16px); }
+            to { opacity: 1; transform: translateX(-50%) translateY(0); }
+        }
 
         .warning-box {
             background: var(--warning-box-bg);
@@ -625,9 +978,19 @@
         html[data-theme-resolved="midnight"] .cat-tag button[data-cat-edit]:hover { background: rgba(56, 189, 248, 0.2); }
         html[data-theme-resolved="midnight"] .card,
         html[data-theme-resolved="midnight"] .password-item,
-        html[data-theme-resolved="midnight"] .modal-card { box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5); border-color: rgba(255, 255, 255, 0.15); }
+        html[data-theme-resolved="midnight"] .modal-card {
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
+            border-color: rgba(255, 255, 255, 0.15);
+        }
 
-        .highlight { background-color: var(--highlight-bg); color: var(--highlight-color); border-radius: 4px; padding: 0 3px; font-weight: 600; transition: background-color 0.3s ease, color 0.3s ease; }
+        .highlight {
+            background-color: var(--highlight-bg);
+            color: var(--highlight-color);
+            border-radius: 4px;
+            padding: 0 3px;
+            font-weight: 600;
+            transition: background-color 0.3s ease, color 0.3s ease;
+        }
 
         .batch-bar {
             background: var(--glass-bg);
@@ -644,8 +1007,23 @@
             flex-shrink: 0;
         }
 
-        .checkbox-item { width: 18px; height: 18px; cursor: pointer; accent-color: var(--primary); flex-shrink: 0; margin-right: 8px; vertical-align: middle; }
-        .checkbox-sm { width: 16px; height: 16px; accent-color: var(--primary); margin: 0; vertical-align: middle; }
+        .checkbox-item {
+            width: 18px;
+            height: 18px;
+            cursor: pointer;
+            accent-color: var(--primary);
+            flex-shrink: 0;
+            margin-right: 8px;
+            vertical-align: middle;
+        }
+
+        .checkbox-sm {
+            width: 16px;
+            height: 16px;
+            accent-color: var(--primary);
+            margin: 0;
+            vertical-align: middle;
+        }
 
         .log-view {
             max-height: 320px;
@@ -687,9 +1065,24 @@
             flex-shrink: 0;
         }
 
-        .strength-indicator { display: flex; gap: 4px; margin: 8px 0; }
-        .strength-segment { flex: 1; height: 6px; background: #e2e8f0; border-radius: 3px; transition: background 0.3s ease; }
-        .strength-text { font-size: 0.75rem; margin-top: 4px; color: var(--text-secondary); transition: color 0.3s ease; }
+        .strength-indicator {
+            display: flex;
+            gap: 4px;
+            margin: 8px 0;
+        }
+        .strength-segment {
+            flex: 1;
+            height: 6px;
+            background: #e2e8f0;
+            border-radius: 3px;
+            transition: background 0.3s ease;
+        }
+        .strength-text {
+            font-size: 0.75rem;
+            margin-top: 4px;
+            color: var(--text-secondary);
+            transition: color 0.3s ease;
+        }
 
         .collapse-top-btn {
             display: none;
@@ -708,11 +1101,19 @@
             gap: 4px;
             touch-action: manipulation;
         }
-        .collapse-top-btn .collapse-text { display: inline; }
-        .collapse-top-btn:hover { background: rgba(0,0,0,0.06); }
+
+        .collapse-top-btn .collapse-text {
+            display: inline;
+        }
+
+        .collapse-top-btn:hover {
+            background: rgba(0,0,0,0.06);
+        }
 
         /* v7.8.0：#expandTopBar 默认隐藏，收起时以绝对定位浮动按钮形式出现在卡片右上角 */
-        #expandTopBar { display: none; }
+        #expandTopBar {
+            display: none;
+        }
 
         .top-collapsed #expandTopBar {
             display: flex;
@@ -720,7 +1121,7 @@
             top: 8px;
             right: 8px;
             z-index: 60;
-            /* 移除原有的长条形外框（background / border / box-shadow / border-radius / padding） */
+            /* 移除原有的长条形外框（background / border / box-shadow / border-radius / padding / sticky） */
         }
 
         .top-collapsed #expandTopBar .btn {
@@ -729,13 +1130,27 @@
             font-size: 0.8rem;
         }
 
-        .top-collapsed .app-sticky-top { display: none !important; }
-
         @media (max-width: 640px) {
-            .collapse-top-btn { display: inline-flex; }
-            .collapse-top-btn .collapse-text { display: none; }
-            .top-collapsed #expandTopBar { top: 6px; right: 6px; }
-            .top-collapsed #expandTopBar .btn { min-height: 32px; padding: 3px 10px; font-size: 0.74rem; gap: 4px; }
+            .collapse-top-btn {
+                display: inline-flex;
+            }
+            .collapse-top-btn .collapse-text {
+                display: none;
+            }
+            .top-collapsed #expandTopBar {
+                top: 6px;
+                right: 6px;
+            }
+            .top-collapsed #expandTopBar .btn {
+                min-height: 32px;
+                padding: 3px 10px;
+                font-size: 0.74rem;
+                gap: 4px;
+            }
+            /* v7.9.0：手机端收起后搜索栏让出浮动按钮空间 */
+            .top-collapsed .search-bar {
+                padding-right: 72px;
+            }
         }
 
         @media (max-width: 640px) {
@@ -754,7 +1169,10 @@
             .pw-text-input { font-size: 0.95rem; min-width: 12ch; }
             .cat-grid { grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); }
             .password-item { padding: 18px 16px; gap: 14px; }
-            .password-item:hover { box-shadow: var(--shadow-sm); border-color: var(--btn-border); }
+            .password-item:hover {
+                box-shadow: var(--shadow-sm);
+                border-color: var(--btn-border);
+            }
             .item-actions .btn-sm { min-height: 44px; min-width: 44px; }
             :root { --item-height: 290px; }
             .password-list-scroll { scrollbar-width: none; }
@@ -775,48 +1193,122 @@
             .export-import-group { display: none !important; }
             .export-more-wrapper { display: inline-block !important; position: relative; }
             :root { --item-height: 270px; }
+            /* v7.9.0：超小屏收起后搜索栏换行时，浮动按钮让出更少空间 */
+            .top-collapsed .search-bar {
+                padding-right: 66px;
+            }
         }
 
-        /* v7.8.0：横屏手机显示收起按钮，收起后同样隐藏中间工具栏 */
+        /* v7.9.0：横屏手机显示收起按钮，收起后保留搜索栏 */
         @media (max-height: 500px) and (orientation: landscape) {
-            .collapse-top-btn { display: inline-flex; }
-            .collapse-top-btn .collapse-text { display: none; }
+            .collapse-top-btn {
+                display: inline-flex;
+            }
+            .collapse-top-btn .collapse-text {
+                display: none;
+            }
 
-            .top-collapsed #expandTopBar { top: 4px; right: 4px; }
-            .top-collapsed #expandTopBar .btn { min-height: 30px; padding: 3px 10px; font-size: 0.72rem; gap: 3px; }
+            .top-collapsed #expandTopBar {
+                top: 4px;
+                right: 4px;
+            }
+            .top-collapsed #expandTopBar .btn {
+                min-height: 30px;
+                padding: 3px 10px;
+                font-size: 0.72rem;
+                gap: 3px;
+            }
 
-            .app-container.card { padding: 1rem 1.2rem; }
-            .password-item { padding: 10px 12px; border-radius: 14px; }
-            .app-header { gap: 8px; }
-            .search-bar { gap: 6px; }
-            .btn-sm { padding: 6px 10px; font-size: 0.72rem; min-height: 36px; }
-            .app-sticky-top { gap: 0.5rem; padding-bottom: 0.2rem; }
-            .add-section { padding: 1rem; }
-            .pw-text-input { font-size: 0.75rem; }
+            .top-collapsed .search-bar {
+                padding-right: 66px;
+            }
+
+            .app-container.card {
+                padding: 1rem 1.2rem;
+            }
+            .password-item {
+                padding: 10px 12px;
+                border-radius: 14px;
+            }
+            .app-header {
+                gap: 8px;
+            }
+            .search-bar {
+                gap: 6px;
+            }
+            .btn-sm {
+                padding: 6px 10px;
+                font-size: 0.72rem;
+                min-height: 36px;
+            }
+            .app-sticky-top {
+                gap: 0.5rem;
+                padding-bottom: 0.2rem;
+            }
+            .add-section {
+                padding: 1rem;
+            }
+            .pw-text-input {
+                font-size: 0.75rem;
+            }
             :root { --item-height: 200px; }
             .modal { padding: 8px calc(8px + var(--safe-area-left)) 8px calc(8px + var(--safe-area-right)); }
-            .modal-card { max-height: 92vh; max-height: 92dvh; padding: 1.4rem; }
+            .modal-card {
+                max-height: 92vh;
+                max-height: 92dvh;
+                padding: 1.4rem;
+            }
         }
 
         @media (orientation: landscape) and (max-height: 500px) and (max-width: 900px) {
-            .modal-card { max-width: 88vw; }
-            .auth-card { padding: 2rem 1.8rem; max-width: 420px; }
-            .auth-icon { font-size: 3rem; margin-bottom: 0.8rem; }
-            .auth-card h2 { font-size: 1.6rem; }
-            .auth-card p { margin-bottom: 1rem; font-size: 0.9rem; }
+            .modal-card {
+                max-width: 88vw;
+            }
+            .auth-card {
+                padding: 2rem 1.8rem;
+                max-width: 420px;
+            }
+            .auth-icon {
+                font-size: 3rem;
+                margin-bottom: 0.8rem;
+            }
+            .auth-card h2 {
+                font-size: 1.6rem;
+            }
+            .auth-card p {
+                margin-bottom: 1rem;
+                font-size: 0.9rem;
+            }
         }
 
         @media (hover: none) and (pointer: coarse) {
-            .btn:hover { transform: none; box-shadow: var(--shadow-sm); background: var(--btn-bg); border-color: var(--btn-border); }
-            .btn-primary:hover { transform: none; box-shadow: 0 4px 14px rgba(2, 132, 199, 0.35); }
-            .password-item:hover { box-shadow: var(--shadow-sm); border-color: var(--btn-border); }
+            .btn:hover {
+                transform: none;
+                box-shadow: var(--shadow-sm);
+                background: var(--btn-bg);
+                border-color: var(--btn-border);
+            }
+            .btn-primary:hover {
+                transform: none;
+                box-shadow: 0 4px 14px rgba(2, 132, 199, 0.35);
+            }
+            .password-item:hover {
+                box-shadow: var(--shadow-sm);
+                border-color: var(--btn-border);
+            }
         }
 
         @media (-webkit-min-device-pixel-ratio: 2) {
-            .card, .password-item, .modal-card { -webkit-font-smoothing: antialiased; }
+            .card, .password-item, .modal-card {
+                -webkit-font-smoothing: antialiased;
+            }
         }
 
-        .keyboard-focus { outline: 3px solid var(--primary); outline-offset: 2px; border-radius: 20px; }
+        .keyboard-focus {
+            outline: 3px solid var(--primary);
+            outline-offset: 2px;
+            border-radius: 20px;
+        }
     </style>
 </head>
 <body>
@@ -850,7 +1342,7 @@
 
     // ===================== 常量与配置 =====================
     const CONFIG = {
-        APP_VERSION: '7.8.0',
+        APP_VERSION: '7.9.0',
         STORAGE_VAULT: 'serene_vault_enc_v3',
         STORAGE_SALT: 'serene_vault_salt_v3',
         STORAGE_AUTH: 'serene_vault_auth_v3',
@@ -889,113 +1381,260 @@
 
     // ===================== 主题定义 =====================
     const THEMES = {
-        ocean: { name: '海洋微风', icon: '🌊', vars: {
-            '--bg-gradient': 'linear-gradient(135deg, #e0f2fe 0%, #bae6fd 50%, #e0e7ff 100%)',
-            '--glass-bg': 'rgba(255, 255, 255, 0.75)', '--glass-border': 'rgba(255, 255, 255, 0.6)',
-            '--surface': '#ffffff', '--surface-alt': '#f0f9ff', '--text': '#0b1a2f',
-            '--text-secondary': '#334155', '--border': '#cbd5e1', '--primary': '#0284c7',
-            '--primary-hover': '#0369a1', '--primary-light': 'rgba(2,132,199,0.15)',
-            '--danger': '#dc2626', '--danger-hover': '#b91c1c', '--warning': '#b45309',
-            '--success': '#059669', '--placeholder-color': '#8a94a6',
-            '--input-bg': 'rgba(255, 255, 255, 0.8)', '--input-border': 'rgba(0, 0, 0, 0.08)',
-            '--input-focus-bg': '#ffffff', '--btn-bg': 'rgba(255, 255, 255, 0.6)',
-            '--btn-border': 'rgba(0, 0, 0, 0.08)', '--btn-bg-hover': 'rgba(255, 255, 255, 0.9)',
-            '--btn-bg-active': 'rgba(255, 255, 255, 0.8)', '--cat-count-bg': 'rgba(0, 0, 0, 0.08)',
-            '--cat-count-color': '#334155', '--warning-box-bg': '#fff8eb',
-            '--warning-box-color': '#8c4f00', '--highlight-bg': '#ffe484', '--highlight-color': '#0f172a'
-        }},
-        sunset: { name: '温暖日落', icon: '🌅', vars: {
-            '--bg-gradient': 'linear-gradient(135deg, #fff7ed 0%, #fed7aa 50%, #fde68a 100%)',
-            '--glass-bg': 'rgba(255, 255, 255, 0.75)', '--glass-border': 'rgba(255, 255, 255, 0.6)',
-            '--surface': '#ffffff', '--surface-alt': '#fff1e6', '--text': '#0b1a2f',
-            '--text-secondary': '#334155', '--border': '#e2c9b3', '--primary': '#ea580c',
-            '--primary-hover': '#c2410c', '--primary-light': 'rgba(234,88,12,0.2)',
-            '--danger': '#b91c1c', '--danger-hover': '#991b1b', '--warning': '#b45309',
-            '--success': '#059669', '--placeholder-color': '#9a7b6a',
-            '--input-bg': 'rgba(255, 255, 255, 0.8)', '--input-border': 'rgba(0, 0, 0, 0.08)',
-            '--input-focus-bg': '#ffffff', '--btn-bg': 'rgba(255, 255, 255, 0.6)',
-            '--btn-border': 'rgba(0, 0, 0, 0.08)', '--btn-bg-hover': 'rgba(255, 255, 255, 0.9)',
-            '--btn-bg-active': 'rgba(255, 255, 255, 0.8)', '--cat-count-bg': 'rgba(0, 0, 0, 0.08)',
-            '--cat-count-color': '#334155', '--warning-box-bg': '#fff8eb',
-            '--warning-box-color': '#8c4f00', '--highlight-bg': '#ffe484', '--highlight-color': '#0f172a'
-        }},
-        forest: { name: '森林绿意', icon: '🌿', vars: {
-            '--bg-gradient': 'linear-gradient(135deg, #ecfdf5 0%, #a7f3d0 50%, #d1fae5 100%)',
-            '--glass-bg': 'rgba(255, 255, 255, 0.75)', '--glass-border': 'rgba(255, 255, 255, 0.6)',
-            '--surface': '#ffffff', '--surface-alt': '#ecfdf5', '--text': '#0b1a2f',
-            '--text-secondary': '#334155', '--border': '#b8d8c3', '--primary': '#059669',
-            '--primary-hover': '#047857', '--primary-light': 'rgba(5,150,105,0.2)',
-            '--danger': '#dc2626', '--danger-hover': '#b91c1c', '--warning': '#b45309',
-            '--success': '#059669', '--placeholder-color': '#6b8a7a',
-            '--input-bg': 'rgba(255, 255, 255, 0.8)', '--input-border': 'rgba(0, 0, 0, 0.08)',
-            '--input-focus-bg': '#ffffff', '--btn-bg': 'rgba(255, 255, 255, 0.6)',
-            '--btn-border': 'rgba(0, 0, 0, 0.08)', '--btn-bg-hover': 'rgba(255, 255, 255, 0.9)',
-            '--btn-bg-active': 'rgba(255, 255, 255, 0.8)', '--cat-count-bg': 'rgba(0, 0, 0, 0.08)',
-            '--cat-count-color': '#334155', '--warning-box-bg': '#fff8eb',
-            '--warning-box-color': '#8c4f00', '--highlight-bg': '#ffe484', '--highlight-color': '#0f172a'
-        }},
-        sakura: { name: '樱花粉彩', icon: '🌸', vars: {
-            '--bg-gradient': 'linear-gradient(135deg, #fce7f3 0%, #fbcfe8 50%, #ede9fe 100%)',
-            '--glass-bg': 'rgba(255, 255, 255, 0.75)', '--glass-border': 'rgba(255, 255, 255, 0.6)',
-            '--surface': '#ffffff', '--surface-alt': '#fce7f3', '--text': '#0b1a2f',
-            '--text-secondary': '#334155', '--border': '#e6c8d8', '--primary': '#db2777',
-            '--primary-hover': '#be185d', '--primary-light': 'rgba(219,39,119,0.2)',
-            '--danger': '#b91c1c', '--danger-hover': '#991b1b', '--warning': '#b45309',
-            '--success': '#059669', '--placeholder-color': '#b08a9a',
-            '--input-bg': 'rgba(255, 255, 255, 0.8)', '--input-border': 'rgba(0, 0, 0, 0.08)',
-            '--input-focus-bg': '#ffffff', '--btn-bg': 'rgba(255, 255, 255, 0.6)',
-            '--btn-border': 'rgba(0, 0, 0, 0.08)', '--btn-bg-hover': 'rgba(255, 255, 255, 0.9)',
-            '--btn-bg-active': 'rgba(255, 255, 255, 0.8)', '--cat-count-bg': 'rgba(0, 0, 0, 0.08)',
-            '--cat-count-color': '#334155', '--warning-box-bg': '#fff8eb',
-            '--warning-box-color': '#8c4f00', '--highlight-bg': '#ffe484', '--highlight-color': '#0f172a'
-        }},
-        lavender: { name: '紫罗兰梦', icon: '💜', vars: {
-            '--bg-gradient': 'linear-gradient(135deg, #ede9fe 0%, #c4b5fd 50%, #e0e7ff 100%)',
-            '--glass-bg': 'rgba(255, 255, 255, 0.75)', '--glass-border': 'rgba(255, 255, 255, 0.6)',
-            '--surface': '#ffffff', '--surface-alt': '#ede9fe', '--text': '#0b1a2f',
-            '--text-secondary': '#334155', '--border': '#c5b8e0', '--primary': '#7c3aed',
-            '--primary-hover': '#6d28d9', '--primary-light': 'rgba(124,58,237,0.2)',
-            '--danger': '#dc2626', '--danger-hover': '#b91c1c', '--warning': '#b45309',
-            '--success': '#059669', '--placeholder-color': '#8b8bb0',
-            '--input-bg': 'rgba(255, 255, 255, 0.8)', '--input-border': 'rgba(0, 0, 0, 0.08)',
-            '--input-focus-bg': '#ffffff', '--btn-bg': 'rgba(255, 255, 255, 0.6)',
-            '--btn-border': 'rgba(0, 0, 0, 0.08)', '--btn-bg-hover': 'rgba(255, 255, 255, 0.9)',
-            '--btn-bg-active': 'rgba(255, 255, 255, 0.8)', '--cat-count-bg': 'rgba(0, 0, 0, 0.08)',
-            '--cat-count-color': '#334155', '--warning-box-bg': '#fff8eb',
-            '--warning-box-color': '#8c4f00', '--highlight-bg': '#ffe484', '--highlight-color': '#0f172a'
-        }},
-        midnight: { name: '午夜蓝', icon: '🌙', vars: {
-            '--bg-gradient': 'linear-gradient(135deg, #0f172a 0%, #1e293b 100%)',
-            '--glass-bg': 'rgba(30, 41, 59, 0.92)', '--glass-border': 'rgba(255, 255, 255, 0.12)',
-            '--surface': '#1e293b', '--surface-alt': '#17212e', '--text': '#f8fafc',
-            '--text-secondary': '#cbd5e1', '--border': '#475569', '--primary': '#38bdf8',
-            '--primary-hover': '#7dd3fc', '--primary-light': 'rgba(56, 189, 248, 0.2)',
-            '--danger': '#f87171', '--danger-hover': '#ef4444', '--warning': '#fbbf24',
-            '--success': '#34d399', '--placeholder-color': '#94a3b8',
-            '--input-bg': 'rgba(0, 0, 0, 0.3)', '--input-border': 'rgba(255, 255, 255, 0.1)',
-            '--input-focus-bg': 'rgba(255, 255, 255, 0.08)', '--btn-bg': 'rgba(255, 255, 255, 0.06)',
-            '--btn-border': 'rgba(255, 255, 255, 0.12)', '--btn-bg-hover': 'rgba(255, 255, 255, 0.12)',
-            '--btn-bg-active': 'rgba(255, 255, 255, 0.08)', '--cat-count-bg': 'rgba(255, 255, 255, 0.18)',
-            '--cat-count-color': '#e2e8f0', '--warning-box-bg': '#2f2412',
-            '--warning-box-color': '#fadf8a', '--highlight-bg': '#4a3a0a', '--highlight-color': '#fbbf24'
-        }}
+        ocean: {
+            name: '海洋微风',
+            icon: '🌊',
+            vars: {
+                '--bg-gradient': 'linear-gradient(135deg, #e0f2fe 0%, #bae6fd 50%, #e0e7ff 100%)',
+                '--glass-bg': 'rgba(255, 255, 255, 0.75)',
+                '--glass-border': 'rgba(255, 255, 255, 0.6)',
+                '--surface': '#ffffff',
+                '--surface-alt': '#f0f9ff',
+                '--text': '#0b1a2f',
+                '--text-secondary': '#334155',
+                '--border': '#cbd5e1',
+                '--primary': '#0284c7',
+                '--primary-hover': '#0369a1',
+                '--primary-light': 'rgba(2,132,199,0.15)',
+                '--danger': '#dc2626',
+                '--danger-hover': '#b91c1c',
+                '--warning': '#b45309',
+                '--success': '#059669',
+                '--placeholder-color': '#8a94a6',
+                '--input-bg': 'rgba(255, 255, 255, 0.8)',
+                '--input-border': 'rgba(0, 0, 0, 0.08)',
+                '--input-focus-bg': '#ffffff',
+                '--btn-bg': 'rgba(255, 255, 255, 0.6)',
+                '--btn-border': 'rgba(0, 0, 0, 0.08)',
+                '--btn-bg-hover': 'rgba(255, 255, 255, 0.9)',
+                '--btn-bg-active': 'rgba(255, 255, 255, 0.8)',
+                '--cat-count-bg': 'rgba(0, 0, 0, 0.08)',
+                '--cat-count-color': '#334155',
+                '--warning-box-bg': '#fff8eb',
+                '--warning-box-color': '#8c4f00',
+                '--highlight-bg': '#ffe484',
+                '--highlight-color': '#0f172a'
+            }
+        },
+        sunset: {
+            name: '温暖日落',
+            icon: '🌅',
+            vars: {
+                '--bg-gradient': 'linear-gradient(135deg, #fff7ed 0%, #fed7aa 50%, #fde68a 100%)',
+                '--glass-bg': 'rgba(255, 255, 255, 0.75)',
+                '--glass-border': 'rgba(255, 255, 255, 0.6)',
+                '--surface': '#ffffff',
+                '--surface-alt': '#fff1e6',
+                '--text': '#0b1a2f',
+                '--text-secondary': '#334155',
+                '--border': '#e2c9b3',
+                '--primary': '#ea580c',
+                '--primary-hover': '#c2410c',
+                '--primary-light': 'rgba(234,88,12,0.2)',
+                '--danger': '#b91c1c',
+                '--danger-hover': '#991b1b',
+                '--warning': '#b45309',
+                '--success': '#059669',
+                '--placeholder-color': '#9a7b6a',
+                '--input-bg': 'rgba(255, 255, 255, 0.8)',
+                '--input-border': 'rgba(0, 0, 0, 0.08)',
+                '--input-focus-bg': '#ffffff',
+                '--btn-bg': 'rgba(255, 255, 255, 0.6)',
+                '--btn-border': 'rgba(0, 0, 0, 0.08)',
+                '--btn-bg-hover': 'rgba(255, 255, 255, 0.9)',
+                '--btn-bg-active': 'rgba(255, 255, 255, 0.8)',
+                '--cat-count-bg': 'rgba(0, 0, 0, 0.08)',
+                '--cat-count-color': '#334155',
+                '--warning-box-bg': '#fff8eb',
+                '--warning-box-color': '#8c4f00',
+                '--highlight-bg': '#ffe484',
+                '--highlight-color': '#0f172a'
+            }
+        },
+        forest: {
+            name: '森林绿意',
+            icon: '🌿',
+            vars: {
+                '--bg-gradient': 'linear-gradient(135deg, #ecfdf5 0%, #a7f3d0 50%, #d1fae5 100%)',
+                '--glass-bg': 'rgba(255, 255, 255, 0.75)',
+                '--glass-border': 'rgba(255, 255, 255, 0.6)',
+                '--surface': '#ffffff',
+                '--surface-alt': '#ecfdf5',
+                '--text': '#0b1a2f',
+                '--text-secondary': '#334155',
+                '--border': '#b8d8c3',
+                '--primary': '#059669',
+                '--primary-hover': '#047857',
+                '--primary-light': 'rgba(5,150,105,0.2)',
+                '--danger': '#dc2626',
+                '--danger-hover': '#b91c1c',
+                '--warning': '#b45309',
+                '--success': '#059669',
+                '--placeholder-color': '#6b8a7a',
+                '--input-bg': 'rgba(255, 255, 255, 0.8)',
+                '--input-border': 'rgba(0, 0, 0, 0.08)',
+                '--input-focus-bg': '#ffffff',
+                '--btn-bg': 'rgba(255, 255, 255, 0.6)',
+                '--btn-border': 'rgba(0, 0, 0, 0.08)',
+                '--btn-bg-hover': 'rgba(255, 255, 255, 0.9)',
+                '--btn-bg-active': 'rgba(255, 255, 255, 0.8)',
+                '--cat-count-bg': 'rgba(0, 0, 0, 0.08)',
+                '--cat-count-color': '#334155',
+                '--warning-box-bg': '#fff8eb',
+                '--warning-box-color': '#8c4f00',
+                '--highlight-bg': '#ffe484',
+                '--highlight-color': '#0f172a'
+            }
+        },
+        sakura: {
+            name: '樱花粉彩',
+            icon: '🌸',
+            vars: {
+                '--bg-gradient': 'linear-gradient(135deg, #fce7f3 0%, #fbcfe8 50%, #ede9fe 100%)',
+                '--glass-bg': 'rgba(255, 255, 255, 0.75)',
+                '--glass-border': 'rgba(255, 255, 255, 0.6)',
+                '--surface': '#ffffff',
+                '--surface-alt': '#fce7f3',
+                '--text': '#0b1a2f',
+                '--text-secondary': '#334155',
+                '--border': '#e6c8d8',
+                '--primary': '#db2777',
+                '--primary-hover': '#be185d',
+                '--primary-light': 'rgba(219,39,119,0.2)',
+                '--danger': '#b91c1c',
+                '--danger-hover': '#991b1b',
+                '--warning': '#b45309',
+                '--success': '#059669',
+                '--placeholder-color': '#b08a9a',
+                '--input-bg': 'rgba(255, 255, 255, 0.8)',
+                '--input-border': 'rgba(0, 0, 0, 0.08)',
+                '--input-focus-bg': '#ffffff',
+                '--btn-bg': 'rgba(255, 255, 255, 0.6)',
+                '--btn-border': 'rgba(0, 0, 0, 0.08)',
+                '--btn-bg-hover': 'rgba(255, 255, 255, 0.9)',
+                '--btn-bg-active': 'rgba(255, 255, 255, 0.8)',
+                '--cat-count-bg': 'rgba(0, 0, 0, 0.08)',
+                '--cat-count-color': '#334155',
+                '--warning-box-bg': '#fff8eb',
+                '--warning-box-color': '#8c4f00',
+                '--highlight-bg': '#ffe484',
+                '--highlight-color': '#0f172a'
+            }
+        },
+        lavender: {
+            name: '紫罗兰梦',
+            icon: '💜',
+            vars: {
+                '--bg-gradient': 'linear-gradient(135deg, #ede9fe 0%, #c4b5fd 50%, #e0e7ff 100%)',
+                '--glass-bg': 'rgba(255, 255, 255, 0.75)',
+                '--glass-border': 'rgba(255, 255, 255, 0.6)',
+                '--surface': '#ffffff',
+                '--surface-alt': '#ede9fe',
+                '--text': '#0b1a2f',
+                '--text-secondary': '#334155',
+                '--border': '#c5b8e0',
+                '--primary': '#7c3aed',
+                '--primary-hover': '#6d28d9',
+                '--primary-light': 'rgba(124,58,237,0.2)',
+                '--danger': '#dc2626',
+                '--danger-hover': '#b91c1c',
+                '--warning': '#b45309',
+                '--success': '#059669',
+                '--placeholder-color': '#8b8bb0',
+                '--input-bg': 'rgba(255, 255, 255, 0.8)',
+                '--input-border': 'rgba(0, 0, 0, 0.08)',
+                '--input-focus-bg': '#ffffff',
+                '--btn-bg': 'rgba(255, 255, 255, 0.6)',
+                '--btn-border': 'rgba(0, 0, 0, 0.08)',
+                '--btn-bg-hover': 'rgba(255, 255, 255, 0.9)',
+                '--btn-bg-active': 'rgba(255, 255, 255, 0.8)',
+                '--cat-count-bg': 'rgba(0, 0, 0, 0.08)',
+                '--cat-count-color': '#334155',
+                '--warning-box-bg': '#fff8eb',
+                '--warning-box-color': '#8c4f00',
+                '--highlight-bg': '#ffe484',
+                '--highlight-color': '#0f172a'
+            }
+        },
+        midnight: {
+            name: '午夜蓝',
+            icon: '🌙',
+            vars: {
+                '--bg-gradient': 'linear-gradient(135deg, #0f172a 0%, #1e293b 100%)',
+                '--glass-bg': 'rgba(30, 41, 59, 0.92)',
+                '--glass-border': 'rgba(255, 255, 255, 0.12)',
+                '--surface': '#1e293b',
+                '--surface-alt': '#17212e',
+                '--text': '#f8fafc',
+                '--text-secondary': '#cbd5e1',
+                '--border': '#475569',
+                '--primary': '#38bdf8',
+                '--primary-hover': '#7dd3fc',
+                '--primary-light': 'rgba(56, 189, 248, 0.2)',
+                '--danger': '#f87171',
+                '--danger-hover': '#ef4444',
+                '--warning': '#fbbf24',
+                '--success': '#34d399',
+                '--placeholder-color': '#94a3b8',
+                '--input-bg': 'rgba(0, 0, 0, 0.3)',
+                '--input-border': 'rgba(255, 255, 255, 0.1)',
+                '--input-focus-bg': 'rgba(255, 255, 255, 0.08)',
+                '--btn-bg': 'rgba(255, 255, 255, 0.06)',
+                '--btn-border': 'rgba(255, 255, 255, 0.12)',
+                '--btn-bg-hover': 'rgba(255, 255, 255, 0.12)',
+                '--btn-bg-active': 'rgba(255, 255, 255, 0.08)',
+                '--cat-count-bg': 'rgba(255, 255, 255, 0.18)',
+                '--cat-count-color': '#e2e8f0',
+                '--warning-box-bg': '#2f2412',
+                '--warning-box-color': '#fadf8a',
+                '--highlight-bg': '#4a3a0a',
+                '--highlight-color': '#fbbf24'
+            }
+        }
     };
 
     // ===================== 全局模态栈管理 =====================
     let modalOpenCount = 0;
     const activeModalClosers = new Set();
 
-    function pushModalOpen() { modalOpenCount++; if (modalOpenCount === 1) document.body.classList.add('modal-open'); }
-    function popModalOpen() { modalOpenCount = Math.max(0, modalOpenCount - 1); if (modalOpenCount === 0) document.body.classList.remove('modal-open'); }
-    function resetModalOpen() { modalOpenCount = 0; document.body.classList.remove('modal-open'); }
-    function registerActiveModal(cleanupFn) { if (typeof cleanupFn === 'function') activeModalClosers.add(cleanupFn); }
-    function unregisterActiveModal(cleanupFn) { activeModalClosers.delete(cleanupFn); }
+    function pushModalOpen() {
+        modalOpenCount++;
+        if (modalOpenCount === 1) {
+            document.body.classList.add('modal-open');
+        }
+    }
+
+    function popModalOpen() {
+        modalOpenCount = Math.max(0, modalOpenCount - 1);
+        if (modalOpenCount === 0) {
+            document.body.classList.remove('modal-open');
+        }
+    }
+
+    function resetModalOpen() {
+        modalOpenCount = 0;
+        document.body.classList.remove('modal-open');
+    }
+
+    function registerActiveModal(cleanupFn) {
+        if (typeof cleanupFn === 'function') {
+            activeModalClosers.add(cleanupFn);
+        }
+    }
+
+    function unregisterActiveModal(cleanupFn) {
+        activeModalClosers.delete(cleanupFn);
+    }
 
     function closeAllActiveModals() {
         const closers = Array.from(activeModalClosers);
         activeModalClosers.clear();
         closers.forEach(function(cleanupFn) {
-            try { cleanupFn(); } catch (error) { console.warn('关闭模态时出现异常:', error); }
+            try {
+                cleanupFn();
+            } catch (error) {
+                console.warn('关闭模态时出现异常:', error);
+            }
         });
     }
 
@@ -1015,16 +1654,24 @@
             }
         };
         document.addEventListener('keydown', keydownHandler);
-        return function removeEscapeListener() { document.removeEventListener('keydown', keydownHandler); };
+        return function removeEscapeListener() {
+            document.removeEventListener('keydown', keydownHandler);
+        };
     }
 
+    // v7.7.0：安全聚焦辅助，避免焦点目标已被移除时静默失败
     function safeRestoreFocus(element) {
         if (!element) return;
         if (typeof element.focus !== 'function') return;
         if (!element.isConnected) return;
-        try { element.focus(); } catch (error) { /* 忽略焦点恢复失败 */ }
+        try {
+            element.focus();
+        } catch (error) {
+            // 忽略焦点恢复失败（例如元素隐藏、disabled 等）
+        }
     }
 
+    // v7.7.0：keydown Enter 统一判断
     function attachEnterToClick(inputElement, clickHandler) {
         if (!inputElement) return;
         inputElement.addEventListener('keydown', function(event) {
@@ -1061,7 +1708,9 @@
             const seconds = String(safe.getSeconds()).padStart(2, '0');
             return `${year}${month}${day}_${hours}${minutes}${seconds}`;
         },
-        escapeRegex: function(text) { return text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'); },
+        escapeRegex: function(text) {
+            return text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+        },
         generateId: function() {
             const array = new Uint8Array(16);
             crypto.getRandomValues(array);
@@ -1085,7 +1734,10 @@
             for (let row of keyboardRows) {
                 for (let i = 0; i <= row.length - 3; i++) {
                     const seq = row.substring(i, i + 3);
-                    if (lowerPwd.includes(seq) || lowerPwd.includes(seq.split('').reverse().join(''))) { isSequence = true; break; }
+                    if (lowerPwd.includes(seq) || lowerPwd.includes(seq.split('').reverse().join(''))) {
+                        isSequence = true;
+                        break;
+                    }
                 }
                 if (isSequence) break;
             }
@@ -1099,27 +1751,38 @@
             if (password.length < CONFIG.MASTER_MIN_LEN) return false;
             return /[A-Z]/.test(password) && /[a-z]/.test(password) && /[0-9]/.test(password) && /[^A-Za-z0-9]/.test(password);
         },
-        strengthText: function(level) { return ['❌ 太弱','⚠️ 弱','📈 中等','✅ 强','💪 非常强'][level] || '未知'; },
-        strengthColor: function(level) { return ['#dc2626','#f59e0b','#f59e0b','#059669','#059669'][level] || '#dc2626'; }
+        strengthText: function(level) {
+            return ['❌ 太弱','⚠️ 弱','📈 中等','✅ 强','💪 非常强'][level] || '未知';
+        },
+        strengthColor: function(level) {
+            return ['#dc2626','#f59e0b','#f59e0b','#059669','#059669'][level] || '#dc2626';
+        }
     };
 
-    // ===================== 安全随机整数（拒绝采样） =====================
+    // ===================== 安全随机整数（拒绝采样，消除模偏差） =====================
     function secureRandomInt(maxExclusive) {
         if (maxExclusive <= 0) return 0;
         if (maxExclusive === 1) return 0;
-        if (maxExclusive > 256) throw new Error('secureRandomInt 不支持 maxExclusive > 256，请使用扩展实现');
+        // v7.7.0：增加断言，避免未来扩展字符集时的静默错误
+        if (maxExclusive > 256) {
+            throw new Error('secureRandomInt 不支持 maxExclusive > 256，请使用扩展实现');
+        }
         const maxValid = 256 - (256 % maxExclusive);
         const buffer = new Uint8Array(1);
         while (true) {
             crypto.getRandomValues(buffer);
-            if (buffer[0] < maxValid) return buffer[0] % maxExclusive;
+            if (buffer[0] < maxValid) {
+                return buffer[0] % maxExclusive;
+            }
         }
     }
 
     function secureRandomIntBatch(count, maxExclusive) {
         if (count <= 0) return [];
         const results = new Array(count);
-        for (let i = 0; i < count; i++) results[i] = secureRandomInt(maxExclusive);
+        for (let i = 0; i < count; i++) {
+            results[i] = secureRandomInt(maxExclusive);
+        }
         return results;
     }
 
@@ -1151,7 +1814,11 @@
                 key,
                 encoder.encode(plaintext)
             );
-            return { iv: Array.from(iv), ciphertext: Array.from(new Uint8Array(ciphertext)), checksum: checksum };
+            return {
+                iv: Array.from(iv),
+                ciphertext: Array.from(new Uint8Array(ciphertext)),
+                checksum: checksum
+            };
         },
         decrypt: async function(key, encryptedObject) {
             const iv = new Uint8Array(encryptedObject.iv);
@@ -1166,12 +1833,21 @@
             );
             const plaintext = new TextDecoder().decode(decryptedBuffer);
             const computedChecksum = await this.computeStringChecksum(plaintext);
-            if (computedChecksum !== checksum) throw new Error('数据完整性校验失败，可能已损坏或被篡改');
+            if (computedChecksum !== checksum) {
+                throw new Error('数据完整性校验失败，可能已损坏或被篡改');
+            }
             return JSON.parse(plaintext);
         },
-        createAuthVerifier: async function(key) { return this.encrypt(key, { test:'serene-vault-verified-v3' }); },
+        createAuthVerifier: async function(key) {
+            return this.encrypt(key, { test:'serene-vault-verified-v3' });
+        },
         verifyAuth: async function(key, authData) {
-            try { await this.decrypt(key, authData); return true; } catch(error) { return false; }
+            try {
+                await this.decrypt(key, authData);
+                return true;
+            } catch(error) {
+                return false;
+            }
         }
     };
 
@@ -1183,20 +1859,30 @@
         try {
             const raw = localStorage.getItem(CONFIG.SECURITY_STORAGE);
             if (raw) loaded = JSON.parse(raw);
-        } catch (e) { console.warn('安全状态读取失败，使用内存存储:', e); }
-        if (loaded && typeof loaded === 'object') return Object.assign({ bruteFailCount: 0, lockoutUntil: 0, verifyFailCount: 0 }, loaded);
+        } catch (e) {
+            console.warn('安全状态读取失败，使用内存存储:', e);
+        }
+        if (loaded && typeof loaded === 'object') {
+            return Object.assign({ bruteFailCount: 0, lockoutUntil: 0, verifyFailCount: 0 }, loaded);
+        }
         if (securityStateMemory) return securityStateMemory;
         return { bruteFailCount: 0, lockoutUntil: 0, verifyFailCount: 0 };
     }
     function saveSecurityState(securityData) {
         securityStateMemory = securityData;
-        try { localStorage.setItem(CONFIG.SECURITY_STORAGE, JSON.stringify(securityData)); }
-        catch (error) { console.warn('安全状态保存失败，降级为内存存储:', error); }
+        try {
+            localStorage.setItem(CONFIG.SECURITY_STORAGE, JSON.stringify(securityData));
+        } catch (error) {
+            console.warn('安全状态保存失败，降级为内存存储:', error);
+        }
     }
-    function getSecurityState() { return loadSecurityState(); }
+    function getSecurityState() {
+        return loadSecurityState();
+    }
     function updateSecurityState(updates) {
         const current = loadSecurityState();
-        saveSecurityState(Object.assign({}, current, updates));
+        const merged = Object.assign({}, current, updates);
+        saveSecurityState(merged);
     }
 
     // ===================== 保存操作串行化队列 =====================
@@ -1204,18 +1890,33 @@
 
     function queueSaveOperation(operation) {
         const result = saveOperationChain.then(operation, operation);
-        saveOperationChain = result.catch(function(error) { console.warn('保存队列中的操作失败:', error); });
+        saveOperationChain = result.catch(function(error) {
+            console.warn('保存队列中的操作失败:', error);
+        });
         return result;
     }
 
     // ===================== 虚拟滚动模块 =====================
     const VirtualScroll = {
-        itemHeight: 260, gap: 16, bufferRows: 5, columns: 1, totalRows: 0, totalHeight: 0,
-        lastRenderedStartRow: -1, lastRenderedEndRow: -1, lastRenderedItemsRef: null,
-        lastContainerWidth: -1, cachedItems: [], scrollRAF: null, resizeTimer: null,
+        itemHeight: 260,
+        gap: 16,
+        bufferRows: 5,
+        columns: 1,
+        totalRows: 0,
+        totalHeight: 0,
+        lastRenderedStartRow: -1,
+        lastRenderedEndRow: -1,
+        lastRenderedItemsRef: null,
+        lastContainerWidth: -1,
+        cachedItems: [],
+        scrollRAF: null,
+        resizeTimer: null,
         cachedItemHeightFromCSS: null,
-        elementPool: [], renderedItemElements: new Map(),
 
+        elementPool: [],
+        renderedItemElements: new Map(),
+
+        // v7.7.0：缓存行高，forceRefresh 时重新读取
         readItemHeightFromCSS: function(forceRefresh) {
             if (!forceRefresh && this.cachedItemHeightFromCSS !== null) {
                 this.itemHeight = this.cachedItemHeightFromCSS;
@@ -1228,16 +1929,24 @@
                     this.itemHeight = parsedValue;
                     this.cachedItemHeightFromCSS = parsedValue;
                 }
-            } catch (error) { console.warn('读取 --item-height 失败，使用默认值:', error); }
+            } catch (error) {
+                console.warn('读取 --item-height 失败，使用默认值:', error);
+            }
         },
-        invalidateItemHeightCache: function() { this.cachedItemHeightFromCSS = null; },
+
+        invalidateItemHeightCache: function() {
+            this.cachedItemHeightFromCSS = null;
+        },
+
         computeColumns: function(containerWidth) {
             if (containerWidth <= 0) return 1;
             if (window.innerWidth <= CONFIG.VIRTUAL_MOBILE_BREAKPOINT) return 1;
             const minItemWidth = CONFIG.VIRTUAL_MIN_ITEM_WIDTH;
             const gap = CONFIG.VIRTUAL_GAP;
-            return Math.max(1, Math.floor((containerWidth + gap) / (minItemWidth + gap)));
+            const columns = Math.max(1, Math.floor((containerWidth + gap) / (minItemWidth + gap)));
+            return columns;
         },
+
         computeLayout: function(containerWidth, itemCount) {
             this.readItemHeightFromCSS(false);
             this.columns = this.computeColumns(containerWidth);
@@ -1246,56 +1955,101 @@
             const gapsTotal = Math.max(0, this.totalRows - 1) * this.gap;
             this.totalHeight = itemsHeightTotal + gapsTotal;
         },
+
         reset: function() {
             this.lastRenderedStartRow = -1;
             this.lastRenderedEndRow = -1;
             this.lastRenderedItemsRef = null;
         },
+
         acquireElement: function() {
-            if (this.elementPool.length > 0) return this.elementPool.pop();
+            if (this.elementPool.length > 0) {
+                return this.elementPool.pop();
+            }
             const element = document.createElement('div');
             element.className = 'password-item';
             return element;
         },
+
         releaseElement: function(element) {
             if (!element) return;
-            if (this.elementPool.length >= CONFIG.VIRTUAL_ELEMENT_POOL_MAX) { element.remove(); return; }
+            if (this.elementPool.length >= CONFIG.VIRTUAL_ELEMENT_POOL_MAX) {
+                element.remove();
+                return;
+            }
             element.removeAttribute('style');
             element.className = 'password-item';
             element.innerHTML = '';
-            if (element.parentNode) element.parentNode.removeChild(element);
+            if (element.parentNode) {
+                element.parentNode.removeChild(element);
+            }
             this.elementPool.push(element);
         },
+
         clearRenderedElements: function() {
-            this.renderedItemElements.forEach((element) => { this.releaseElement(element); });
+            this.renderedItemElements.forEach((element) => {
+                this.releaseElement(element);
+            });
             this.renderedItemElements.clear();
         },
+
         fullReset: function() {
             this.reset();
             this.lastContainerWidth = -1;
             this.cachedItems = [];
             this.invalidateItemHeightCache();
             this.clearRenderedElements();
-            if (this.scrollRAF) { cancelAnimationFrame(this.scrollRAF); this.scrollRAF = null; }
-            if (this.resizeTimer) { clearTimeout(this.resizeTimer); this.resizeTimer = null; }
+            if (this.scrollRAF) {
+                cancelAnimationFrame(this.scrollRAF);
+                this.scrollRAF = null;
+            }
+            if (this.resizeTimer) {
+                clearTimeout(this.resizeTimer);
+                this.resizeTimer = null;
+            }
         }
     };
 
     // ===================== 状态管理 =====================
     const State = {
-        masterKey: null, passwords: [], customCategories: [],
-        passwordIdIndex: new Map(), searchableIndex: new Map(), passwordPositionIndex: new Map(),
-        visibleLoginPasswords: new Set(), visibleTransactionPasswords: new Set(),
-        searchQuery: '', searchField: 'all', batchMode: false, selectedIds: new Set(),
-        sortAscending: true, activeCategoryModal: null, addSectionVisible: false,
-        activeEditItemId: null, activeEditModalCleanup: null,
-        idleTimer: null, idleLastScheduleTime: 0, lastActivity: Date.now(),
-        clipboardTimer: null, clipboardExpectedValue: null, saveLock: null,
-        lastReauthenticationTime: 0, currentTheme: 'ocean',
-        bruteFailCount: 0, verifyFailCount: 0, channel: null,
-        visibilityLockTimer: null, searchDebounceTimer: null,
-        globalEventController: null, renderFrameRequest: null,
-        lastCategoryEditClickTime: 0, keyboardFocusedItemId: null,
+        masterKey: null,
+        passwords: [],
+        customCategories: [],
+
+        passwordIdIndex: new Map(),
+        searchableIndex: new Map(),
+        passwordPositionIndex: new Map(),
+
+        visibleLoginPasswords: new Set(),
+        visibleTransactionPasswords: new Set(),
+        searchQuery: '',
+        searchField: 'all',
+        batchMode: false,
+        selectedIds: new Set(),
+        sortAscending: true,
+        activeCategoryModal: null,
+        addSectionVisible: false,
+        activeEditItemId: null,
+        activeEditModalCleanup: null,
+
+        idleTimer: null,
+        idleLastScheduleTime: 0,
+        lastActivity: Date.now(),
+        clipboardTimer: null,
+        clipboardExpectedValue: null,
+        saveLock: null,
+        lastReauthenticationTime: 0,
+        currentTheme: 'ocean',
+        bruteFailCount: 0,
+        verifyFailCount: 0,
+        channel: null,
+        visibilityLockTimer: null,
+        searchDebounceTimer: null,
+        globalEventController: null,
+        renderFrameRequest: null,
+        lastCategoryEditClickTime: 0,
+
+        keyboardFocusedItemId: null,
 
         rebuildIndex: function() {
             this.passwordIdIndex.clear();
@@ -1312,15 +2066,20 @@
                 });
             });
         },
+
         rebuildPositionIndex: function(orderedItems) {
             this.passwordPositionIndex.clear();
             orderedItems.forEach(function(item, index) {
                 State.passwordPositionIndex.set(item.id, index);
             });
         },
+
         reset: function() {
             if (this.passwords) {
-                this.passwords.forEach(function(p) { p.loginPassword = ''; p.transactionPassword = ''; });
+                this.passwords.forEach(function(p) {
+                    p.loginPassword = '';
+                    p.transactionPassword = '';
+                });
             }
             this.masterKey = null;
             this.passwords = [];
@@ -1344,15 +2103,36 @@
             this.activeCategoryModal = null;
             this.lastCategoryEditClickTime = 0;
             this.keyboardFocusedItemId = null;
-            if (this.idleTimer) { clearTimeout(this.idleTimer); this.idleTimer = null; }
+            if (this.idleTimer) {
+                clearTimeout(this.idleTimer);
+                this.idleTimer = null;
+            }
             this.idleLastScheduleTime = 0;
-            if (this.clipboardTimer) { clearTimeout(this.clipboardTimer); this.clipboardTimer = null; }
+            if (this.clipboardTimer) {
+                clearTimeout(this.clipboardTimer);
+                this.clipboardTimer = null;
+            }
             this.clipboardExpectedValue = null;
-            if (this.visibilityLockTimer) { clearTimeout(this.visibilityLockTimer); this.visibilityLockTimer = null; }
-            if (this.searchDebounceTimer) { clearTimeout(this.searchDebounceTimer); this.searchDebounceTimer = null; }
-            if (this.renderFrameRequest) { cancelAnimationFrame(this.renderFrameRequest); this.renderFrameRequest = null; }
-            if (this.channel) { this.channel.close(); this.channel = null; }
-            if (this.globalEventController) { this.globalEventController.abort(); this.globalEventController = null; }
+            if (this.visibilityLockTimer) {
+                clearTimeout(this.visibilityLockTimer);
+                this.visibilityLockTimer = null;
+            }
+            if (this.searchDebounceTimer) {
+                clearTimeout(this.searchDebounceTimer);
+                this.searchDebounceTimer = null;
+            }
+            if (this.renderFrameRequest) {
+                cancelAnimationFrame(this.renderFrameRequest);
+                this.renderFrameRequest = null;
+            }
+            if (this.channel) {
+                this.channel.close();
+                this.channel = null;
+            }
+            if (this.globalEventController) {
+                this.globalEventController.abort();
+                this.globalEventController = null;
+            }
             VirtualScroll.fullReset();
             document.removeEventListener('visibilitychange', onVisibilityChange);
         }
@@ -1386,15 +2166,19 @@
         State.rebuildIndex();
     }
 
+    // ===================== 日志 =====================
     function addLog(action, details) {
         try {
             let logs = JSON.parse(localStorage.getItem(CONFIG.LOG_STORAGE) || '[]');
             logs.unshift({ time: new Date().toISOString(), action: action, details: String(details).slice(0,200) });
             if (logs.length > 200) logs.pop();
             localStorage.setItem(CONFIG.LOG_STORAGE, JSON.stringify(logs));
-        } catch (e) { console.warn('日志写入失败:', e); }
+        } catch (e) {
+            console.warn('日志写入失败:', e);
+        }
     }
 
+    // ===================== 速率限制 =====================
     async function applyRateLimit(failCount) {
         if (failCount <= 0) return;
         const delay = CONFIG.BASE_DELAY_MS * Math.pow(2, Math.min(failCount - 1, 5));
@@ -1404,15 +2188,25 @@
     // ===================== 保存与解锁 =====================
     async function saveVault() {
         if (!State.masterKey) return;
-        const vaultData = { passwords: State.passwords, customCategories: State.customCategories, version: 3, lastUpdated: Date.now() };
+        const vaultData = {
+            passwords: State.passwords,
+            customCategories: State.customCategories,
+            version: 3,
+            lastUpdated: Date.now()
+        };
         const encrypted = await CryptoModule.encrypt(State.masterKey, vaultData);
         try {
             localStorage.setItem(CONFIG.STORAGE_VAULT, JSON.stringify(encrypted));
             localStorage.setItem(CONFIG.STORAGE_INIT, 'true');
-        } catch (error) { throw new Error('数据保存失败：浏览器存储空间可能不足或不可用'); }
+        } catch (error) {
+            throw new Error('数据保存失败：浏览器存储空间可能不足或不可用');
+        }
         if (State.channel) {
-            try { State.channel.postMessage({ type: 'vaultUpdated', timestamp: Date.now() }); }
-            catch (error) { console.warn('BroadcastChannel 消息发送失败:', error); }
+            try {
+                State.channel.postMessage({ type: 'vaultUpdated', timestamp: Date.now() });
+            } catch (error) {
+                console.warn('BroadcastChannel 消息发送失败:', error);
+            }
         }
     }
 
@@ -1427,8 +2221,11 @@
     }
 
     function cleanMigrationBackup() {
-        try { localStorage.removeItem(CONFIG.MIGRATION_BACKUP_KEY); }
-        catch(e) { console.warn('清理迁移备份失败:', e); }
+        try {
+            localStorage.removeItem(CONFIG.MIGRATION_BACKUP_KEY);
+        } catch(e) {
+            console.warn('清理迁移备份失败:', e);
+        }
     }
 
     async function verifyMasterPassword(password) {
@@ -1466,7 +2263,9 @@
                 localStorage.removeItem(CONFIG.STORAGE_AUTH);
                 localStorage.removeItem(CONFIG.STORAGE_INIT);
                 localStorage.removeItem(CONFIG.STORAGE_VAULT);
-            } catch(e) { console.warn('初始化失败清理异常:', e); }
+            } catch(e) {
+                console.warn('初始化失败清理异常:', e);
+            }
             State.masterKey = null;
             State.passwords = [];
             State.customCategories = [];
@@ -1510,9 +2309,12 @@
         const vaultRaw = localStorage.getItem(CONFIG.STORAGE_VAULT);
         if (!vaultRaw) throw new Error('保险库数据缺失');
         let decrypted;
-        try { decrypted = await CryptoModule.decrypt(key, JSON.parse(vaultRaw)); }
-        catch (error) {
-            if (error.message.includes('完整性校验失败')) throw new Error('保险库数据损坏或被篡改');
+        try {
+            decrypted = await CryptoModule.decrypt(key, JSON.parse(vaultRaw));
+        } catch (error) {
+            if (error.message.includes('完整性校验失败')) {
+                throw new Error('保险库数据损坏或被篡改');
+            }
             throw new Error('解密失败，可能主密码错误或数据损坏');
         }
 
@@ -1534,9 +2336,13 @@
         State.bruteFailCount = 0;
         State.lastReauthenticationTime = 0;
         updateSecurityState({ bruteFailCount: 0, lockoutUntil: 0 });
+
         cleanMigrationBackup();
 
-        if (State.channel) { State.channel.close(); State.channel = null; }
+        if (State.channel) {
+            State.channel.close();
+            State.channel = null;
+        }
         if (typeof BroadcastChannel !== 'undefined') {
             try {
                 State.channel = new BroadcastChannel('serene_vault_sync');
@@ -1588,7 +2394,9 @@
                             if (typeof renderListOnly === 'function') renderListOnly();
                             if (typeof refreshDatalist === 'function') refreshDatalist();
                             showToast('🔄 数据已从另一窗口同步');
-                        } catch (error) { console.warn('同步失败:', error); }
+                        } catch (error) {
+                            console.warn('同步失败:', error);
+                        }
                     } else if (event.data && event.data.type === 'masterPasswordChanged') {
                         showToast('⚠️ 主密码已在其他窗口修改，即将锁定', true, 3000);
                         lockAndLogout();
@@ -1609,10 +2417,15 @@
         if (document.hidden) {
             if (State.visibilityLockTimer) clearTimeout(State.visibilityLockTimer);
             State.visibilityLockTimer = setTimeout(function() {
-                if (document.hidden && State.masterKey) lockAndLogout();
+                if (document.hidden && State.masterKey) {
+                    lockAndLogout();
+                }
             }, CONFIG.VISIBILITY_LOCK_DELAY);
         } else {
-            if (State.visibilityLockTimer) { clearTimeout(State.visibilityLockTimer); State.visibilityLockTimer = null; }
+            if (State.visibilityLockTimer) {
+                clearTimeout(State.visibilityLockTimer);
+                State.visibilityLockTimer = null;
+            }
             State.lastActivity = Date.now();
             scheduleIdleLock();
         }
@@ -1620,19 +2433,27 @@
 
     function scheduleIdleLock() {
         const now = Date.now();
-        if (now - State.idleLastScheduleTime < CONFIG.IDLE_RESCHEDULE_THROTTLE_MS && State.idleTimer) return;
+        if (now - State.idleLastScheduleTime < CONFIG.IDLE_RESCHEDULE_THROTTLE_MS && State.idleTimer) {
+            return;
+        }
         State.idleLastScheduleTime = now;
         if (State.idleTimer) clearTimeout(State.idleTimer);
         State.idleTimer = setTimeout(function() {
             State.idleTimer = null;
-            if (State.masterKey) lockAndLogout();
+            if (State.masterKey) {
+                lockAndLogout();
+            }
         }, CONFIG.IDLE_TIMEOUT);
     }
 
     function startIdleMonitor() {
-        if (State.idleTimer) { clearTimeout(State.idleTimer); State.idleTimer = null; }
+        if (State.idleTimer) {
+            clearTimeout(State.idleTimer);
+            State.idleTimer = null;
+        }
         State.idleLastScheduleTime = 0;
         scheduleIdleLock();
+
         document.removeEventListener('visibilitychange', onVisibilityChange);
         document.addEventListener('visibilitychange', onVisibilityChange);
     }
@@ -1641,21 +2462,29 @@
         if (State.idleTimer) { clearTimeout(State.idleTimer); State.idleTimer = null; }
         if (State.visibilityLockTimer) { clearTimeout(State.visibilityLockTimer); State.visibilityLockTimer = null; }
         if (State.channel) { State.channel.close(); State.channel = null; }
+
         try {
-            if (typeof State.activeEditModalCleanup === 'function') State.activeEditModalCleanup();
-        } catch(e) { console.warn('编辑模态框清理失败:', e); }
+            if (typeof State.activeEditModalCleanup === 'function') {
+                State.activeEditModalCleanup();
+            }
+        } catch(e) {
+            console.warn('编辑模态框清理失败:', e);
+        }
         closeAllActiveModals();
+
         document.querySelectorAll('.modal').forEach(function(modal) { modal.remove(); });
         resetModalOpen();
+
         State.reset();
         showToast('⏰ 已自动锁定');
         showAuth();
     }
 
     // ===================== 分类管理 =====================
-    function loadCategories() { return [...State.customCategories]; }
+    function loadCategories() {
+        return [...State.customCategories];
+    }
     function saveCategories(categories) { State.customCategories = [...new Set(categories)]; }
-
     function addCategory(name) {
         const trimmed = name.trim();
         if (!trimmed) return false;
@@ -1666,14 +2495,12 @@
         saveCategories(current);
         return true;
     }
-
     function removeCategory(name) {
         const current = loadCategories();
         const filtered = current.filter(function(c){ return c !== name; });
         if (filtered.length !== current.length) { saveCategories(filtered); return true; }
         return false;
     }
-
     function batchAddCategories(newCategories, replaceExisting) {
         if (replaceExisting === undefined) replaceExisting = false;
         if (!newCategories.length) return false;
@@ -1704,7 +2531,10 @@
     async function copyAndClear(text) {
         if (text === null || text === undefined) return;
         const stringValue = String(text);
-        if (State.clipboardTimer) { clearTimeout(State.clipboardTimer); State.clipboardTimer = null; }
+        if (State.clipboardTimer) {
+            clearTimeout(State.clipboardTimer);
+            State.clipboardTimer = null;
+        }
         try {
             await navigator.clipboard.writeText(stringValue);
             State.clipboardExpectedValue = stringValue;
@@ -1713,14 +2543,23 @@
                 State.clipboardTimer = null;
                 let currentClipboard = null;
                 let canReadClipboard = true;
-                try { currentClipboard = await navigator.clipboard.readText(); }
-                catch (readError) { canReadClipboard = false; }
+                try {
+                    currentClipboard = await navigator.clipboard.readText();
+                } catch (readError) {
+                    canReadClipboard = false;
+                }
                 if (canReadClipboard && currentClipboard === State.clipboardExpectedValue) {
-                    try { await navigator.clipboard.writeText(''); } catch (clearError) {}
+                    try {
+                        await navigator.clipboard.writeText('');
+                    } catch (clearError) {
+                        // 忽略清空失败
+                    }
                 }
                 State.clipboardExpectedValue = null;
             }, CONFIG.CLIPBOARD_CLEAR_DELAY_MS);
-        } catch(e) { showToast('复制失败，请手动复制', true); }
+        } catch(e) {
+            showToast('复制失败，请手动复制', true);
+        }
     }
 
     // ===================== 自定义确认对话框 =====================
@@ -1764,7 +2603,9 @@
             const previousFocus = document.activeElement;
             const confirmationInput = modal.querySelector('#confirmDialogInput');
             if (confirmationInput) {
-                requestAnimationFrame(function() { try { confirmationInput.focus(); } catch (e) {} });
+                requestAnimationFrame(function() {
+                    try { confirmationInput.focus(); } catch (e) { /* iOS 兼容 */ }
+                });
             }
 
             let removeEscapeListener = null;
@@ -1782,6 +2623,7 @@
                 resolve(result);
             };
             registerActiveModal(cleanupDialog);
+
             removeEscapeListener = attachEscapeToClose(modal, function() { cleanupDialog(false); });
 
             modal.querySelector('#confirmDialogCancel').onclick = function() { cleanupDialog(false); };
@@ -1800,37 +2642,46 @@
             };
 
             if (confirmationInput) {
-                attachEnterToClick(confirmationInput, function() { modal.querySelector('#confirmDialogConfirm').click(); });
+                attachEnterToClick(confirmationInput, function() {
+                    modal.querySelector('#confirmDialogConfirm').click();
+                });
             }
 
-            modal.addEventListener('click', function(event) { if (event.target === modal) cleanupDialog(false); });
+            modal.addEventListener('click', function(event) {
+                if (event.target === modal) cleanupDialog(false);
+            });
         });
     }
 
-    // ===================== 密码生成器 =====================
+    // ===================== 密码生成器（拒绝采样，消除模偏差） =====================
     function generateSecurePassword(length) {
         if (!length) length = CONFIG.GENERATED_PASSWORD_LENGTH;
         if (length < CONFIG.LOGIN_PW_MIN) length = CONFIG.LOGIN_PW_MIN;
         if (length > CONFIG.LOGIN_PW_MAX) length = CONFIG.LOGIN_PW_MAX;
+
         const lowerCaseCharacters = 'abcdefghijklmnopqrstuvwxyz';
         const upperCaseCharacters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
         const numberCharacters = '0123456789';
         const symbolCharacters = '!@#$%^&*()-_=+[]{};:,.<>?';
         const allCharacters = lowerCaseCharacters + upperCaseCharacters + numberCharacters + symbolCharacters;
+
         const passwordCharacters = [];
         passwordCharacters.push(lowerCaseCharacters[secureRandomInt(lowerCaseCharacters.length)]);
         passwordCharacters.push(upperCaseCharacters[secureRandomInt(upperCaseCharacters.length)]);
         passwordCharacters.push(numberCharacters[secureRandomInt(numberCharacters.length)]);
         passwordCharacters.push(symbolCharacters[secureRandomInt(symbolCharacters.length)]);
+
         for (let index = 4; index < length; index++) {
             passwordCharacters.push(allCharacters[secureRandomInt(allCharacters.length)]);
         }
+
         for (let index = passwordCharacters.length - 1; index > 0; index--) {
             const randomIndex = secureRandomInt(index + 1);
             const temporaryCharacter = passwordCharacters[index];
             passwordCharacters[index] = passwordCharacters[randomIndex];
             passwordCharacters[randomIndex] = temporaryCharacter;
         }
+
         return passwordCharacters.join('');
     }
 
@@ -1844,7 +2695,9 @@
         if (returnPassword === undefined) returnPassword = false;
         if (forceReauth === undefined) forceReauth = false;
         if (!State.masterKey) throw new Error('未解锁');
-        if (!forceReauth && !returnPassword && State.lastReauthenticationTime && (Date.now() - State.lastReauthenticationTime) < CONFIG.REAUTH_VALIDITY_MS) return true;
+        if (!forceReauth && !returnPassword && State.lastReauthenticationTime && (Date.now() - State.lastReauthenticationTime) < CONFIG.REAUTH_VALIDITY_MS) {
+            return true;
+        }
         return new Promise(function(resolve) {
             const modal = document.createElement('div');
             modal.className = 'modal';
@@ -1856,7 +2709,10 @@
             const confirmButton = modal.querySelector('#confirmVerify');
             let removeEscapeListener = null;
             let isClosed = false;
-            requestAnimationFrame(function() { try { input.focus(); } catch (e) {} });
+
+            requestAnimationFrame(function() {
+                try { input.focus(); } catch (e) { /* iOS 兼容 */ }
+            });
 
             const cleanup = function(value) {
                 if (isClosed) return;
@@ -1870,7 +2726,10 @@
                 resolve(value);
             };
             registerActiveModal(cleanup);
-            removeEscapeListener = attachEscapeToClose(modal, function() { cleanup(returnPassword ? null : false); });
+
+            removeEscapeListener = attachEscapeToClose(modal, function() {
+                cleanup(returnPassword ? null : false);
+            });
 
             confirmButton.onclick = async function() {
                 const password = input.value;
@@ -1891,7 +2750,8 @@
                     State.verifyFailCount = 0;
                     updateSecurityState({ verifyFailCount: 0 });
                     State.lastReauthenticationTime = Date.now();
-                    cleanup(returnPassword ? password : true);
+                    const result = returnPassword ? password : true;
+                    cleanup(result);
                 } catch(error) {
                     showToast(error.message, true);
                     input.value = '';
@@ -1902,7 +2762,6 @@
             attachEnterToClick(input, function() { confirmButton.click(); });
         });
     }
-
     async function requireReauthentication(actionDesc, force) {
         if (force === undefined) force = false;
         if (!await promptReauthentication(actionDesc, false, force)) throw new Error('验证取消');
@@ -1912,16 +2771,22 @@
     // ===================== 选择框样式辅助 =====================
     function updateSelectPlaceholderColor(selectElement) {
         if (!selectElement) return;
-        if (selectElement.value === '') selectElement.style.color = 'var(--placeholder-color)';
-        else selectElement.style.color = 'var(--text)';
+        if (selectElement.value === '') {
+            selectElement.style.color = 'var(--placeholder-color)';
+        } else {
+            selectElement.style.color = 'var(--text)';
+        }
     }
     function updateAllSelectColors() {
-        document.querySelectorAll('select').forEach(function(select) { updateSelectPlaceholderColor(select); });
+        document.querySelectorAll('select').forEach(function(select) {
+            updateSelectPlaceholderColor(select);
+        });
     }
 
-    // ===================== 密码可见性切换 =====================
+    // ===================== 密码可见性切换辅助函数 =====================
     function togglePasswordVisibility(inputElement, toggleButton, itemId, passwordType) {
         if (!inputElement || !toggleButton) return;
+
         const isCurrentlyPassword = inputElement.type === 'password';
         if (isCurrentlyPassword) {
             const item = State.passwordIdIndex.get(itemId);
@@ -1931,15 +2796,21 @@
             inputElement.value = passwordValue || '';
             toggleButton.innerHTML = '<svg class="icon"><use href="#icon-eye-off"/></svg>';
             toggleButton.setAttribute('aria-label', `隐藏${passwordType === 'login' ? '登录' : '交易'}密码`);
-            if (passwordType === 'login') State.visibleLoginPasswords.add(itemId);
-            else State.visibleTransactionPasswords.add(itemId);
+            if (passwordType === 'login') {
+                State.visibleLoginPasswords.add(itemId);
+            } else {
+                State.visibleTransactionPasswords.add(itemId);
+            }
         } else {
             inputElement.type = 'password';
             inputElement.value = '';
             toggleButton.innerHTML = '<svg class="icon"><use href="#icon-eye"/></svg>';
             toggleButton.setAttribute('aria-label', `显示${passwordType === 'login' ? '登录' : '交易'}密码`);
-            if (passwordType === 'login') State.visibleLoginPasswords.delete(itemId);
-            else State.visibleTransactionPasswords.delete(itemId);
+            if (passwordType === 'login') {
+                State.visibleLoginPasswords.delete(itemId);
+            } else {
+                State.visibleTransactionPasswords.delete(itemId);
+            }
         }
     }
 
@@ -2014,14 +2885,30 @@
         while (i < csvText.length) {
             const char = csvText[i];
             if (char === '"') {
-                if (inQuotes && i + 1 < csvText.length && csvText[i + 1] === '"') { currentField += '"'; i += 2; continue; }
-                else { inQuotes = !inQuotes; i++; continue; }
+                if (inQuotes && i + 1 < csvText.length && csvText[i + 1] === '"') {
+                    currentField += '"';
+                    i += 2;
+                    continue;
+                } else {
+                    inQuotes = !inQuotes;
+                    i++;
+                    continue;
+                }
             }
-            if (char === ',' && !inQuotes) { currentRow.push(currentField); currentField = ''; i++; continue; }
-            if (!inQuotes && (char === '\n' || char === '\r')) {
-                if (char === '\r' && i + 1 < csvText.length && csvText[i + 1] === '\n') i++;
+            if (char === ',' && !inQuotes) {
                 currentRow.push(currentField);
-                if (currentRow.length > 1 || currentRow[0] !== '') rows.push(currentRow);
+                currentField = '';
+                i++;
+                continue;
+            }
+            if (!inQuotes && (char === '\n' || char === '\r')) {
+                if (char === '\r' && i + 1 < csvText.length && csvText[i + 1] === '\n') {
+                    i++;
+                }
+                currentRow.push(currentField);
+                if (currentRow.length > 1 || currentRow[0] !== '') {
+                    rows.push(currentRow);
+                }
                 currentRow = [];
                 currentField = '';
                 i++;
@@ -2032,7 +2919,9 @@
         }
         if (currentField !== '' || currentRow.length > 0) {
             currentRow.push(currentField);
-            if (currentRow.length > 1 || currentRow[0] !== '') rows.push(currentRow);
+            if (currentRow.length > 1 || currentRow[0] !== '') {
+                rows.push(currentRow);
+            }
         }
         return rows;
     }
@@ -2075,16 +2964,24 @@
                 const oldPasswords = State.passwords.map(function(p) { return {...p}; });
                 const oldCategories = [...State.customCategories];
                 const exists = State.customCategories.some(function(c) { return c === newCategory; });
-                if (exists) { showToast('分类名称已存在', true); return; }
+                if (exists) {
+                    showToast('分类名称已存在', true);
+                    return;
+                }
                 const index = State.customCategories.indexOf(oldCategory);
                 if (index !== -1) {
                     State.customCategories.splice(index, 1, newCategory);
                     State.customCategories.sort(function(a, b) { return a.localeCompare(b); });
                 }
-                State.passwords.forEach(function(item) { if (item.category === oldCategory) item.category = newCategory; });
+                State.passwords.forEach(function(item) {
+                    if (item.category === oldCategory) {
+                        item.category = newCategory;
+                    }
+                });
                 State.rebuildIndex();
-                try { await saveEncrypted(); }
-                catch (error) {
+                try {
+                    await saveEncrypted();
+                } catch (error) {
                     State.passwords = oldPasswords;
                     State.customCategories = oldCategories;
                     State.rebuildIndex();
@@ -2138,8 +3035,9 @@
                 removeCategory(category);
                 State.passwords.forEach(function(item) { if (item.category === category) item.category = ''; });
                 State.rebuildIndex();
-                try { await saveEncrypted(); }
-                catch (error) {
+                try {
+                    await saveEncrypted();
+                } catch (error) {
                     State.passwords = oldPasswords;
                     State.customCategories = oldCategories;
                     State.rebuildIndex();
@@ -2181,7 +3079,10 @@
             const input = modal.querySelector('#confirmCategoryInput');
             let removeEscapeListener = null;
             let isClosed = false;
-            requestAnimationFrame(function() { try { input.focus(); } catch (e) {} });
+
+            requestAnimationFrame(function() {
+                try { input.focus(); } catch (e) { /* iOS */ }
+            });
 
             const cleanup = function(result) {
                 if (isClosed) return;
@@ -2199,8 +3100,13 @@
 
             modal.querySelector('#cancelCategoryDeletion').onclick = function() { cleanup(false); };
             modal.querySelector('#confirmCategoryDeletion').onclick = function() {
-                if (input.value.trim() === category) cleanup(true);
-                else { showToast('输入不匹配，取消删除', true); input.value = ''; input.focus(); }
+                if (input.value.trim() === category) {
+                    cleanup(true);
+                } else {
+                    showToast('输入不匹配，取消删除', true);
+                    input.value = '';
+                    input.focus();
+                }
             };
             attachEnterToClick(input, function() { modal.querySelector('#confirmCategoryDeletion').click(); });
         });
@@ -2226,8 +3132,12 @@
             const input = modal.querySelector('#renameCategoryInput');
             let removeEscapeListener = null;
             let isClosed = false;
+
             requestAnimationFrame(function() {
-                try { input.focus(); input.select(); } catch (e) {}
+                try {
+                    input.focus();
+                    input.select();
+                } catch (e) { /* iOS */ }
             });
 
             const cleanup = function(result) {
@@ -2247,8 +3157,15 @@
             modal.querySelector('#cancelRenameCategory').onclick = function() { cleanup(null); };
             modal.querySelector('#confirmRenameCategory').onclick = function() {
                 const newName = input.value.trim();
-                if (!newName) { showToast('分类名称不能为空', true); input.focus(); return; }
-                if (newName === oldCategory) { cleanup(null); return; }
+                if (!newName) {
+                    showToast('分类名称不能为空', true);
+                    input.focus();
+                    return;
+                }
+                if (newName === oldCategory) {
+                    cleanup(null);
+                    return;
+                }
                 cleanup(newName);
             };
             attachEnterToClick(input, function() { modal.querySelector('#confirmRenameCategory').click(); });
@@ -2267,7 +3184,9 @@
                 optionsHtml += `<option value="${Util.escapeAttr(category)}"${selected}>${Util.escapeHtml(category)}</option>`;
             });
             select.innerHTML = optionsHtml;
-            if (currentValue && !categories.includes(currentValue)) select.value = '';
+            if (currentValue && !categories.includes(currentValue)) {
+                select.value = '';
+            }
             updateSelectPlaceholderColor(select);
         };
         updateSelect('inpCategory');
@@ -2282,7 +3201,8 @@
         return Util.escapeHtml(text).replace(regex, '<span class="highlight">$1</span>');
     }
 
-    // ===================== 密码列表渲染 =====================
+    // ===================== 密码列表渲染（虚拟滚动 + 元素池 + 键盘导航） =====================
+
     function fillPasswordItemElement(element, item, keyword) {
         const loginVisible = State.visibleLoginPasswords.has(item.id);
         const transactionVisible = State.visibleTransactionPasswords.has(item.id);
@@ -2334,14 +3254,25 @@
 
         if (loginVisible) {
             const loginInput = element.querySelector('[id="login-' + item.id + '"]');
-            if (loginInput) { loginInput.type = 'text'; loginInput.value = item.loginPassword || ''; }
+            if (loginInput) {
+                loginInput.type = 'text';
+                loginInput.value = item.loginPassword || '';
+            }
         }
         if (transactionVisible && item.transactionPassword) {
             const tranInput = element.querySelector('[id="tran-' + item.id + '"]');
-            if (tranInput) { tranInput.type = 'text'; tranInput.value = item.transactionPassword || ''; }
+            if (tranInput) {
+                tranInput.type = 'text';
+                tranInput.value = item.transactionPassword || '';
+            }
         }
-        if (State.keyboardFocusedItemId === item.id) element.classList.add('keyboard-focus');
-        else element.classList.remove('keyboard-focus');
+
+        if (State.keyboardFocusedItemId === item.id) {
+            element.classList.add('keyboard-focus');
+        } else {
+            element.classList.remove('keyboard-focus');
+        }
+
         return element;
     }
 
@@ -2357,7 +3288,10 @@
         const rowHeight = VirtualScroll.itemHeight + VirtualScroll.gap;
 
         let startRow = Math.max(0, Math.floor(scrollTop / rowHeight) - VirtualScroll.bufferRows);
-        let endRow = Math.min(VirtualScroll.totalRows - 1, Math.floor((scrollTop + containerHeight) / rowHeight) + VirtualScroll.bufferRows);
+        let endRow = Math.min(
+            VirtualScroll.totalRows - 1,
+            Math.floor((scrollTop + containerHeight) / rowHeight) + VirtualScroll.bufferRows
+        );
         if (endRow < startRow) endRow = startRow;
 
         const itemsChanged = items !== VirtualScroll.lastRenderedItemsRef;
@@ -2365,8 +3299,9 @@
         if (!itemsChanged &&
             startRow === VirtualScroll.lastRenderedStartRow &&
             endRow === VirtualScroll.lastRenderedEndRow &&
-            VirtualScroll.renderedItemElements.size > 0) return;
-
+            VirtualScroll.renderedItemElements.size > 0) {
+            return;
+        }
         VirtualScroll.lastRenderedStartRow = startRow;
         VirtualScroll.lastRenderedEndRow = endRow;
         VirtualScroll.lastRenderedItemsRef = items;
@@ -2380,12 +3315,17 @@
         const visibleItemsOrdered = [];
         for (let i = startIndex; i <= endIndex; i++) {
             const item = items[i];
-            if (item) { visibleItemIds.add(item.id); visibleItemsOrdered.push(item); }
+            if (item) {
+                visibleItemIds.add(item.id);
+                visibleItemsOrdered.push(item);
+            }
         }
 
         const toRelease = [];
         VirtualScroll.renderedItemElements.forEach((element, id) => {
-            if (!visibleItemIds.has(id)) toRelease.push(id);
+            if (!visibleItemIds.has(id)) {
+                toRelease.push(id);
+            }
         });
         toRelease.forEach((id) => {
             const element = VirtualScroll.renderedItemElements.get(id);
@@ -2410,10 +3350,16 @@
         const fragment = document.createDocumentFragment();
         visibleItemsOrdered.forEach((item) => {
             const element = VirtualScroll.renderedItemElements.get(item.id);
-            if (element) fragment.appendChild(element);
+            if (element) {
+                fragment.appendChild(element);
+            }
         });
-        if (typeof grid.replaceChildren === 'function') grid.replaceChildren(fragment);
-        else { grid.innerHTML = ''; grid.appendChild(fragment); }
+        if (typeof grid.replaceChildren === 'function') {
+            grid.replaceChildren(fragment);
+        } else {
+            grid.innerHTML = '';
+            grid.appendChild(fragment);
+        }
     }
 
     function handleListScroll() {
@@ -2434,25 +3380,49 @@
         const listContainer = document.getElementById('listContainer');
         if (!listContainer) return;
         if (event.target !== listContainer) return;
+
         const items = VirtualScroll.cachedItems;
         if (!items || !items.length) return;
 
         const rowHeight = VirtualScroll.itemHeight + VirtualScroll.gap;
         let targetIndex = -1;
+
         let currentItemIndex = -1;
-        if (State.keyboardFocusedItemId && State.passwordPositionIndex.has(State.keyboardFocusedItemId)) {
-            currentItemIndex = State.passwordPositionIndex.get(State.keyboardFocusedItemId);
+        if (State.keyboardFocusedItemId) {
+            if (State.passwordPositionIndex.has(State.keyboardFocusedItemId)) {
+                currentItemIndex = State.passwordPositionIndex.get(State.keyboardFocusedItemId);
+            }
         }
 
         switch (event.key) {
-            case 'ArrowDown': event.preventDefault(); targetIndex = currentItemIndex + 1; break;
-            case 'ArrowUp': event.preventDefault(); targetIndex = currentItemIndex < 0 ? items.length - 1 : currentItemIndex - 1; break;
-            case 'Home': event.preventDefault(); targetIndex = 0; break;
-            case 'End': event.preventDefault(); targetIndex = items.length - 1; break;
-            case 'PageDown': event.preventDefault(); targetIndex = Math.min(items.length - 1, (VirtualScroll.lastRenderedStartRow + 3) * VirtualScroll.columns); break;
-            case 'PageUp': event.preventDefault(); targetIndex = Math.max(0, (VirtualScroll.lastRenderedStartRow - 3) * VirtualScroll.columns); break;
-            case 'Tab': return;
-            default: return;
+            case 'ArrowDown':
+                event.preventDefault();
+                targetIndex = currentItemIndex + 1;
+                break;
+            case 'ArrowUp':
+                event.preventDefault();
+                targetIndex = currentItemIndex < 0 ? items.length - 1 : currentItemIndex - 1;
+                break;
+            case 'Home':
+                event.preventDefault();
+                targetIndex = 0;
+                break;
+            case 'End':
+                event.preventDefault();
+                targetIndex = items.length - 1;
+                break;
+            case 'PageDown':
+                event.preventDefault();
+                targetIndex = Math.min(items.length - 1, (VirtualScroll.lastRenderedStartRow + 3) * VirtualScroll.columns);
+                break;
+            case 'PageUp':
+                event.preventDefault();
+                targetIndex = Math.max(0, (VirtualScroll.lastRenderedStartRow - 3) * VirtualScroll.columns);
+                break;
+            case 'Tab':
+                return;
+            default:
+                return;
         }
 
         if (targetIndex < 0) targetIndex = 0;
@@ -2469,15 +3439,20 @@
         const viewTop = listContainer.scrollTop;
         const viewBottom = viewTop + listContainer.clientHeight;
 
-        if (targetTop < viewTop) listContainer.scrollTop = targetTop;
-        else if (targetBottom > viewBottom) listContainer.scrollTop = targetBottom - listContainer.clientHeight;
+        if (targetTop < viewTop) {
+            listContainer.scrollTop = targetTop;
+        } else if (targetBottom > viewBottom) {
+            listContainer.scrollTop = targetBottom - listContainer.clientHeight;
+        }
 
         VirtualScroll.reset();
         renderListOnly();
     }
 
     let renderListOnly = function() {
-        if (State.renderFrameRequest) cancelAnimationFrame(State.renderFrameRequest);
+        if (State.renderFrameRequest) {
+            cancelAnimationFrame(State.renderFrameRequest);
+        }
         State.renderFrameRequest = requestAnimationFrame(function() {
             State.renderFrameRequest = null;
             actualRenderList();
@@ -2540,8 +3515,12 @@
         let containerWidth = listContainer.clientWidth;
         if (containerWidth <= 0) {
             const appContainer = document.getElementById('appContainer');
-            if (appContainer) containerWidth = appContainer.clientWidth - 80;
-            if (containerWidth <= 0) containerWidth = window.innerWidth;
+            if (appContainer) {
+                containerWidth = appContainer.clientWidth - 80;
+            }
+            if (containerWidth <= 0) {
+                containerWidth = window.innerWidth;
+            }
         }
         VirtualScroll.computeLayout(containerWidth, filtered.length);
         VirtualScroll.cachedItems = filtered;
@@ -2620,9 +3599,12 @@
         pushModalOpen();
 
         State.activeEditItemId = item.id;
+
         const previousFocus = document.activeElement;
         const firstInput = modal.querySelector('input');
-        requestAnimationFrame(function() { try { if (firstInput) firstInput.focus(); } catch (e) {} });
+        requestAnimationFrame(function() {
+            try { if (firstInput) firstInput.focus(); } catch (e) { /* iOS */ }
+        });
 
         let removeEscapeListener = null;
         let isClosed = false;
@@ -2631,14 +3613,20 @@
             isClosed = true;
             if (removeEscapeListener) removeEscapeListener();
             const loginPwInput = modal.querySelector('#editLoginPw');
-            if (loginPwInput) { loginPwInput.type = 'password'; loginPwInput.value = ''; }
+            if (loginPwInput) {
+                loginPwInput.type = 'password';
+                loginPwInput.value = '';
+            }
             const toggleLoginBtn = modal.querySelector('#toggleEditLoginVis');
             if (toggleLoginBtn) {
                 toggleLoginBtn.innerHTML = '<svg class="icon"><use href="#icon-eye"/></svg>';
                 toggleLoginBtn.setAttribute('aria-label', '显示登录密码');
             }
             const tranPwInput = modal.querySelector('#editTranPw');
-            if (tranPwInput) { tranPwInput.type = 'password'; tranPwInput.value = ''; }
+            if (tranPwInput) {
+                tranPwInput.type = 'password';
+                tranPwInput.value = '';
+            }
             const toggleTranBtn = modal.querySelector('#toggleEditTranVis');
             if (toggleTranBtn) {
                 toggleTranBtn.innerHTML = '<svg class="icon"><use href="#icon-eye"/></svg>';
@@ -2661,8 +3649,12 @@
         let tranDirty = false;
 
         const editLoginPwInput = modal.querySelector('#editLoginPw');
-        editLoginPwInput.addEventListener('input', function() { loginDirty = true; });
-        modal.querySelector('#editTranPw').addEventListener('input', function() { tranDirty = true; });
+        editLoginPwInput.addEventListener('input', function() {
+            loginDirty = true;
+        });
+        modal.querySelector('#editTranPw').addEventListener('input', function() {
+            tranDirty = true;
+        });
 
         modal.querySelector('#generateEditLoginPwBtn').onclick = function() {
             const generatedPassword = generateSecurePassword(CONFIG.GENERATED_PASSWORD_LENGTH);
@@ -2695,13 +3687,17 @@
 
         modal.querySelector('#toggleEditLoginVis').onclick = function() {
             if (editLoginPwInput.type === 'password') {
-                if (!loginDirty) editLoginPwInput.value = originalLoginPassword;
+                if (!loginDirty) {
+                    editLoginPwInput.value = originalLoginPassword;
+                }
                 editLoginPwInput.type = 'text';
                 this.innerHTML = '<svg class="icon"><use href="#icon-eye-off"/></svg>';
                 this.setAttribute('aria-label', '隐藏登录密码');
             } else {
                 editLoginPwInput.type = 'password';
-                if (!loginDirty) editLoginPwInput.value = '';
+                if (!loginDirty) {
+                    editLoginPwInput.value = '';
+                }
                 this.innerHTML = '<svg class="icon"><use href="#icon-eye"/></svg>';
                 this.setAttribute('aria-label', '显示登录密码');
             }
@@ -2710,13 +3706,17 @@
         modal.querySelector('#toggleEditTranVis').onclick = function() {
             const tranInput = modal.querySelector('#editTranPw');
             if (tranInput.type === 'password') {
-                if (!tranDirty) tranInput.value = originalTransactionPassword;
+                if (!tranDirty) {
+                    tranInput.value = originalTransactionPassword;
+                }
                 tranInput.type = 'text';
                 this.innerHTML = '<svg class="icon"><use href="#icon-eye-off"/></svg>';
                 this.setAttribute('aria-label', '隐藏交易密码');
             } else {
                 tranInput.type = 'password';
-                if (!tranDirty) tranInput.value = '';
+                if (!tranDirty) {
+                    tranInput.value = '';
+                }
                 this.innerHTML = '<svg class="icon"><use href="#icon-eye"/></svg>';
                 this.setAttribute('aria-label', '显示交易密码');
             }
@@ -2737,9 +3737,13 @@
 
             const newName = modal.querySelector('#editName').value.trim();
             let newLoginPassword = editLoginPwInput.value.trim();
-            if (!loginDirty && !newLoginPassword) newLoginPassword = originalLoginPassword;
+            if (!loginDirty && !newLoginPassword) {
+                newLoginPassword = originalLoginPassword;
+            }
             let newTransactionPassword = modal.querySelector('#editTranPw').value.trim();
-            if (!tranDirty && !newTransactionPassword) newTransactionPassword = originalTransactionPassword;
+            if (!tranDirty && !newTransactionPassword) {
+                newTransactionPassword = originalTransactionPassword;
+            }
             if (!newName || !newLoginPassword) return showToast('名称和登录密码不能为空', true);
             if (newLoginPassword.length < CONFIG.LOGIN_PW_MIN || newLoginPassword.length > CONFIG.LOGIN_PW_MAX) return showToast(`登录密码需${CONFIG.LOGIN_PW_MIN}-${CONFIG.LOGIN_PW_MAX}位`, true);
             if (newTransactionPassword && !/^\d{6}$/.test(newTransactionPassword)) return showToast('交易密码必须为6位数字', true);
@@ -2747,10 +3751,14 @@
             const passwordsSnapshot = State.passwords.slice();
             const categoriesSnapshot = [...State.customCategories];
             const currentItemFieldsSnapshot = {
-                name: currentItem.name, username: currentItem.username,
-                loginPassword: currentItem.loginPassword, transactionPassword: currentItem.transactionPassword,
-                email: currentItem.email, phone: currentItem.phone,
-                category: currentItem.category, note: currentItem.note
+                name: currentItem.name,
+                username: currentItem.username,
+                loginPassword: currentItem.loginPassword,
+                transactionPassword: currentItem.transactionPassword,
+                email: currentItem.email,
+                phone: currentItem.phone,
+                category: currentItem.category,
+                note: currentItem.note
             };
 
             const existingItem = State.passwords.find(function(p) { return p.name === newName && p.id !== currentItem.id; });
@@ -2822,10 +3830,14 @@
         const confirmed = await showConfirmDialog({
             title: '导出CSV警告',
             message: '⚠️ CSV 导出为明文，会暴露所有密码。是否继续？',
-            confirmText: '继续导出', cancelText: '取消', isDanger: true
+            confirmText: '继续导出',
+            cancelText: '取消',
+            isDanger: true
         });
         if (!confirmed) return;
-        try { await requireReauthentication('导出CSV', true); } catch(e) { return; }
+        try {
+            await requireReauthentication('导出CSV', true);
+        } catch(e) { return; }
         const headers = ['name', 'username', 'loginPassword', 'transactionPassword', 'category', 'email', 'phone', 'note'];
         const rows = State.passwords.map(function(item) { return headers.map(function(header) { return escapeCsvField(item[header] || ''); }).join(','); });
         const csvContent = '\uFEFF' + [headers.join(',')].concat(rows).join('\n');
@@ -2835,13 +3847,18 @@
     }
 
     async function exportEncryptedBackup() {
-        try { await requireReauthentication('导出加密备份', true); } catch(e) { return; }
+        try {
+            await requireReauthentication('导出加密备份', true);
+        } catch(e) { return; }
         const vaultData = { passwords: State.passwords, customCategories: State.customCategories };
         const exportData = await CryptoModule.encrypt(State.masterKey, vaultData);
         const exportObject = { version: 5, encrypted: true, salt: JSON.parse(localStorage.getItem(CONFIG.STORAGE_SALT)), data: exportData, plainChecksum: exportData.checksum };
         downloadBlob(new Blob([JSON.stringify(exportObject)], { type: 'application/json' }), `静谧密钥_加密备份_${Util.formatTimestampForFilename()}.json`);
-        try { localStorage.setItem(CONFIG.LAST_EXPORT_KEY, String(Date.now())); }
-        catch (error) { console.warn('记录上次导出时间失败:', error); }
+        try {
+            localStorage.setItem(CONFIG.LAST_EXPORT_KEY, String(Date.now()));
+        } catch (error) {
+            console.warn('记录上次导出时间失败:', error);
+        }
         addLog('导出加密备份', '成功');
         showToast('🔒 加密备份已导出');
     }
@@ -2850,10 +3867,14 @@
         const confirmed = await showConfirmDialog({
             title: '导出明文JSON警告',
             message: '⚠️ 明文JSON会暴露所有密码，任何人打开即可查看。是否继续？',
-            confirmText: '继续导出', cancelText: '取消', isDanger: true
+            confirmText: '继续导出',
+            cancelText: '取消',
+            isDanger: true
         });
         if (!confirmed) return;
-        try { await requireReauthentication('导出明文JSON', true); } catch(e) { return; }
+        try {
+            await requireReauthentication('导出明文JSON', true);
+        } catch(e) { return; }
         const exportData = {
             version: 3,
             exportedAt: new Date().toISOString(),
@@ -2873,7 +3894,10 @@
             anchor.download = filename;
             document.body.appendChild(anchor);
             anchor.click();
-            setTimeout(function() { URL.revokeObjectURL(url); anchor.remove(); }, 1500);
+            setTimeout(function() {
+                URL.revokeObjectURL(url);
+                anchor.remove();
+            }, 1500);
         } catch (error) {
             console.error('下载文件失败:', error);
             showToast('下载失败，请重试或检查浏览器权限', true);
@@ -2883,7 +3907,9 @@
     // ===================== 导入功能 =====================
     async function importCSV(file, trustChecked) {
         if (!trustChecked) { showToast('请勾选信任来源', true); return; }
-        try { await requireReauthentication('导入CSV', true); } catch(e) { return; }
+        try {
+            await requireReauthentication('导入CSV', true);
+        } catch(e) { return; }
         if (file.size > CONFIG.MAX_CSV_SIZE_MB * 1024 * 1024) { showToast(`文件不能超过${CONFIG.MAX_CSV_SIZE_MB}MB`, true); return; }
         const text = await file.text();
         const cleanText = text.charCodeAt(0) === 0xFEFF ? text.slice(1) : text;
@@ -2905,7 +3931,9 @@
             const shouldContinue = await showConfirmDialog({
                 title: 'CSV格式警告',
                 message: 'CSV缺少"名称"或"登录密码"列，继续导入可能出错。是否尝试？',
-                confirmText: '继续导入', cancelText: '取消', isDanger: false
+                confirmText: '继续导入',
+                cancelText: '取消',
+                isDanger: false
             });
             if (!shouldContinue) return;
         }
@@ -2937,7 +3965,9 @@
             syncCategoriesFromPasswords();
             showToast('CSV导入完成');
             addLog('导入CSV', `${normalizedItems.length}条`);
-        } catch (error) {}
+        } catch (error) {
+            // applyImport 内部已处理回滚和提示
+        }
     }
 
     async function importFromFile(file, trustChecked) {
@@ -2953,11 +3983,14 @@
                 let decrypted = await CryptoModule.decrypt(key, parsed.data);
                 if (parsed.version >= 4 && parsed.plainChecksum) {
                     const calculatedChecksum = await CryptoModule.computeStringChecksum(JSON.stringify(decrypted));
-                    if (calculatedChecksum !== parsed.plainChecksum) throw new Error('校验和不匹配，文件可能已损坏，已中止导入');
+                    if (calculatedChecksum !== parsed.plainChecksum) {
+                        throw new Error('校验和不匹配，文件可能已损坏，已中止导入');
+                    }
                 }
                 let importedPasswords = [], importedCategories = [];
-                if (Array.isArray(decrypted)) importedPasswords = decrypted;
-                else {
+                if (Array.isArray(decrypted)) {
+                    importedPasswords = decrypted;
+                } else {
                     importedPasswords = decrypted.passwords || [];
                     importedCategories = decrypted.customCategories || [];
                 }
@@ -2976,13 +4009,19 @@
                     replaceCategories = await showConfirmDialog({
                         title: '导入分类',
                         message: '导入文件包含分类库，是否替换当前分类？',
-                        confirmText: '替换', cancelText: '保留当前', isDanger: false
+                        confirmText: '替换',
+                        cancelText: '保留当前',
+                        isDanger: false
                     });
                 }
                 await applyImport(importedPasswords, importedCategories, replaceCategories, true);
-            } catch (error) { showToast('导入失败：' + error.message, true); }
+            } catch (error) {
+                showToast('导入失败：' + error.message, true);
+            }
         } else if (trustChecked && parsed && parsed.passwords && Array.isArray(parsed.passwords)) {
-            try { await requireReauthentication('导入明文JSON', true); } catch(e) { return; }
+            try {
+                await requireReauthentication('导入明文JSON', true);
+            } catch(e) { return; }
             if (parsed.passwords.length > CONFIG.MAX_PASSWORDS) {
                 showToast(`导入文件包含 ${parsed.passwords.length} 条密码，超过上限 ${CONFIG.MAX_PASSWORDS}`, true, 5000);
                 return;
@@ -2991,8 +4030,11 @@
             let replaceCategories = false;
             if (importedCategories.length > 0) {
                 replaceCategories = await showConfirmDialog({
-                    title: '导入分类', message: '导入文件包含分类库，是否替换？',
-                    confirmText: '替换', cancelText: '保留当前', isDanger: false
+                    title: '导入分类',
+                    message: '导入文件包含分类库，是否替换？',
+                    confirmText: '替换',
+                    cancelText: '保留当前',
+                    isDanger: false
                 });
             }
             const baseTime = Date.now();
@@ -3003,7 +4045,9 @@
             });
             await applyImport(importedPasswords, importedCategories, replaceCategories, true);
         } else if (trustChecked && Array.isArray(parsed)) {
-            try { await requireReauthentication('导入明文数组', true); } catch(e) { return; }
+            try {
+                await requireReauthentication('导入明文数组', true);
+            } catch(e) { return; }
             if (!parsed.length) { showToast('文件无数据', true); return; }
             if (parsed.length > CONFIG.MAX_PASSWORDS) {
                 showToast(`文件包含 ${parsed.length} 条密码，超过上限 ${CONFIG.MAX_PASSWORDS}`, true, 5000);
@@ -3013,7 +4057,10 @@
             const shouldImport = await showConfirmDialog({
                 title: '导入预览',
                 message: `预览前5条：<br><pre style="font-size:0.8rem;overflow-x:auto;white-space:pre-wrap;">${Util.escapeHtml(preview)}</pre>是否导入？`,
-                confirmText: '导入', cancelText: '取消', isDanger: false, allowHtml: true
+                confirmText: '导入',
+                cancelText: '取消',
+                isDanger: false,
+                allowHtml: true
             });
             if (shouldImport) {
                 const baseTime = Date.now();
@@ -3035,7 +4082,10 @@
             overwrite = await showConfirmDialog({
                 title: '导入方式',
                 message: '覆盖当前所有密码？<br>确定 = 覆盖，取消 = 合并（跳过重名）',
-                confirmText: '覆盖', cancelText: '合并', isDanger: true, allowHtml: true
+                confirmText: '覆盖',
+                cancelText: '合并',
+                isDanger: true,
+                allowHtml: true
             });
         }
         const previousPasswords = State.passwords.map(function(p) { return {...p}; });
@@ -3121,7 +4171,10 @@
             const inputElement = modal.querySelector('#modalPw');
             let removeEscapeListener = null;
             let isClosed = false;
-            requestAnimationFrame(function() { try { inputElement.focus(); } catch (e) {} });
+
+            requestAnimationFrame(function() {
+                try { inputElement.focus(); } catch (e) { /* iOS */ }
+            });
 
             const cleanup = function(value) {
                 if (isClosed) return;
@@ -3155,7 +4208,9 @@
 
     async function batchDelete() {
         if (!State.selectedIds.size) return;
-        try { await requireReauthentication('批量删除', true); } catch(e) { return; }
+        try {
+            await requireReauthentication('批量删除', true);
+        } catch(e) { return; }
         const confirmationPhrase = `删除${State.selectedIds.size}条`;
         const userConfirmed = await promptForBatchDeletion(confirmationPhrase, State.selectedIds.size);
         if (!userConfirmed) return;
@@ -3168,8 +4223,9 @@
         });
         State.selectedIds.clear();
         State.rebuildIndex();
-        try { await saveEncrypted(); }
-        catch (error) {
+        try {
+            await saveEncrypted();
+        } catch (error) {
             State.passwords = oldPasswords;
             State.rebuildIndex();
             showToast('保存失败：' + error.message, true, 5000);
@@ -3207,7 +4263,10 @@
             const input = modal.querySelector('#confirmBatchDeleteInput');
             let removeEscapeListener = null;
             let isClosed = false;
-            requestAnimationFrame(function() { try { input.focus(); } catch (e) {} });
+
+            requestAnimationFrame(function() {
+                try { input.focus(); } catch (e) { /* iOS */ }
+            });
 
             const cleanup = function(result) {
                 if (isClosed) return;
@@ -3225,8 +4284,13 @@
 
             modal.querySelector('#cancelBatchDelete').onclick = function() { cleanup(false); };
             modal.querySelector('#confirmBatchDelete').onclick = function() {
-                if (input.value.trim() === phrase) cleanup(true);
-                else { showToast('输入不匹配，取消删除', true); input.value = ''; input.focus(); }
+                if (input.value.trim() === phrase) {
+                    cleanup(true);
+                } else {
+                    showToast('输入不匹配，取消删除', true);
+                    input.value = '';
+                    input.focus();
+                }
             };
             attachEnterToClick(input, function() { modal.querySelector('#confirmBatchDelete').click(); });
         });
@@ -3234,13 +4298,17 @@
 
     async function batchMoveCategory(targetCategory) {
         if (!State.selectedIds.size || !targetCategory) return;
-        try { await requireReauthentication('批量移动分类', true); } catch(e) { return; }
+        try {
+            await requireReauthentication('批量移动分类', true);
+        } catch(e) { return; }
+
         const movedCount = State.selectedIds.size;
         const oldPasswords = State.passwords.map(function(p) { return {...p}; });
         State.passwords.forEach(function(item) { if (State.selectedIds.has(item.id)) item.category = targetCategory; });
         State.rebuildIndex();
-        try { await saveEncrypted(); }
-        catch (error) {
+        try {
+            await saveEncrypted();
+        } catch (error) {
             State.passwords = oldPasswords;
             State.rebuildIndex();
             showToast('保存失败：' + error.message, true, 5000);
@@ -3258,7 +4326,9 @@
     }
 
     async function wipeAllPasswords() {
-        try { await requireReauthentication('清空全部密码', true); } catch(e) { return; }
+        try {
+            await requireReauthentication('清空全部密码', true);
+        } catch(e) { return; }
         const userConfirmed = await promptForWipeAll();
         if (!userConfirmed) return;
         const oldPasswords = State.passwords.map(function(p) { return {...p}; });
@@ -3266,8 +4336,9 @@
         State.rebuildIndex();
         State.visibleLoginPasswords.clear();
         State.visibleTransactionPasswords.clear();
-        try { await saveEncrypted(); }
-        catch (error) {
+        try {
+            await saveEncrypted();
+        } catch (error) {
             State.passwords = oldPasswords;
             State.rebuildIndex();
             showToast('保存失败：' + error.message, true, 5000);
@@ -3301,7 +4372,10 @@
             const input = modal.querySelector('#confirmWipeInput');
             let removeEscapeListener = null;
             let isClosed = false;
-            requestAnimationFrame(function() { try { input.focus(); } catch (e) {} });
+
+            requestAnimationFrame(function() {
+                try { input.focus(); } catch (e) { /* iOS */ }
+            });
 
             const cleanup = function(result) {
                 if (isClosed) return;
@@ -3319,8 +4393,13 @@
 
             modal.querySelector('#cancelWipe').onclick = function() { cleanup(false); };
             modal.querySelector('#confirmWipe').onclick = function() {
-                if (input.value.trim() === '清空全部') cleanup(true);
-                else { showToast('输入不匹配，取消清空', true); input.value = ''; input.focus(); }
+                if (input.value.trim() === '清空全部') {
+                    cleanup(true);
+                } else {
+                    showToast('输入不匹配，取消清空', true);
+                    input.value = '';
+                    input.focus();
+                }
             };
             attachEnterToClick(input, function() { modal.querySelector('#confirmWipe').click(); });
         });
@@ -3329,7 +4408,9 @@
     // ===================== 修改主密码 =====================
     async function showChangePasswordModal() {
         let oldPassword;
-        try { oldPassword = await promptReauthentication('修改主密码', true); } catch(e) { return; }
+        try {
+            oldPassword = await promptReauthentication('修改主密码', true);
+        } catch(e) { return; }
         if (!oldPassword || typeof oldPassword !== 'string') return;
         const modal = document.createElement('div');
         modal.className = 'modal';
@@ -3360,7 +4441,10 @@
         });
         let removeEscapeListener = null;
         let isClosed = false;
-        requestAnimationFrame(function() { try { newPasswordInput.focus(); } catch (e) {} });
+
+        requestAnimationFrame(function() {
+            try { newPasswordInput.focus(); } catch (e) { /* iOS */ }
+        });
 
         const closeChangePwModal = function() {
             if (isClosed) return;
@@ -3403,8 +4487,11 @@
         const vaultRaw = localStorage.getItem(CONFIG.STORAGE_VAULT);
         if (!vaultRaw) throw new Error('未找到保险库');
         let decrypted;
-        try { decrypted = await CryptoModule.decrypt(oldKey, JSON.parse(vaultRaw)); }
-        catch (e) { throw new Error('保险库解密失败'); }
+        try {
+            decrypted = await CryptoModule.decrypt(oldKey, JSON.parse(vaultRaw));
+        } catch (e) {
+            throw new Error('保险库解密失败');
+        }
         const oldData = Array.isArray(decrypted) ? { passwords: decrypted, customCategories: [] } : { passwords: decrypted.passwords || [], customCategories: decrypted.customCategories || [] };
 
         const oldBackup = {
@@ -3412,8 +4499,11 @@
             auth: JSON.parse(localStorage.getItem(CONFIG.STORAGE_AUTH)),
             vault: JSON.parse(vaultRaw)
         };
-        try { localStorage.setItem(CONFIG.MIGRATION_BACKUP_KEY, JSON.stringify(oldBackup)); }
-        catch (error) { console.warn('备份旧数据失败，继续修改主密码:', error); }
+        try {
+            localStorage.setItem(CONFIG.MIGRATION_BACKUP_KEY, JSON.stringify(oldBackup));
+        } catch (error) {
+            console.warn('备份旧数据失败，继续修改主密码:', error);
+        }
         const oldMasterKey = State.masterKey;
 
         try {
@@ -3435,13 +4525,17 @@
             State.rebuildIndex();
 
             State.lastReauthenticationTime = 0;
+
             cleanMigrationBackup();
             oldPassword = '';
             addLog('修改主密码', '成功');
 
             if (State.channel) {
-                try { State.channel.postMessage({ type: 'masterPasswordChanged', timestamp: Date.now() }); }
-                catch (error) { console.warn('BroadcastChannel 消息发送失败:', error); }
+                try {
+                    State.channel.postMessage({ type: 'masterPasswordChanged', timestamp: Date.now() });
+                } catch (error) {
+                    console.warn('BroadcastChannel 消息发送失败:', error);
+                }
             }
 
             showToast('✅ 主密码修改成功');
@@ -3459,8 +4553,12 @@
     // ===================== 日志与分类管理界面 =====================
     function showLogs() {
         let logs = [];
-        try { logs = JSON.parse(localStorage.getItem(CONFIG.LOG_STORAGE) || '[]'); }
-        catch (error) { console.warn('日志读取失败:', error); logs = []; }
+        try {
+            logs = JSON.parse(localStorage.getItem(CONFIG.LOG_STORAGE) || '[]');
+        } catch (error) {
+            console.warn('日志读取失败:', error);
+            logs = [];
+        }
         const modal = document.createElement('div');
         modal.className = 'modal';
         modal.innerHTML = `
@@ -3478,8 +4576,12 @@
         const previousFocus = document.activeElement;
         const refreshLogs = function() {
             let newLogs = [];
-            try { newLogs = JSON.parse(localStorage.getItem(CONFIG.LOG_STORAGE) || '[]'); }
-            catch (error) { console.warn('日志刷新读取失败:', error); newLogs = []; }
+            try {
+                newLogs = JSON.parse(localStorage.getItem(CONFIG.LOG_STORAGE) || '[]');
+            } catch (error) {
+                console.warn('日志刷新读取失败:', error);
+                newLogs = [];
+            }
             modal.querySelector('.log-view').innerHTML = newLogs.length ? newLogs.map(function(log) { return `<div>${Util.escapeHtml(log.time)} | ${Util.escapeHtml(log.action)} | ${Util.escapeHtml(log.details)}</div>`; }).join('') : '暂无日志记录';
         };
         let removeEscapeListener = null;
@@ -3500,8 +4602,12 @@
         modal.addEventListener('click', function(e) { if (e.target === modal) closeLogsModal(); });
         modal.querySelector('#exportLogBtn').onclick = function() {
             let data = [];
-            try { data = JSON.parse(localStorage.getItem(CONFIG.LOG_STORAGE) || '[]'); }
-            catch (error) { console.warn('日志导出读取失败:', error); data = []; }
+            try {
+                data = JSON.parse(localStorage.getItem(CONFIG.LOG_STORAGE) || '[]');
+            } catch (error) {
+                console.warn('日志导出读取失败:', error);
+                data = [];
+            }
             downloadBlob(new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' }), `静谧密钥_日志_${Util.formatTimestampForFilename()}.json`);
             showToast('日志已导出');
         };
@@ -3596,7 +4702,10 @@
         removeEscapeListener = attachEscapeToClose(modal, closeModal);
 
         modal.querySelector('#closeCatBtn').onclick = closeModal;
-        modal.addEventListener('click', function(event) { if (event.target === modal) closeModal(); });
+
+        modal.addEventListener('click', function(event) {
+            if (event.target === modal) closeModal();
+        });
 
         modal.querySelector('#addCatBtn').onclick = async function() {
             const name = modal.querySelector('#newCatName').value.trim();
@@ -3624,10 +4733,17 @@
     // ===================== 主题管理 =====================
     function getPreferredInitialTheme() {
         let savedTheme = null;
-        try { savedTheme = localStorage.getItem(CONFIG.THEME_STORAGE); }
-        catch (e) { console.warn('读取主题设置失败:', e); }
-        if (savedTheme && THEMES[savedTheme]) return savedTheme;
-        if (typeof window.matchMedia === 'function' && window.matchMedia('(prefers-color-scheme: dark)').matches) return 'midnight';
+        try {
+            savedTheme = localStorage.getItem(CONFIG.THEME_STORAGE);
+        } catch (e) {
+            console.warn('读取主题设置失败:', e);
+        }
+        if (savedTheme && THEMES[savedTheme]) {
+            return savedTheme;
+        }
+        if (typeof window.matchMedia === 'function' && window.matchMedia('(prefers-color-scheme: dark)').matches) {
+            return 'midnight';
+        }
         return 'ocean';
     }
 
@@ -3636,12 +4752,17 @@
         const theme = THEMES[themeKey];
         if (!theme) return;
         const root = document.documentElement;
-        Object.entries(theme.vars).forEach(function(entry) { root.style.setProperty(entry[0], entry[1]); });
+        Object.entries(theme.vars).forEach(function(entry) {
+            root.style.setProperty(entry[0], entry[1]);
+        });
         root.setAttribute('data-theme-resolved', themeKey);
         State.currentTheme = themeKey;
         if (saveToStorage) {
-            try { localStorage.setItem(CONFIG.THEME_STORAGE, themeKey); }
-            catch (error) { console.warn('主题设置保存失败:', error); }
+            try {
+                localStorage.setItem(CONFIG.THEME_STORAGE, themeKey);
+            } catch (error) {
+                console.warn('主题设置保存失败:', error);
+            }
         }
         const themeButton = document.getElementById('themeSwitcherBtn');
         if (themeButton) themeButton.innerHTML = `<svg class="icon"><use href="#icon-palette"/></svg> ${theme.icon}`;
@@ -3668,6 +4789,7 @@
         });
     }
 
+    // ===================== 搜索防抖 =====================
     function debouncedSearch() {
         if (State.searchDebounceTimer) clearTimeout(State.searchDebounceTimer);
         State.searchDebounceTimer = setTimeout(function() {
@@ -3681,6 +4803,7 @@
         }, CONFIG.SEARCH_DEBOUNCE_MS);
     }
 
+    // ===================== 密码强度指示器 =====================
     function updateStrengthIndicator(indicatorId, textId, password) {
         const container = document.getElementById(indicatorId);
         if (!container) return;
@@ -3689,8 +4812,11 @@
         const textElement = document.getElementById(textId);
         const colors = ['#dc2626', '#f59e0b', '#f59e0b', '#059669', '#059669'];
         segments.forEach(function(segment, index) {
-            if (index < level) segment.style.background = colors[level] || '#dc2626';
-            else segment.style.background = '#e2e8f0';
+            if (index < level) {
+                segment.style.background = colors[level] || '#dc2626';
+            } else {
+                segment.style.background = '#e2e8f0';
+            }
         });
         if (textElement) {
             textElement.innerText = Util.strengthText(level);
@@ -3700,8 +4826,14 @@
 
     // ===================== 主界面渲染 =====================
     let renderApp = function() {
-        if (State.searchDebounceTimer) { clearTimeout(State.searchDebounceTimer); State.searchDebounceTimer = null; }
-        if (State.globalEventController) State.globalEventController.abort();
+        if (State.searchDebounceTimer) {
+            clearTimeout(State.searchDebounceTimer);
+            State.searchDebounceTimer = null;
+        }
+
+        if (State.globalEventController) {
+            State.globalEventController.abort();
+        }
         State.globalEventController = new AbortController();
         const signal = State.globalEventController.signal;
 
@@ -3848,21 +4980,35 @@
         };
 
         const toggleTopBar = (collapse) => {
-            if (collapse === undefined) collapse = !appContainer.classList.contains('top-collapsed');
+            if (collapse === undefined) {
+                collapse = !appContainer.classList.contains('top-collapsed');
+            }
             appContainer.classList.toggle('top-collapsed', collapse);
             requestAnimationFrame(function() {
                 setTimeout(scheduleVirtualReRender, CONFIG.VIRTUAL_LAYOUT_RECOMPUTE_DELAY_MS);
             });
         };
 
-        if (collapseBtn) collapseBtn.addEventListener('click', function(event) { event.stopPropagation(); toggleTopBar(true); });
-        if (expandBtn) expandBtn.addEventListener('click', function(event) { event.stopPropagation(); toggleTopBar(false); });
+        if (collapseBtn) {
+            collapseBtn.addEventListener('click', function(event) {
+                event.stopPropagation();
+                toggleTopBar(true);
+            });
+        }
+        if (expandBtn) {
+            expandBtn.addEventListener('click', function(event) {
+                event.stopPropagation();
+                toggleTopBar(false);
+            });
+        }
 
         const handleResize = function() {
             // v7.8.0：横屏手机不被误判为"桌面"，避免自动展开
             const isMobileLandscape = window.matchMedia('(max-height: 500px) and (orientation: landscape)').matches;
             const isDesktopLayout = window.innerWidth > 640 && !isMobileLandscape;
-            if (isDesktopLayout && appContainer.classList.contains('top-collapsed')) toggleTopBar(false);
+            if (isDesktopLayout && appContainer.classList.contains('top-collapsed')) {
+                toggleTopBar(false);
+            }
             if (VirtualScroll.resizeTimer) clearTimeout(VirtualScroll.resizeTimer);
             VirtualScroll.resizeTimer = setTimeout(function() {
                 VirtualScroll.invalidateItemHeightCache();
@@ -3872,9 +5018,12 @@
             }, CONFIG.VIRTUAL_RESIZE_DEBOUNCE_MS);
         };
         window.addEventListener('resize', handleResize, { signal });
-        window.addEventListener('orientationchange', function() { setTimeout(handleResize, 250); }, { signal });
+        window.addEventListener('orientationchange', function() {
+            setTimeout(handleResize, 250);
+        }, { signal });
 
         appContainer.addEventListener('click', async function(event) {
+            // v7.7.0：鼠标/触摸点击后清除键盘导航视觉残留
             if (State.keyboardFocusedItemId) {
                 State.keyboardFocusedItemId = null;
                 const currentFocused = document.querySelector('.password-item.keyboard-focus');
@@ -3894,7 +5043,9 @@
                     const confirmed = await showConfirmDialog({
                         title: '删除确认',
                         message: `确定删除「${item.name}」吗？`,
-                        confirmText: '删除', cancelText: '取消', isDanger: true
+                        confirmText: '删除',
+                        cancelText: '取消',
+                        isDanger: true
                     });
                     if (confirmed) {
                         const oldPasswords = State.passwords.map(function(p) { return {...p}; });
@@ -3902,8 +5053,9 @@
                         State.visibleLoginPasswords.delete(item.id);
                         State.visibleTransactionPasswords.delete(item.id);
                         State.rebuildIndex();
-                        try { await saveEncrypted(); }
-                        catch (error) {
+                        try {
+                            await saveEncrypted();
+                        } catch (error) {
                             State.passwords = oldPasswords;
                             State.rebuildIndex();
                             showToast('保存失败：' + error.message, true, 5000);
@@ -3946,8 +5098,11 @@
                 const checkbox = event.target;
                 const id = checkbox.dataset.id;
                 if (!id) return;
-                if (checkbox.checked) State.selectedIds.add(id);
-                else State.selectedIds.delete(id);
+                if (checkbox.checked) {
+                    State.selectedIds.add(id);
+                } else {
+                    State.selectedIds.delete(id);
+                }
                 const batchCount = document.getElementById('batchCount');
                 if (batchCount) batchCount.innerText = State.selectedIds.size;
             }
@@ -4008,7 +5163,9 @@
                     if (optionalFields) optionalFields.classList.remove('show');
                     if (toggleOptionalBtn) toggleOptionalBtn.textContent = '更多信息';
                 }
-                requestAnimationFrame(function() { setTimeout(scheduleVirtualReRender, CONFIG.VIRTUAL_LAYOUT_RECOMPUTE_DELAY_MS); });
+                requestAnimationFrame(function() {
+                    setTimeout(scheduleVirtualReRender, CONFIG.VIRTUAL_LAYOUT_RECOMPUTE_DELAY_MS);
+                });
             };
         }
 
@@ -4050,11 +5207,14 @@
             if (State.passwords.length >= CONFIG.MAX_PASSWORDS) return showToast(`已达上限${CONFIG.MAX_PASSWORDS}`, true);
 
             const oldPasswords = State.passwords.map(function(p) { return {...p}; });
+
             const existingItem = State.passwords.find(function(p) { return p.name === name; });
             if (existingItem) {
                 const resolution = await promptDuplicateNameResolution(name, true);
                 if (resolution === 'cancel') return;
-                if (resolution === 'overwrite') State.passwords = State.passwords.filter(function(p) { return p.id !== existingItem.id; });
+                if (resolution === 'overwrite') {
+                    State.passwords = State.passwords.filter(function(p) { return p.id !== existingItem.id; });
+                }
             }
 
             State.passwords.unshift(normalizeItem({
@@ -4069,8 +5229,9 @@
                 createdAt: Date.now()
             }));
             State.rebuildIndex();
-            try { await saveEncrypted(); }
-            catch (error) {
+            try {
+                await saveEncrypted();
+            } catch (error) {
                 State.passwords = oldPasswords;
                 State.rebuildIndex();
                 showToast('保存失败：' + error.message, true, 5000);
@@ -4351,7 +5512,9 @@
             hasAuth = !!localStorage.getItem(CONFIG.STORAGE_AUTH);
             hasVault = !!localStorage.getItem(CONFIG.STORAGE_VAULT);
             initFlag = localStorage.getItem(CONFIG.STORAGE_INIT) === 'true';
-        } catch (e) { console.warn('初始化状态检查失败:', e); }
+        } catch (e) {
+            console.warn('初始化状态检查失败:', e);
+        }
         const anyStored = hasSalt || hasAuth || hasVault;
         const fullyInitialized = initFlag && hasSalt && hasAuth && hasVault;
         const partiallyInitialized = anyStored && !fullyInitialized;
@@ -4372,7 +5535,10 @@
                     const confirmed = await showConfirmDialog({
                         title: '重置保险库',
                         message: '⚠️ 确定重置保险库吗？此操作将清除本地所有密码和设置，且不可恢复！',
-                        confirmText: '重置', cancelText: '取消', isDanger: true, requireConfirmationText: '重置'
+                        confirmText: '重置',
+                        cancelText: '取消',
+                        isDanger: true,
+                        requireConfirmationText: '重置'
                     });
                     if (confirmed) {
                         try {
@@ -4386,7 +5552,9 @@
                             State.reset();
                             showToast('保险库已重置，请重新设置主密码');
                             showAuth();
-                        } catch (error) { showToast('重置失败：' + error.message, true); }
+                        } catch (error) {
+                            showToast('重置失败：' + error.message, true);
+                        }
                     }
                 };
             }
@@ -4432,7 +5600,10 @@
                 });
                 let removeEscapeListener = null;
                 let isClosed = false;
-                requestAnimationFrame(function() { try { passwordInput1.focus(); } catch (e) {} });
+
+                requestAnimationFrame(function() {
+                    try { passwordInput1.focus(); } catch (e) { /* iOS */ }
+                });
 
                 const closeSetupModal = function() {
                     if (isClosed) return;
@@ -4476,7 +5647,9 @@
             const loginPasswordInput = document.getElementById('loginPw');
             const errorDiv = document.getElementById('errorMsg');
             const loginButton = document.getElementById('loginBtn');
-            requestAnimationFrame(function() { try { loginPasswordInput.focus(); } catch (e) {} });
+            requestAnimationFrame(function() {
+                try { loginPasswordInput.focus(); } catch (e) { /* iOS */ }
+            });
             const doLogin = async function() {
                 try {
                     await unlockVault(loginPasswordInput.value);
@@ -4496,7 +5669,10 @@
                             const confirmed = await showConfirmDialog({
                                 title: '重置保险库',
                                 message: '⚠️ 确定重置保险库吗？此操作将清除所有密码和设置，且不可恢复！',
-                                confirmText: '重置', cancelText: '取消', isDanger: true, requireConfirmationText: '重置'
+                                confirmText: '重置',
+                                cancelText: '取消',
+                                isDanger: true,
+                                requireConfirmationText: '重置'
                             });
                             if (confirmed) {
                                 try {
@@ -4510,7 +5686,9 @@
                                     State.reset();
                                     showToast('保险库已重置，请重新设置主密码');
                                     showAuth();
-                                } catch (error) { showToast('重置失败：' + error.message, true); }
+                                } catch (error) {
+                                    showToast('重置失败：' + error.message, true);
+                                }
                             }
                         };
                         errorDiv.after(resetBtn);
@@ -4534,7 +5712,9 @@
     let idleEventsAbortController = null;
 
     function bindIdleEvents() {
-        if (idleEventsAbortController) idleEventsAbortController.abort();
+        if (idleEventsAbortController) {
+            idleEventsAbortController.abort();
+        }
         idleEventsAbortController = new AbortController();
         const signal = idleEventsAbortController.signal;
         const activityEvents = ['click', 'keydown', 'touchstart', 'scroll', 'mousemove'];
@@ -4546,14 +5726,16 @@
         });
     }
 
-    // ===================== 启动 =====================
+    // ===================== 启动（含存储可用性检查） =====================
     function isStorageAvailable() {
         try {
             const testKey = '__serene_storage_test__';
             localStorage.setItem(testKey, '1');
             localStorage.removeItem(testKey);
             return true;
-        } catch (e) { return false; }
+        } catch (e) {
+            return false;
+        }
     }
 
     if (typeof crypto !== 'undefined' && crypto.subtle && (location.protocol === 'https:' || location.hostname === 'localhost' || location.hostname === '127.0.0.1')) {
