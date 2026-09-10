@@ -1,0 +1,13 @@
+﻿{
+    "name": "serene-vault",
+    "version": "9.6.0",
+    "private": true,
+    "type": "commonjs",
+    "description": "静谧·密钥 — 本地安全密码本",
+    "scripts": {
+        "check-dict": "node scripts/check-dict-gaps.js"
+    },
+    "engines": {
+        "node": ">=14"
+    }
+}

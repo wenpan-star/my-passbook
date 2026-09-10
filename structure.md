@@ -3,13 +3,19 @@
 项目根/
 ├── index.html
 ├── jsconfig.json               ← 类型检查配置（checkJs）
+├── package.json                ← Node 项目配置（CommonJS）
 ├── css/
 │   └── styles.css              ← 密码本样式（6 套主题变量）
+├── scripts/
+│   ├── check-dict-gaps.js      ← 拼音字典库缺口校验脚本（一/二/三级字表）
+│   └── data/                   ← 二级/三级字表数据（可选，缺失时跳过）
+│       ├── level2.txt
+│       └── level3.txt
 ├── archive/
 │   └── V8.5.0.html             ← v8.5.0 单文件历史快照（归档，不推荐使用）
 └── js/
     ├── main.js                 ← 启动引导 + 事件订阅
-    ├── config.js               ← 版本 9.4.1
+    ├── config.js               ← 版本 9.6.0
     ├── events.js               ← 事件名常量
     ├── password-strength.js    ← 共享强度条
     ├── pinyin-initials.js      ← 中文拼音首字母生成器（无外部依赖）
@@ -45,24 +51,40 @@
 
 ## 版本沿革
 
-- **v9.4.1**：
-  - **修复关键 BUG**：`pinyin-initials.js` 拼音数据表中 23 个以 `m` 开头的
-    常用汉字（妈麻玛码蚂马骂嘛吗埋买麦卖迈脉瞒馒蛮满蔓曼慢漫）被误放在
-    `l` 分组，导致 `mm` 无法匹配「妈妈」、`mt` 无法匹配「馒头」等。
-  - 已将 23 字从 `l` 分组移入 `m` 分组开头，顺序与原数据一致。
-- **v9.4.0**：
-  - 新增 `js/pinyin-initials.js`：内置约 3000 常用汉字首字母数据表，
-    无外部依赖，符合 CSP `script-src 'self'`。
-  - **只对中文字符生成拼音首字母**；英文、数字、标点完全跳过，
-    按常规文本匹配处理。
-  - `DataState.rebuildIndex()` 为每个条目构建首字母索引
-    （`nameInitials` / `usernameInitials` / `categoryInitials` /
-     `emailInitials` / `phoneInitials` / `noteInitials` / `allInitials`）。
-  - 搜索支持中文拼音首字母匹配：输入 `zfb` 可匹配「支付宝」，
-    输入 `zgyx` 可匹配「中国银行」。
-  - 搜索框占位文案更新为「搜索名称/账号/分类/拼音首字母...」。
-- **v9.3.0**：`CategoryView.open` 添加分类改用 `mutateVault` 事务；
-  `session.js` 跨窗口同步后清理陈旧 UI 状态；`applyImport` 先过滤后截断。
+- **v9.6.0**：
+  - **修复 CSS 语法错误**：`css/styles.css` 中 `.item-actions` 规则重复且
+    首块未闭合，此前会导致其后所有 CSS 规则被解析器吞入。已合并为单条规则。
+  - **重构字典校验脚本**：`scripts/check-dict-gaps.js` 支持
+    一级 / 二级 / 三级字表校验。一级内置；二级 / 三级从
+    `scripts/data/level2.txt` / `level3.txt` 读取，缺失则优雅跳过。
+  - **修复键盘导航越界**：`js/ui-list.js` 的 PageUp / PageDown 在首次
+    渲染前触发时，`lastRenderedStartRow === -1` 会造成目标索引计算错误。
+    引入 `anchorRow = max(0, lastRenderedStartRow)` 作为锚点。
+  - **修复导入回滚不完整**：`js/import-export.js` 的 `applyImport` 快照
+    纳入 `UiState.selectedIds` / `keyboardFocusedItemId`，
+    覆盖模式清空可见集合后失败回滚时能一并恢复。
+  - **修复 visibilitychange 绑定**：`js/session.js` 改用模块级闭包包装，
+    避免 `this` 隐式丢失风险。
+  - **跨窗口同步去抖**：`js/session.js` 的 `vaultUpdated` 消息加入
+    `CONFIG.CROSS_WINDOW_SYNC_DEBOUNCE_MS` 去抖，连续保存只触发一次重载。
+  - **移除冗余清理**：`js/session.js` 的 `lockAndLogout` 移除
+    `querySelectorAll('.modal').remove()`（`Modal.closeAll()` 已处理）。
+  - **移除未使用导入**：`js/ui-toolbar.js` 删除未使用的 `Save` 导入。
+  - **修复模态框关闭钩子**：`js/modal.js` 新增 `onBeforeClose` 钩子，
+    `js/ui-edit-modal.js` 不再 monkey-patch `handle.close`。
+  - **修复 Enter 绑定**：`js/views/auth-view.js` 首次设置主密码时，
+    `#setupNewPw1` 也绑定 Enter。
+  - **bindEnter 跳过 textarea**：`js/modal.js` 的 `bindEnter` 对
+    `<textarea>` 不做 Enter 劫持。
+- **v9.5.1**：
+  - 修复 `package.js` → `package.json` 命名（npm 才能识别）。
+  - `js/pinyin-initials.js` 的 y 分组末尾移除重复的「瑶」。
+  - `scripts/check-dict-gaps.js` 去掉 `node:` 前缀，兼容 Node 14.0.0+。
+  - `structure.md` 被截断部分已补全。
+- **v9.5.0**：合并两批补录共 73 字，新增 `package.json`
+  与 `scripts/check-dict-gaps.js`（CommonJS）。
+- **v9.4.0**：新增 `js/pinyin-initials.js`，支持中文拼音首字母搜索。
+- **v9.3.0**：`CategoryView.open` 添加分类改用 `mutateVault` 事务。
 - **v9.2.2**：清理编辑器项目遗留死代码 + 归档 `V8.5.0.html`。
 - **v9.2.1**：修复 `security.js` 语法错误 + `keepBoth` 分支 + 静态 import `Security`。
 - **v9.2.0**：新增 `jsconfig.json` + JSDoc 类型检查。
@@ -73,12 +95,13 @@
 
 `archive/V8.5.0.html` 是 v8.5.0 单文件版本的历史快照，保留原因：
 
-1. **应急恢复**：若未来模块化版本因意外损坏，可用单文件版本作为最后防线读取同源的 localStorage 数据。
-2. **数据兼容**：与 v9.4.1 使用完全相同的 localStorage 键
+1. **应急恢复**：若未来模块化版本因意外损坏，可用单文件版本作为最后防线
+   读取同源的 localStorage 数据。
+2. **数据兼容**：与 v9.6.0 使用完全相同的 localStorage 键
    （`serene_vault_enc_v3` / `serene_vault_salt_v3` / `serene_vault_auth_v3`
    / `serene_vault_init_v3`），可无缝读写。
 3. **安全差异**：单文件版本 CSP 为 `script-src 'self' 'unsafe-inline'`
-   （因内联 `<script>` 需要），**安全性弱于** v9.4.1 的 `script-src 'self'`。
+   （因内联 `<script>` 需要），**安全性弱于** v9.6.0 的 `script-src 'self'`。
    **不建议**日常使用。
 
 ## 存储键说明
@@ -95,29 +118,15 @@
 | `serene_security_v3` | 安全状态 | 暴力破解计数 / 锁定截止时间 |
 | `serene_migration_backup` | 改密迁移备份 | 崩溃恢复 |
 
-## 搜索功能说明
+## 拼音字典库维护
 
-**支持的匹配方式：**
+### 字典库位置
 
-| 输入 | 匹配目标 | 匹配方式 |
-|---|---|---|
-| `支付宝` | 「支付宝」 | 中文子串 |
-| `支付` | 「支付宝」 | 中文子串 |
-| `zfb` | 「支付宝」 | 中文拼音首字母 |
-| `zgyx` | 「中国银行」 | 中文拼音首字母 |
-| `mm` | 「妈妈」「买卖」「慢慢」 | 中文拼音首字母 |
-| `mt` | 「馒头」 | 中文拼音首字母 |
-| `google` | 「Google」 | 英文子串（原样匹配） |
-| `123` | 「wx123」 | 数字子串（原样匹配） |
+`js/pinyin-initials.js` 中的 `PINYIN_INITIAL_DATA` 常量。
 
-**首字母匹配生效条件：**
+### 缺口校验
 
-1. 查询词为纯 ASCII（仅含 `a-z` / `0-9`）
-2. 条目对应字段包含中文
-3. 中文汉字已收录于 `pinyin-initials.js` 的拼音数据表
-
-**已知限制：**
-
-- 多音字取默认读音（如「行」默认读 `xíng`，不匹配 `háng`）
-- 数据表未收录的生僻字无法通过首字母匹配（仍可通过完整中文匹配）
-- 英文/数字按常规文本子串匹配，不生成首字母缩写
+```bash
+node scripts/check-dict-gaps.js
+# 或
+npm run check-dict

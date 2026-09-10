@@ -1,47 +1,39 @@
 /**
- * pinyin-initials.js — 中文拼音首字母索引生成器
+ * check-dict-gaps.js — 拼音字典库缺口校验脚本（CommonJS）
  *
- * 职责：从任意文本中提取【中文字符】的拼音首字母。
+ * 校验字典库对《通用规范汉字表》一级 / 二级 / 三级字表的覆盖情况。
  *
- * 设计要点：
- *   - 只处理中文字符（CJK 统一表意文字）；英文、数字、标点、Emoji 全部跳过
- *   - 使用内置汉字首字母数据表，无外部依赖，符合 CSP 'self'
- *   - 无 DOM 依赖、无副作用；模块加载时一次性构建反查 Map，查询为 O(1)
- *   - 数据表中未收录的汉字静默跳过，不影响其他字符
+ * 用法：
+ *   node scripts/check-dict-gaps.js
+ *   npm run check-dict
  *
- * 示例：
- *   getInitials('支付宝')          → 'zfb'
- *   getInitials('中国银行')        → 'zgyx'   （"行"默认读 xíng）
- *   getInitials('程兴怡')          → 'cxy'
- *   getInitials('钱雨妍')          → 'qyy'
- *   getInitials('Google Account')  → ''       （纯英文，不生成首字母）
- *   getInitials('支付宝 Alipay')    → 'zfb'    （英文部分跳过）
- *   getInitials('wx123')           → ''       （无中文，不生成）
- *   getInitials('')                → ''
- *   getInitials(null)              → ''
+ * 字表数据：
+ *   一级字表：内置（LEVEL1_BY_INITIAL）
+ *   二级字表：scripts/data/level2.txt
+ *   三级字表：scripts/data/level3.txt
+ *   文件不存在时跳过该级别。
  *
- * v9.5.1：修复 y 分组末尾误重复的「瑶」——原本已存在于 y 分组中间，
- *         v9.4.3 补录时误重复，现移除末尾的重复项。
- * v9.5.0：合并 v9.4.2（35 字）与 v9.4.3（38 字）两批补录共 73 字，
- *         覆盖常用姓名/地名用字缺口。新增按分组：
- *         a：癌矮蔼皑 / b：掰 / c：宸 / h：皓晗昊晖泓 /
- *         j：瑾璟婧珺 / l：岚麟 / m：淼 / n：楠 /
- *         q：琪琦骐淇祺茜 / r：睿芮婼 / s：帅晟姗铄 /
- *         t：婷渟 / w：雯薇 / x：萱馨鑫曦汐禧晞潇璇煊昕 /
- *         y：怡妍瑜玥轶琰旖璎晔昱嫣妤昀钰煜烨焱沅 / z：梓喆
- * v9.4.1：修复 l/m 分组错位——23 个以 m 开头的常用汉字
- *         （妈麻玛码蚂马骂嘛吗埋买麦卖迈脉瞒馒蛮满蔓曼慢漫）
- *         原本误落在 l 分组，已移入 m 分组开头。
- * v9.4.0：新增。为搜索提供中文拼音首字母匹配能力。
+ * v9.6.0：支持二级 / 三级字表校验。去除 node: 前缀（兼容 Node 14.0.0+）。
  */
 
-// ==================== 汉字首字母数据表 ====================
-// 结构：{ 首字母: '该首字母下的所有汉字（连续字符串）' }
-// 未收录的汉字在查询时自动跳过。多音字取常用读音。
-// 注意：同一汉字不会在多个分组重复出现。
+'use strict';
 
-const PINYIN_INITIAL_DATA = {
-    a: '阿啊哀挨哎唉埃艾碍爱隘安鞍氨俺按暗岸胺案肮昂盎凹敖熬翱袄傲奥懊澳癌矮蔼皑',
+const { readFileSync, existsSync } = require('fs');
+const { join, resolve } = require('path');
+
+// ==================== 路径解析 ====================
+
+const PROJECT_ROOT = resolve(__dirname, '..');
+const DICT_FILE_PATH = join(PROJECT_ROOT, 'js', 'pinyin-initials.js');
+const DATA_DIR = join(__dirname, 'data');
+
+// ==================== 一级字表（内置） ====================
+// 《通用规范汉字表》一级字表，按拼音首字母分组。
+// 未收录在基准表中的字不参与比对。
+// 注意：同一汉字不会在多个分组重复出现（已人工核对）。
+
+const LEVEL1_BY_INITIAL = {
+    a: '啊哀挨埃唉哎癌矮艾碍爱隘安氨俺按暗岸胺案肮昂盎凹熬翱袄傲奥懊澳蔼皑',
     b: '八巴扒吧芭疤拔跋把靶坝霸罢爸白百柏摆佰败拜稗斑班搬扳般颁板版扮拌伴瓣半办绊邦帮梆榜膀绑棒磅蚌镑傍谤苞胞包褒剥薄雹保堡饱宝抱报暴豹鲍爆杯碑悲卑北辈背贝钡倍狈备惫焙被奔苯本笨崩绷甭泵蹦迸逼鼻比鄙笔彼碧蓖蔽毕毙毖币庇痹闭敝弊必辟壁臂避陛鞭边编贬扁便变卞辨辩辫遍标彪膘表鳖憋别瘪彬斌濒滨宾摈兵冰柄丙秉饼炳病并玻菠播拨钵波博勃搏铂箔伯帛舶脖膊渤泊驳捕卜哺补埠不布步簿部怖掰',
     c: '擦猜裁材才财睬踩采彩菜蔡餐参蚕残惭惨灿苍舱仓沧藏操糙槽曹草厕策侧册测层蹭插叉茬茶查碴搽察岔差诧拆柴豺搀掺蝉馋谗缠铲产阐颤昌猖场尝常长偿肠厂敞畅唱倡超抄钞朝嘲潮巢吵炒车扯撤掣彻澈郴臣辰尘晨忱沉陈趁衬撑称城橙成呈乘程惩澄诚承逞骋秤吃痴持匙池迟弛驰耻齿侈尺赤翅斥炽充冲虫崇宠抽酬畴踌稠愁筹仇绸瞅丑臭初出橱厨躇锄雏滁除楚础储矗搐触处揣川穿椽传船喘串疮窗幢床闯创吹炊捶锤垂春椿醇唇淳纯蠢戳绰疵茨磁雌辞慈瓷词此刺赐次聪葱囱匆从丛凑粗醋簇促蹿篡窜摧崔催脆瘁粹淬翠村存寸磋撮搓措挫错宸',
     d: '搭达答瘩打大呆歹傣戴带殆代贷袋待逮怠耽担丹单郸掸胆旦氮但惮淡诞弹蛋当挡党荡档刀捣蹈倒岛祷导到稻悼道盗德得的蹬灯登等瞪凳邓堤低滴迪敌笛狄涤翟嫡抵底地蒂第帝弟递缔颠掂滇碘点典靛垫电佃甸店惦奠淀殿碉叼雕凋刁掉吊钓调跌爹碟蝶迭谍叠丁盯叮钉顶鼎锭定订丢东冬董懂动栋侗恫冻洞兜抖斗陡豆逗痘都督毒犊独读堵睹赌杜镀肚度渡妒端短锻段断缎堆兑队对墩吨蹲敦顿囤钝盾遁掇哆多夺垛躲朵跺舵剁惰堕',
@@ -49,7 +41,7 @@ const PINYIN_INITIAL_DATA = {
     f: '发罚筏伐乏阀法珐藩帆番翻樊矾钒繁凡烦反返范贩犯饭泛坊芳方肪房防妨仿访纺放菲非啡飞肥匪诽吠肺废沸费芬酚吩氛分纷坟焚汾粉奋份忿愤粪丰封枫蜂峰锋风疯烽逢冯缝讽奉凤佛否夫敷肤孵扶拂辐幅氟符伏俘服浮涪福袱弗甫抚辅俯釜斧脯腑府腐赴副覆赋复傅付阜父腹负富讣附妇缚咐',
     g: '噶嘎该改概钙盖溉干甘杆柑竿肝赶感秆敢赣冈刚钢缸肛纲岗港杠篙皋高膏羔糕搞镐稿告哥歌搁戈鸽胳疙割革葛格蛤阁隔铬个各给根跟耕更庚羹埂耿梗工攻功恭龚供躬公宫弓巩汞拱贡共钩勾沟苟狗垢构购够辜菇咕箍估沽孤姑鼓古蛊骨谷股故顾固雇刮瓜剐寡挂褂乖拐怪棺关官冠观管馆罐惯灌贯光广逛瑰规圭硅归龟闺轨鬼诡癸桂柜跪贵刽辊滚棍锅郭国果裹过',
     h: '哈骸孩海氦亥害骇酣憨邯韩含涵寒函喊罕翰撼捍旱憾悍焊汗汉夯杭航壕嚎豪毫郝好耗号浩呵喝荷菏核禾和何合盒貉阂河涸赫褐鹤贺嘿黑痕很狠恨哼亨横衡恒轰哄烘虹鸿洪宏弘红喉侯猴吼厚候后呼乎忽瑚壶葫胡蝴狐糊湖弧虎唬护互沪户花哗华猾滑画划化话槐徊怀淮坏欢环桓还缓换患唤痪豢焕涣宦幻荒慌黄磺蝗簧皇凰惶煌晃幌恍谎灰挥辉徽恢蛔回毁悔慧卉惠晦贿秽会烩汇讳诲绘荤昏婚魂浑混豁活伙火获或惑霍货祸皓晗昊晖泓',
-    j: '击圾基机畸稽积箕肌饥迹激讥鸡姬绩缉吉极棘辑籍集及急疾汲即嫉级挤几脊己蓟技冀季伎祭剂悸济寄寂计记既忌际妓继纪嘉枷夹佳家加荚颊贾甲钾假稼价架驾嫁歼监坚尖笺间煎兼肩艰奸缄茧检柬碱硷拣捡简俭剪减荐槛鉴践贱见键箭件健舰剑饯渐溅涧建僵姜将浆江疆蒋桨奖讲匠酱降蕉椒礁焦胶交郊浇骄娇嚼搅铰矫侥脚狡角饺缴绞剿教酵轿较叫窖揭接皆秸街阶截劫节桔杰捷睫竭洁结解姐戒藉芥界借介疥诫届巾筋斤金今津襟紧锦仅谨进靳晋禁近烬浸尽劲荆兢茎睛晶鲸京惊精粳经井警景颈静境敬镜径痉靖竟竞净炯窘揪究纠玖韭久灸九酒厩救旧臼舅咎就疚鞠拘狙疽居驹菊局咀矩举沮聚拒据巨具距踞锯俱句惧炬剧捐鹃娟倦眷卷绢撅攫抉掘倔爵觉决诀绝均菌钧军君峻瑾璟婧珺',
+    j: '击圾基机畸稽积箕肌饥迹激讥鸡姬绩缉吉极棘辑籍集及急疾汲即嫉级挤几脊己蓟技冀季伎祭剂悸济寄寂计记既忌际妓继纪嘉枷夹佳家加荚颊贾甲钾假稼价架驾嫁歼监坚尖笺间煎兼肩艰奸缄茧检柬碱硷拣捡简俭剪减荐槛鉴践贱见键箭件健舰剑饯渐溅涧建僵姜将浆江疆蒋桨奖讲匠酱降蕉椒礁焦胶交郊浇骄娇嚼搅铰矫侥脚狡角饺缴绞剿教酵轿较叫窖揭接皆秸街阶截劫节桔杰捷睫竭洁结解姐戒藉芥界借介疥诫届巾筋斤金今津襟紧锦仅谨进靳晋禁近烬浸尽劲荆兢茎睛晶鲸京惊精粳经井警景颈静境敬镜径痉靖竟竞净炯窘揪究纠玖韭久灸九酒厩救旧臼舅咎就疚鞠拘狙疽居驹菊局咀矩举沮聚拒据巨具距踞锯俱句惧炬剧捐鹃娟倦眷卷绢撅攫抉掘倔爵觉决诀绝均菌钧军君峻珺',
     k: '俊竣浚郡骏喀咖卡咯开揩楷凯慨刊堪勘坎砍看康慷糠扛抗亢炕考拷烤靠坷苛柯棵磕颗科壳咳可渴克刻客课肯啃垦恳坑吭空恐孔控抠口扣寇枯哭窟苦酷库裤夸垮挎跨胯块筷侩快宽款匡筐狂框矿眶旷况亏盔岿窥葵奎魁傀馈愧溃坤昆捆困括扩廓阔',
     l: '垃拉喇蜡腊辣啦莱来赖蓝婪栏拦篮阑兰澜谰揽览懒缆烂滥琅榔狼廊郎朗浪捞劳牢老佬姥酪烙涝勒乐雷镭蕾磊累儡垒擂肋类泪棱楞冷厘梨犁黎篱狸离漓理李里鲤礼莉荔吏栗丽厉励砾历利傈例俐痢立粒沥隶力璃哩俩联莲连镰廉怜涟帘敛脸链恋炼练粮凉梁粱良两辆量晾亮谅撩聊僚疗燎寥辽潦了撂镣廖料列裂烈劣猎琳林磷霖临邻鳞淋凛赁吝拎玲菱零龄铃伶羚凌灵陵岭领另令溜琉榴硫馏留刘瘤流柳六龙聋咙笼窿隆垄拢陇楼娄搂篓漏陋芦卢颅庐炉掳卤虏鲁麓碌露路赂鹿潞禄录陆戮驴吕铝侣旅履屡缕虑氯律率滤绿峦挛孪滦卵乱掠略抡轮仑沦纶论萝螺罗逻锣箩骡裸落洛骆络岚麟',
     m: '妈麻玛码蚂马骂嘛吗埋买麦卖迈脉瞒馒蛮满蔓曼慢漫芒茫盲氓忙莽猫茅锚毛矛铆卯茂冒帽貌贸么玫枚梅酶霉煤没眉媒镁每美昧寐妹媚门闷们萌蒙檬盟锰猛梦孟眯醚靡糜迷谜弥米秘觅泌蜜密幂棉眠绵冕免勉娩缅面苗描瞄藐秒渺庙妙蔑灭民抿皿敏悯闽明螟鸣铭名命谬摸摹蘑模膜磨摩魔抹末莫墨默沫漠寞陌谋牟某拇牡亩姆母墓暮幕募慕木目睦牧穆淼',
@@ -66,93 +58,163 @@ const PINYIN_INITIAL_DATA = {
     z: '匝砸杂栽哉灾宰载再在咱攒暂赞赃脏葬遭糟凿藻枣早澡蚤躁噪造皂灶燥责择则泽贼怎增憎曾赠扎喳渣札轧铡闸眨栅榨咋乍炸诈摘斋宅窄债寨瞻毡詹粘沾盏斩辗崭展蘸栈占战站湛绽樟章彰漳张掌涨杖丈帐账仗胀瘴障招昭找沼赵照罩兆肇召遮折哲蛰辙者锗蔗这浙珍斟真甄砧臻贞针侦枕疹诊震振镇阵蒸挣睁征狰争怔整拯正政帧症郑证芝枝支吱蜘知肢脂汁之织职直植殖执值侄址指止趾只旨纸志挚掷至致置帜峙制智秩稚质炙痔滞治窒中盅忠钟衷终种肿重仲众舟周州洲诌粥轴肘帚咒皱宙昼骤珠株蛛朱猪诸诛逐竹烛煮拄瞩嘱主著柱助蛀贮铸筑住注祝驻抓爪拽专砖转撰赚篆桩庄装妆撞壮状椎锥追赘坠缀谆准捉拙卓桌琢茁酌啄着灼浊兹咨资姿滋淄孜紫仔籽滓子自渍字鬃棕踪宗综总纵邹走奏揍租足卒族祖诅阻组钻纂嘴醉最罪尊遵昨左佐柞做作坐座梓喆'
 };
 
-// ==================== 反查 Map 构建 ====================
-// 模块加载时一次性构建「汉字 → 首字母」Map，查询 O(1)。
-// 若同一字符在多个分组中出现（理论上不应出现），以首次出现为准。
+// ==================== 工具函数 ====================
 
-const CHINESE_CHARACTER_TO_INITIAL_MAP = new Map();
+const HAN_REGEX = /[\u4e00-\u9fff]/;
 
-(function buildChineseCharacterToInitialMap() {
-    const initialLetters = Object.keys(PINYIN_INITIAL_DATA);
-    for (let groupIndex = 0; groupIndex < initialLetters.length; groupIndex++) {
-        const initialLetter = initialLetters[groupIndex];
-        const chineseCharacterString = PINYIN_INITIAL_DATA[initialLetter];
-        if (!chineseCharacterString) continue;
-        for (const chineseCharacter of chineseCharacterString) {
-            if (!CHINESE_CHARACTER_TO_INITIAL_MAP.has(chineseCharacter)) {
-                CHINESE_CHARACTER_TO_INITIAL_MAP.set(chineseCharacter, initialLetter);
+/**
+ * 从任意文本中提取所有汉字并去重。
+ * @param {string} text
+ * @returns {Set<string>}
+ */
+function extractHanCharacters(text) {
+    const set = new Set();
+    for (const character of text) {
+        if (HAN_REGEX.test(character)) set.add(character);
+    }
+    return set;
+}
+
+/**
+ * 从 js/pinyin-initials.js 中提取字典库已收录的汉字。
+ * @returns {Set<string>}
+ */
+function extractDictionaryCharacters() {
+    const sourceText = readFileSync(DICT_FILE_PATH, 'utf-8');
+    const dataBlockMatch = sourceText.match(
+        /const\s+PINYIN_INITIAL_DATA\s*=\s*\{([\s\S]*?)\n\};/
+    );
+    if (!dataBlockMatch) {
+        throw new Error('无法从 pinyin-initials.js 解析 PINYIN_INITIAL_DATA 常量块');
+    }
+
+    const dataBlockBody = dataBlockMatch[1];
+    const characterSet = new Set();
+
+    const groupRegex = /([a-z])\s*:\s*'([^']*)'/g;
+    let match;
+    while ((match = groupRegex.exec(dataBlockBody)) !== null) {
+        for (const character of match[2]) {
+            if (HAN_REGEX.test(character)) characterSet.add(character);
+        }
+    }
+    return characterSet;
+}
+
+/**
+ * 读取外部字表文件（若存在）。
+ * @param {string} filePath
+ * @returns {Set<string>|null}
+ */
+function readExternalLevelFile(filePath) {
+    if (!existsSync(filePath)) return null;
+    const text = readFileSync(filePath, 'utf-8');
+    return extractHanCharacters(text);
+}
+
+/**
+ * 校验单个级别，返回缺口信息。
+ * @param {string} levelName
+ * @param {Set<string>} levelChars
+ * @param {Set<string>} dictChars
+ * @returns {{name: string, total: number, covered: number, missing: string[]}}
+ */
+function checkLevel(levelName, levelChars, dictChars) {
+    const missing = [];
+    for (const character of levelChars) {
+        if (!dictChars.has(character)) missing.push(character);
+    }
+    missing.sort((a, b) => a.codePointAt(0) - b.codePointAt(0));
+    return {
+        name: levelName,
+        total: levelChars.size,
+        covered: levelChars.size - missing.length,
+        missing
+    };
+}
+
+// ==================== 主流程 ====================
+
+function main() {
+    console.log('========================================');
+    console.log('  拼音字典库缺口校验 v9.6.0');
+    console.log('  （一级 / 二级 / 三级字表）');
+    console.log('========================================');
+    console.log('');
+
+    let dictChars;
+    try {
+        dictChars = extractDictionaryCharacters();
+    } catch (error) {
+        console.error('读取字典库失败：', error.message);
+        process.exit(1);
+    }
+
+    console.log(`字典库收录汉字：${dictChars.size} 字`);
+    console.log('');
+
+    const results = [];
+
+    // ---- 一级字表（内置） ----
+    const level1Chars = extractHanCharacters(Object.values(LEVEL1_BY_INITIAL).join(''));
+    results.push(checkLevel('一级字表', level1Chars, dictChars));
+
+    // ---- 二级字表（外部文件） ----
+    const level2Path = join(DATA_DIR, 'level2.txt');
+    const level2Chars = readExternalLevelFile(level2Path);
+    if (level2Chars) {
+        results.push(checkLevel('二级字表', level2Chars, dictChars));
+    } else {
+        console.log(`[跳过] 二级字表：未找到 ${level2Path}`);
+    }
+
+    // ---- 三级字表（外部文件） ----
+    const level3Path = join(DATA_DIR, 'level3.txt');
+    const level3Chars = readExternalLevelFile(level3Path);
+    if (level3Chars) {
+        results.push(checkLevel('三级字表', level3Chars, dictChars));
+    } else {
+        console.log(`[跳过] 三级字表：未找到 ${level3Path}`);
+    }
+
+    console.log('');
+
+    let totalMissing = 0;
+
+    results.forEach(result => {
+        const rate = result.total > 0
+            ? ((result.covered / result.total) * 100).toFixed(2)
+            : '100.00';
+        console.log(`【${result.name}】`);
+        console.log(`  基准：${result.total} 字`);
+        console.log(`  已覆盖：${result.covered} 字`);
+        console.log(`  缺失：${result.missing.length} 字`);
+        console.log(`  覆盖率：${rate}%`);
+        if (result.missing.length > 0) {
+            const missingText = result.missing.join('');
+            console.log('  缺失字：');
+            for (let index = 0; index < missingText.length; index += 80) {
+                console.log('    ' + missingText.slice(index, index + 80));
             }
         }
+        console.log('');
+        totalMissing += result.missing.length;
+    });
+
+    console.log('========================================');
+    if (totalMissing === 0) {
+        console.log('✅ 所有已加载字表均已完全覆盖');
+        process.exit(0);
+    } else {
+        console.log(`❌ 共缺失 ${totalMissing} 字，请补齐字典库`);
+        console.log('');
+        console.log('提示：');
+        console.log('  1. 将缺失字追加到 js/pinyin-initials.js 对应分组的末尾');
+        console.log('  2. 追加时注意核对首字母，避免误放');
+        console.log('  3. 多音字取常用读音（如「行」取 x，不取 h）');
+        console.log('  4. 同一汉字不要在多分组重复出现');
+        process.exit(1);
     }
-})();
-
-// ==================== 字符判定 ====================
-
-/**
- * 判断单个字符是否是 CJK 统一表意文字。
- * 覆盖范围：CJK 扩展 A（U+3400-4DBF）、CJK 基本区（U+4E00-9FFF）、
- *          CJK 兼容表意文字（U+F900-FAFF）。
- *
- * @param {string} character 单个字符
- * @returns {boolean}
- */
-function isChineseCharacter(character) {
-    if (!character) return false;
-    const codePoint = character.codePointAt(0);
-    if (codePoint === undefined) return false;
-    return (codePoint >= 0x3400 && codePoint <= 0x4DBF) ||
-           (codePoint >= 0x4E00 && codePoint <= 0x9FFF) ||
-           (codePoint >= 0xF900 && codePoint <= 0xFAFF);
 }
 
-// ==================== 主函数 ====================
-
-/**
- * 从文本中提取中文字符的拼音首字母。
- *
- * 处理规则：
- *   - 中文汉字：若在数据表中，追加其拼音首字母（小写）
- *   - 中文汉字但不在数据表中：静默跳过
- *   - 英文 / 数字 / 标点 / 空格 / Emoji：全部跳过
- *
- * @param {*} text 任意输入（会自动转为字符串）
- * @returns {string} 小写首字母字符串；若无中文则为空字符串
- */
-export function getInitials(text) {
-    if (text === null || text === undefined) return '';
-
-    const sourceText = String(text);
-    if (!sourceText) return '';
-
-    let result = '';
-
-    for (const character of sourceText) {
-        if (!isChineseCharacter(character)) continue;
-
-        const initialLetter = CHINESE_CHARACTER_TO_INITIAL_MAP.get(character);
-        if (initialLetter) {
-            result += initialLetter;
-        }
-    }
-
-    return result;
-}
-
-/**
- * 判断某字符是否已收录在拼音数据表中。
- * 仅用于测试与调试，业务代码无需调用。
- *
- * @param {string} character
- * @returns {boolean}
- */
-export function hasChineseCharacterInitial(character) {
-    return CHINESE_CHARACTER_TO_INITIAL_MAP.has(character);
-}
-
-/**
- * 返回拼音数据表已收录的汉字总数。仅用于测试与调试。
- * @returns {number}
- */
-export function getChineseCharacterInitialMapSize() {
-    return CHINESE_CHARACTER_TO_INITIAL_MAP.size;
-}
+main();

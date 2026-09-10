@@ -5,9 +5,10 @@
  * ListRenderer：列表过滤、排序、渲染、事件处理。
  * 键盘导航：ArrowUp/Down/Home/End/PageUp/PageDown。
  *
- * v9.4.0：getFilteredAndSorted 支持中文拼音首字母匹配。
- *         纯 ASCII 查询词（如 zfb）会同时匹配普通文本与中文首字母索引；
- *         含中文的查询词仅走普通文本匹配。
+ * v9.6.0：
+ *   - 修复键盘 PageUp / PageDown 在首帧渲染前触发时，因
+ *     lastRenderedStartRow === -1 造成的目标索引越界问题。
+ *     引入 anchorRow = max(0, lastRenderedStartRow) 作为锚点。
  */
 
 import { CONFIG } from './config.js';
@@ -495,6 +496,9 @@ export const ListRenderer = {
 
     /**
      * 键盘导航。
+     *
+     * v9.6.0：PageUp / PageDown 使用 Math.max(0, lastRenderedStartRow) 作为锚点，
+     * 避免首次渲染前 lastRenderedStartRow === -1 造成目标索引越界。
      */
     handleKeydown(event) {
         const listContainer = document.getElementById('listContainer');
@@ -510,6 +514,9 @@ export const ListRenderer = {
         if (UiState.keyboardFocusedItemId && DataState.passwordPositionIndex.has(UiState.keyboardFocusedItemId)) {
             currentItemIndex = DataState.passwordPositionIndex.get(UiState.keyboardFocusedItemId);
         }
+
+        // v9.6.0：以有效行号作为 PageUp / PageDown 的锚点。
+        const anchorRow = Math.max(0, VirtualScroll.lastRenderedStartRow);
 
         switch (event.key) {
             case 'ArrowDown':
@@ -530,11 +537,17 @@ export const ListRenderer = {
                 break;
             case 'PageDown':
                 event.preventDefault();
-                targetIndex = Math.min(items.length - 1, (VirtualScroll.lastRenderedStartRow + 3) * VirtualScroll.columns);
+                targetIndex = Math.min(
+                    items.length - 1,
+                    (anchorRow + 3) * VirtualScroll.columns
+                );
                 break;
             case 'PageUp':
                 event.preventDefault();
-                targetIndex = Math.max(0, (VirtualScroll.lastRenderedStartRow - 3) * VirtualScroll.columns);
+                targetIndex = Math.max(
+                    0,
+                    (anchorRow - 3) * VirtualScroll.columns
+                );
                 break;
             case 'Tab':
                 return;

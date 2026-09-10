@@ -5,7 +5,7 @@
  * SESSION_UNLOCKED → 渲染主界面 + 启动跨窗口同步 + 空闲监控。
  * SESSION_LOCKED → 切换登录界面。
  *
- * v9.4.1：版本号更新至 9.4.1。
+ * v9.5.1：版本号更新至 9.5.1。
  */
 
 import { CONFIG, THEMES } from './config.js';

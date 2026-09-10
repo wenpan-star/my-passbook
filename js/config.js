@@ -3,11 +3,11 @@
  *
  * 本模块只导出纯数据，无任何副作用、无任何 DOM 依赖。
  *
- * v9.4.1：版本号更新至 9.4.1。
+ * v9.6.0：版本号更新至 9.6.0（配合字典校验脚本多级重构、CSS 语法错误修复）。
  */
 
 export const CONFIG = Object.freeze({
-    APP_VERSION: '9.4.1',
+    APP_VERSION: '9.6.0',
 
     // ---- localStorage 键名 ----
     STORAGE_VAULT: 'serene_vault_enc_v3',
@@ -43,6 +43,7 @@ export const CONFIG = Object.freeze({
     BASE_DELAY_MS: 1000,
     LOCK_DURATION_INCREMENT_MS: 60000,
     CLIPBOARD_CLEAR_DELAY_MS: 10000,
+    CROSS_WINDOW_SYNC_DEBOUNCE_MS: 150,
 
     // ---- 搜索 ----
     SEARCH_DEBOUNCE_MS: 300,

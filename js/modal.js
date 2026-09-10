@@ -3,6 +3,11 @@
  *
  * 统一实现：模态框栈、ESC 只关闭最顶层、焦点恢复、生命周期。
  * 重新认证时动态 import('./auth.js') 打破循环依赖。
+ *
+ * v9.6.0：
+ *   - 新增 onBeforeClose 钩子，替代 ui-edit-modal.js 中原本的 handle.close
+ *     monkey-patch，避免破坏 Modal._stack 的引用一致性。
+ *   - bindEnter 跳过 <textarea>，避免劫持用户在多行输入框中的换行意图。
  */
 
 import { Util } from './util.js';
@@ -86,6 +91,16 @@ export const Modal = {
             if (isClosed) return;
             isClosed = true;
 
+            // v9.6.0：onBeforeClose 在移除 DOM 之前调用，可用于清理输入内容、
+            // 恢复 type=password 等（替代 monkey-patch handle.close 的旧实现）。
+            if (typeof optionObject.onBeforeClose === 'function') {
+                try {
+                    optionObject.onBeforeClose(handle);
+                } catch (error) {
+                    console.error('模态框 onBeforeClose 异常:', error);
+                }
+            }
+
             if (removeEscapeListener) {
                 removeEscapeListener();
                 removeEscapeListener = null;
@@ -158,11 +173,15 @@ export const Modal = {
 
     /**
      * 为输入框绑定 Enter 键触发某个点击目标。
+     *
+     * v9.6.0：跳过 <textarea>，避免劫持多行输入框的换行意图。
+     *
      * @param {HTMLElement} inputElement
      * @param {HTMLElement|Function} clickTarget
      */
     bindEnter(inputElement, clickTarget) {
         if (!inputElement) return;
+        if (inputElement.tagName === 'TEXTAREA') return;
         inputElement.addEventListener('keydown', function(event) {
             if (event.isComposing || event.keyCode === 229) return;
             if (event.key === 'Enter') {

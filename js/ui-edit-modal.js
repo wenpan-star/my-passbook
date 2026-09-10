@@ -2,11 +2,8 @@
  * ui-edit-modal.js — 编辑密码模态框
  *
  * 使用共享的 updateStrengthIndicator；写操作走 mutateVault 事务。
- *
- * v9.2.1：修复 Dialog.duplicateName 返回 keepBoth（另存为）时未处理的分支。
- *         此前若用户选择「保留两者（另存为）」，代码会直接把 currentItem.name
- *         改成 newName，导致两个条目同名。现引入 finalName，通过
- *         Util.generateUniqueName 生成不冲突的新名称（如 "name (1)"）。
+ * 关闭时通过 Modal 的 onBeforeClose 钩子清理密码字段（v9.6.0 起不再 monkey-patch
+ * handle.close，避免破坏 Modal._stack 的引用一致性）。
  */
 
 import { CONFIG } from './config.js';
@@ -167,16 +164,20 @@ export const EditModal = {
                     categorySelect.addEventListener('change', updateColor);
                 }
 
-                const originalClose = handle.close.bind(handle);
-                handle.close = function(result) {
-                    const loginPwField = this.querySelector('#editLoginPw');
-                    if (loginPwField) { loginPwField.type = 'password'; loginPwField.value = ''; }
-                    const tranPwField = this.querySelector('#editTranPw');
-                    if (tranPwField) { tranPwField.type = 'password'; tranPwField.value = ''; }
-                    originalClose(result);
-                };
-
                 Modal.bindEnter(handle.querySelector('#editName'), handle.querySelector('#saveEditBtn'));
+            },
+            // v9.6.0：改用 onBeforeClose 钩子，关闭前清空密码字段并还原 type。
+            onBeforeClose: handle => {
+                const loginPwField = handle.querySelector('#editLoginPw');
+                if (loginPwField) {
+                    loginPwField.type = 'password';
+                    loginPwField.value = '';
+                }
+                const tranPwField = handle.querySelector('#editTranPw');
+                if (tranPwField) {
+                    tranPwField.type = 'password';
+                    tranPwField.value = '';
+                }
             },
             onClose: () => {
                 UiState.activeEditItemId = null;
@@ -189,11 +190,6 @@ export const EditModal = {
 
     /**
      * 处理保存（走 mutateVault 事务）。
-     *
-     * v9.2.1：修复 keepBoth 分支。
-     * @param {object} handle
-     * @param {object} originalItem
-     * @param {object} editState
      */
     async _handleSave(handle, originalItem, editState) {
         const currentItem = DataState.passwordIdIndex.get(originalItem.id);
@@ -235,7 +231,6 @@ export const EditModal = {
         };
 
         let overwrittenItemIdToCleanup = null;
-        // v9.2.1：引入 finalName，处理 keepBoth（另存为）分支。
         let finalName = newName;
 
         const existingItem = DataState.passwords.find(p => p.name === newName && p.id !== currentItem.id);
@@ -245,7 +240,6 @@ export const EditModal = {
             if (resolution === 'overwrite') {
                 overwrittenItemIdToCleanup = existingItem.id;
             } else if (resolution === 'keepBoth') {
-                // 为当前条目生成不冲突的新名称，避免出现两个同名条目
                 finalName = Util.generateUniqueName(newName, currentItem.id, DataState.passwords);
             }
         }

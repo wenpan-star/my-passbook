@@ -4,11 +4,12 @@
  * 空闲锁定 / 页面隐藏锁定 / 跨窗口同步 / 手动锁定。
  * 锁定时 emit(Events.SESSION_LOCKED)，由 main.js 切换登录界面。
  *
- * v9.3.0：
- *   - reloadVaultFromStorage 增加陈旧 UI 状态清理：跨窗口同步后，
- *     visibleLoginPasswords / visibleTransactionPasswords / selectedIds /
- *     keyboardFocusedItemId 中引用已删除条目的 ID 会被自动清除，
- *     避免内存泄漏与错误选中状态。
+ * v9.6.0：
+ *   - visibilitychange 监听器改为闭包包装（避免 this 隐式丢失风险）。
+ *   - 跨窗口 vaultUpdated 消息加入去抖（CONFIG.CROSS_WINDOW_SYNC_DEBOUNCE_MS），
+ *     连续保存只做一次全量重载与重渲染。
+ *   - lockAndLogout 移除冗余的 .modal querySelectorAll 清理
+ *     （Modal.closeAll() 已负责移除所有模态）。
  */
 
 import { CONFIG } from './config.js';
@@ -24,6 +25,19 @@ import {
     resetPasswordVisibilityButtons,
     updateAllSelectColors
 } from './views/helpers.js';
+
+/**
+ * 跨窗口同步去抖句柄。
+ * @type {number|null}
+ */
+let crossWindowSyncDebounceTimer = null;
+
+/**
+ * visibilitychange 处理器（模块级，确保 add/remove 引用一致）。
+ */
+function handleVisibilityChange() {
+    Session.onVisibilityChange();
+}
 
 /**
  * 清理 UiState 中引用已删除条目的陈旧 ID。
@@ -99,7 +113,6 @@ async function reloadVaultFromStorage() {
 
         DataState.rebuildIndex();
 
-        // v9.3.0：清理陈旧 UI 引用，避免内存泄漏与错误选中状态
         const validItemIds = new Set(DataState.passwords.map(item => item.id));
         cleanupStaleUiReferences(validItemIds);
 
@@ -110,9 +123,58 @@ async function reloadVaultFromStorage() {
     }
 }
 
+/**
+ * 处理单条 vaultUpdated 消息（去抖后执行）。
+ */
+async function processVaultUpdatedMessage() {
+    if (
+        UiState.activeEditItemId &&
+        typeof UiState.activeEditModalCleanup === 'function'
+    ) {
+        Toast.show(
+            '⚠️ 其他窗口已更新数据，当前编辑将被关闭',
+            { isError: true, duration: 3000 }
+        );
+        UiState.activeEditModalCleanup();
+    }
+
+    if (UiState.addSectionVisible) {
+        const addSection = document.getElementById('addSection');
+        if (addSection && addSection.style.display !== 'none') {
+            if (hasUnsavedAddContent()) {
+                Toast.show(
+                    '⚠️ 其他窗口已更新数据，未保存的添加内容将被丢弃',
+                    { isError: true, duration: 3000 }
+                );
+                addSection.style.display = 'none';
+                UiState.addSectionVisible = false;
+                const chevron = document.getElementById('addToggleChevron');
+                if (chevron) chevron.style.transform = 'rotate(0deg)';
+                [
+                    'inpName', 'inpUsername', 'inpLoginPw', 'inpTranPw',
+                    'inpEmail', 'inpPhone', 'inpCategory', 'inpNote'
+                ].forEach(fieldId => {
+                    const element = document.getElementById(fieldId);
+                    if (element) element.value = '';
+                });
+                resetPasswordVisibilityButtons();
+                updateAllSelectColors();
+            }
+        }
+    }
+
+    const reloaded = await reloadVaultFromStorage();
+    if (reloaded) {
+        EventBus.emit(Events.VAULT_CHANGED, { source: 'crossWindow' });
+        Toast.show('🔄 数据已从另一窗口同步');
+    }
+}
+
 export const Session = {
     /**
      * 建立跨窗口同步通道。
+     *
+     * v9.6.0：vaultUpdated 消息去抖，连续保存只触发一次全量重载。
      */
     setupCrossWindowSync() {
         if (UiState.channel) {
@@ -128,48 +190,16 @@ export const Session = {
                 if (!event.data) return;
 
                 if (event.data.type === 'vaultUpdated') {
-                    if (
-                        UiState.activeEditItemId &&
-                        typeof UiState.activeEditModalCleanup === 'function'
-                    ) {
-                        Toast.show(
-                            '⚠️ 其他窗口已更新数据，当前编辑将被关闭',
-                            { isError: true, duration: 3000 }
-                        );
-                        UiState.activeEditModalCleanup();
+                    // v9.6.0：去抖，连续保存只处理一次。
+                    if (crossWindowSyncDebounceTimer) {
+                        clearTimeout(crossWindowSyncDebounceTimer);
                     }
-
-                    if (UiState.addSectionVisible) {
-                        const addSection = document.getElementById('addSection');
-                        if (addSection && addSection.style.display !== 'none') {
-                            if (hasUnsavedAddContent()) {
-                                Toast.show(
-                                    '⚠️ 其他窗口已更新数据，未保存的添加内容将被丢弃',
-                                    { isError: true, duration: 3000 }
-                                );
-                                addSection.style.display = 'none';
-                                UiState.addSectionVisible = false;
-                                const chevron = document.getElementById('addToggleChevron');
-                                if (chevron) chevron.style.transform = 'rotate(0deg)';
-                                [
-                                    'inpName', 'inpUsername', 'inpLoginPw', 'inpTranPw',
-                                    'inpEmail', 'inpPhone', 'inpCategory', 'inpNote'
-                                ].forEach(fieldId => {
-                                    const element = document.getElementById(fieldId);
-                                    if (element) element.value = '';
-                                });
-                                resetPasswordVisibilityButtons();
-                                updateAllSelectColors();
-                            }
-                        }
-                    }
-
-                    const reloaded = await reloadVaultFromStorage();
-                    if (reloaded) {
-                        EventBus.emit(Events.VAULT_CHANGED, { source: 'crossWindow' });
-                        Toast.show('🔄 数据已从另一窗口同步');
-                    }
+                    crossWindowSyncDebounceTimer = setTimeout(() => {
+                        crossWindowSyncDebounceTimer = null;
+                        processVaultUpdatedMessage();
+                    }, CONFIG.CROSS_WINDOW_SYNC_DEBOUNCE_MS);
                 } else if (event.data.type === 'masterPasswordChanged') {
+                    // 主密码变更属安全关键事件，立即处理，不去抖。
                     Toast.show(
                         '⚠️ 主密码已在其他窗口修改，即将锁定',
                         { isError: true, duration: 3000 }
@@ -220,8 +250,9 @@ export const Session = {
         UiState.idleLastScheduleTime = 0;
         Session.scheduleIdleLock();
 
-        document.removeEventListener('visibilitychange', Session.onVisibilityChange);
-        document.addEventListener('visibilitychange', Session.onVisibilityChange);
+        // v9.6.0：使用模块级 handleVisibilityChange 包装，避免 this 隐式丢失。
+        document.removeEventListener('visibilitychange', handleVisibilityChange);
+        document.addEventListener('visibilitychange', handleVisibilityChange);
     },
 
     /**
@@ -251,7 +282,7 @@ export const Session = {
      * 停止空闲监控（解绑 visibilitychange）。
      */
     stopIdleMonitor() {
-        document.removeEventListener('visibilitychange', Session.onVisibilityChange);
+        document.removeEventListener('visibilitychange', handleVisibilityChange);
         if (UiState.idleTimer) {
             clearTimeout(UiState.idleTimer);
             UiState.idleTimer = null;
@@ -264,9 +295,16 @@ export const Session = {
 
     /**
      * 锁定并登出。
+     *
+     * v9.6.0：移除冗余的 .modal querySelectorAll 清理。
      */
     lockAndLogout() {
         Session.stopIdleMonitor();
+
+        if (crossWindowSyncDebounceTimer) {
+            clearTimeout(crossWindowSyncDebounceTimer);
+            crossWindowSyncDebounceTimer = null;
+        }
 
         if (UiState.channel) {
             UiState.channel.close();
@@ -282,7 +320,6 @@ export const Session = {
         }
 
         Modal.closeAll();
-        document.querySelectorAll('.modal').forEach(modalElement => modalElement.remove());
 
         DataState.reset();
         AuthState.reset();

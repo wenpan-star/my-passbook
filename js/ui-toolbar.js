@@ -1,10 +1,7 @@
 /**
  * ui-toolbar.js — 工具栏：主题切换、日志、分类管理、导出、导入
  *
- * v9.3.0：
- *   - CategoryView.open 添加分类改用 mutateVault 事务，去除手动回滚逻辑，
- *     避免 Category.add 内部排序/去重导致回滚不完整。
- *   - 重命名/删除分类继续走 mutateVault。
+ * v9.6.0：移除未使用的 Save 导入。
  */
 
 import { CONFIG, THEMES } from './config.js';
@@ -16,7 +13,6 @@ import { Toast } from './toast.js';
 import { Log } from './log.js';
 import { Category } from './category.js';
 import { ImportExport } from './import-export.js';
-import { Save } from './save.js';
 import { VirtualScroll } from './ui-list.js';
 import { Events } from './events.js';
 import { mutateVault } from './mutation.js';
@@ -159,7 +155,6 @@ export const CategoryView = {
 
                 handle.querySelector('#closeCatBtn').onclick = () => handle.close();
 
-                // v9.3.0：添加分类走 mutateVault 事务，失败自动回滚
                 handle.querySelector('#addCatBtn').onclick = async () => {
                     const newCategoryName = handle.querySelector('#newCatName').value.trim();
                     if (!newCategoryName) {

@@ -3,6 +3,9 @@
  *
  * 首次使用 / 登录 / 数据损坏三态；首次设置对话框。
  * 登录成功后由 main.js 订阅 SESSION_UNLOCKED 触发 renderApp。
+ *
+ * v9.6.0：首次设置主密码对话框中，#setupNewPw1 也绑定 Enter，
+ *         两个输入框均可用 Enter 触发提交。
  */
 
 import { CONFIG } from '../config.js';
@@ -203,6 +206,8 @@ export function showAuth() {
 
 /**
  * 首次使用：设置主密码对话框。
+ *
+ * v9.6.0：两个密码输入框都绑定 Enter 触发创建按钮。
  */
 export function showSetupDialog() {
     Modal.open({
@@ -252,13 +257,20 @@ export function showSetupDialog() {
         ],
         onOpen: handle => {
             const passwordInput1 = handle.querySelector('#setupNewPw1');
+            const passwordInput2 = handle.querySelector('#setupNewPw2');
+            const confirmButton = handle.querySelector('#confirmSetupBtn');
+
             passwordInput1.addEventListener('input', () => {
                 updateStrengthIndicator('setupPwStrengthIndicator', 'setupPwStrengthText', passwordInput1.value);
             });
+
             requestAnimationFrame(() => {
                 try { passwordInput1.focus(); } catch (e) { /* iOS */ }
             });
-            Modal.bindEnter(handle.querySelector('#setupNewPw2'), handle.querySelector('#confirmSetupBtn'));
+
+            // v9.6.0：两个输入框均可用 Enter 触发提交。
+            Modal.bindEnter(passwordInput1, confirmButton);
+            Modal.bindEnter(passwordInput2, confirmButton);
         }
     });
 }

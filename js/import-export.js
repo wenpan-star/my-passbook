@@ -5,10 +5,9 @@
  * 导入：CSV / 加密备份 / 明文 JSON / 明文数组。
  * CSV 公式注入防护；三态重名处理。
  *
- * v9.3.0：
- *   - applyImport 改为「先过滤后截断」：先剔除无效条目，再判断是否超上限，
- *     避免因 slice 前置而丢弃有效数据；截断时明确提示用户。
- *   - 保留 v9.2.1 的 UI 可见性快照回滚逻辑。
+ * v9.6.0：
+ *   - applyImport 快照纳入 UiState.selectedIds / keyboardFocusedItemId，
+ *     保证任何写操作失败回滚时，UI 状态与数据状态同步一致。
  */
 
 import { CONFIG } from './config.js';
@@ -629,8 +628,8 @@ export const ImportExport = {
     /**
      * 应用导入。
      *
-     * v9.3.0：先过滤无效条目，再判断是否超上限并截断，截断时明确提示。
-     * v9.2.1：覆盖模式下清空 UiState 可见性集合前先做快照，失败回滚时一并恢复。
+     * v9.6.0：快照纳入 UiState.selectedIds / keyboardFocusedItemId，
+     *         覆盖模式清空可见集合时，失败回滚亦恢复这些集合。
      *
      * @param {Array} importedPasswords
      * @param {Array} importedCategories
@@ -638,7 +637,7 @@ export const ImportExport = {
      * @param {boolean} allowOverwrite
      */
     async applyImport(importedPasswords, importedCategories, replaceCategories, allowOverwrite) {
-        // v9.3.0：先过滤，再截断
+        // 先过滤，再截断
         const validImportedItems = importedPasswords.filter(
             item => item && item.name && item.loginPassword
         );
@@ -683,9 +682,11 @@ export const ImportExport = {
         // 快照（用于失败回滚）
         const previousPasswords = DataState.passwords.map(p => Object.assign({}, p));
         const previousCategories = [...DataState.customCategories];
-        // v9.2.1：同步快照 UI 可见性集合
         const previousVisibleLoginPasswords = new Set(UiState.visibleLoginPasswords);
         const previousVisibleTransactionPasswords = new Set(UiState.visibleTransactionPasswords);
+        // v9.6.0：同步快照选中集合与键盘焦点
+        const previousSelectedIds = new Set(UiState.selectedIds);
+        const previousKeyboardFocusedItemId = UiState.keyboardFocusedItemId;
 
         let skippedCount = 0;
         let truncatedCount = 0;
@@ -719,6 +720,9 @@ export const ImportExport = {
                 DataState.passwords = workingItems;
                 UiState.visibleLoginPasswords.clear();
                 UiState.visibleTransactionPasswords.clear();
+                // v9.6.0：覆盖模式下同步清理选中集合与键盘焦点，避免引用已失效 ID。
+                UiState.selectedIds.clear();
+                UiState.keyboardFocusedItemId = null;
             } else {
                 const existingNames = new Set(DataState.passwords.map(p => p.name));
                 const newItems = [];
@@ -778,9 +782,11 @@ export const ImportExport = {
             DataState.passwords = previousPasswords;
             DataState.customCategories = previousCategories;
             DataState.rebuildIndex();
-            // v9.2.1：同步恢复 UI 可见性集合
             UiState.visibleLoginPasswords = previousVisibleLoginPasswords;
             UiState.visibleTransactionPasswords = previousVisibleTransactionPasswords;
+            // v9.6.0：同步恢复选中集合与键盘焦点
+            UiState.selectedIds = previousSelectedIds;
+            UiState.keyboardFocusedItemId = previousKeyboardFocusedItemId;
             Toast.show('保存失败：' + error.message, { isError: true, duration: 5000 });
         }
     }
