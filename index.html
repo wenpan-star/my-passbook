@@ -1,49 +1,57 @@
 <!--
 ====================================================================================
- 静谧·密钥 v7.6.0 — 深度审核改进版
+ 静谧·密钥 v7.7.0 — 二次审核深度修复版
  更新日期：2026-09-10
 ====================================================================================
- 本次改进（基于 v7.5.0 深度审核报告）：
+ 本次改进（基于 v7.6.0 二次深度审核报告）：
 
- 【Bug 修复】
- 1. [修复] 所有模态框关闭函数加 isClosed 守卫，避免异步保存 + 手动关闭导致的
-     modalOpenCount 重复递减、body.modal-open 类误移除。
- 2. [修复] 跨窗口同步（BroadcastChannel vaultUpdated）前调用 VirtualScroll.reset()，
-     避免缓存跳过重渲染导致界面不更新。
- 3. [修复] searchFieldSelect 切换搜索字段时同步重置 scrollTop = 0，避免位置跳变。
- 4. [修复] searchInput 输入时把 scrollTop = 0 移入 debounce 回调，与过滤同步执行。
+ 【P1 功能回归修复】
+ 1. [修复] 列表滚动不重置空闲计时器：handleListScroll 的 rAF 回调中调用
+     scheduleIdleLock()，避免用户"只滚动不操作"被误锁定。window 上的 scroll
+     监听无效（scroll 不冒泡 + body overflow:hidden），必须绑定到真实滚动容器。
+ 2. [修复] .password-list-scroll 的 padding-top: 0.5rem 造成虚拟列表顶部
+     8px 系统性偏移，删除后 scrollTop=0 与第一行像素级对齐。
 
- 【安全性增强】
- 5. [优化] 密码生成器改用拒绝采样（secureRandomInt），消除模偏差。
+ 【P2 健壮性 / 交互修复】
+ 3. [修复] handleListKeydown 加 event.target === listContainer 守卫，
+     用户 Tab 到条目内按钮后按方向键不再触发列表导航，避免"焦点在 A，画面滚到 B"。
+ 4. [修复] 键盘导航去掉多余的 scrollIntoView（已有精确 scrollTop 计算），
+     消除双次滚动导致的轻微抖动。
+ 5. [修复] grid.innerHTML = '' 改为 grid.replaceChildren(fragment)（附降级），
+     单次 DOM 操作替代两次，减少每帧 reflow。
+ 6. [修复] 所有模态框清理函数的 previousFocus.focus() 增加 isConnected 检查，
+     避免焦点目标已被移除时的静默失败。
+ 7. [修复] 键盘导航从 items.findIndex（O(n)）改为 State.passwordPositionIndex
+     （O(1) Map 索引），在 actualRenderList 中每次过滤后重建。
 
- 【性能优化】
- 6. [优化] VirtualScroll 引入 DOM 元素池（elementPool + renderedItemElements），
-     滚动时复用已渲染元素，大幅减少节点创建销毁开销。
- 7. [优化] 缓存检查新增 lastRenderedItemsRef，跟踪 items 引用变化，防止漏渲染。
- 8. [优化] .virtual-list-grid 改用 transform: translate3d 定位，配合 will-change，
-     触发合成层，滚动更流畅；不再用 top 触发重排。
- 9. [优化] 引入搜索索引 State.searchableIndex（name/username/email/phone/category/note
-     的小写缓存），避免每次搜索重新 toLowerCase。
+ 【P3 完整性与兼容性】
+ 8. [优化] bindIdleEvents 引入 idleEventsAbortController，避免未来重复调用
+     导致的监听器泄漏。
+ 9. [修复] 顶部注释中"transitionend"描述与实际实现不一致，改为准确描述
+     "rAF + 320ms 兜底"。
+ 10. [优化] 移动端（max-width: 640px）禁用 .virtual-list-grid 的
+      will-change: transform，避免低端华为/老设备创建过多合成层。
+ 11. [修复] keyboardFocusedItemId 在鼠标/触摸点击后清空，
+      消除"上次键盘焦点残留高亮"的视觉错位。
 
- 【可访问性 & UX】
- 10. [新增] 虚拟列表键盘导航：Tab / 方向键 / PageUp / PageDown / Home / End，
-     自动滚动并重新渲染可见区，让键盘用户能访问列表下方条目。
- 11. [修复] 桌面端列表显示细滚动条（scrollbar-width: thin + ::-webkit-scrollbar），
-     大列表可拖动定位；手机端仍隐藏滚动条以获得更多空间。
- 12. [修复] 添加区展开/收起改用 transitionend 监听，避免固定 setTimeout 造成的错位。
- 13. [优化] 长内容以 title 属性补充完整信息，减轻固定行高的裁剪影响。
-
- 【手机交互增强（iOS / 华为 / Chrome / QQ 浏览器）】
- 14. [优化] 所有可点击元素加 touch-action: manipulation，消除 300ms 点击延迟和双击缩放。
- 15. [优化] 输入框 font-size ≥ 16px（移动端断点），避免 iOS Safari 自动放大。
- 16. [优化] 移动端表单输入框补全 inputmode（email / tel / numeric），唤起合适键盘。
- 17. [优化] 横屏专用断点增强，适配 iPhone / 华为刘海与底部横条（safe-area-inset）。
- 18. [优化] 模态框 max-height 改用 dvh + fallback，滚动惯性 -webkit-overflow-scrolling。
- 19. [优化] 防止长按选中文本干扰交互（密码输入框 caret-color + user-select: none）。
- 20. [优化] 模态内输入框自动聚焦改为 requestAnimationFrame 延迟，兼容 iOS 键盘。
+ 【P4 细节打磨】
+ 12. [优化] secureRandomInt 增加 maxExclusive > 256 断言，避免未来扩展字符集
+      时的静默错误。
+ 13. [优化] 所有 keypress 监听改为 keydown（keypress 已废弃，且不响应修饰键），
+      并保留 event.key === 'Enter' 判断。
+ 14. [优化] VirtualScroll.readItemHeightFromCSS 增加缓存，仅在 resize /
+      orientationchange / 主题切换时失效，避免频繁 getComputedStyle 强制重排。
 
  保留不变：密码生成器、强度提示、批量操作、导入导出、分类管理、主题切换（含 midnight）、
- 自动锁定、跨窗口同步、日志、重新认证、ESC 关闭、模态栈、剪贴板保护等全部原有功能。
+ 自动锁定、跨窗口同步、日志、重新认证、ESC 关闭、模态栈、剪贴板保护、虚拟滚动、
+ 元素池复用、拒绝采样、键盘导航等全部原有功能。
+
+ 历史更新（v7.5.0 → v7.6.0）：修复模态框 isClosed 守卫、跨窗口同步前 reset、
+ searchFieldSelect 切换重置 scrollTop、DOM 元素池、搜索索引、键盘导航、手机交互增强。
+ 历史更新（v7.3.0 → v7.5.0）：引入虚拟滚动，MAX_PASSWORDS = 10000 时列表依然流畅。
+ 历史更新（v7.2.0 → v7.3.0）：修复暗色系统+浅色主题错色、嵌套模态 ESC 冲突等。
+ 历史更新（v7.1.0 → v7.2.0）：修复编辑保存失败重试、旧格式解锁兼容等。
+ 历史更新（v7.0.0 → v7.1.0）：深度修复与健壮性增强，代码完整无简写。
 ====================================================================================
 -->
 <!DOCTYPE html>
@@ -60,7 +68,7 @@
     <meta http-equiv="X-Frame-Options" content="DENY">
     <meta http-equiv="X-Content-Type-Options" content="nosniff">
     <meta http-equiv="Referrer-Policy" content="strict-origin-when-cross-origin">
-    <title>🔐 静谧·密钥 | 安全密码本 v7.6.0</title>
+    <title>🔐 静谧·密钥 | 安全密码本 v7.7.0</title>
     <style>
         :root {
             --bg-gradient: linear-gradient(135deg, #e0f2fe 0%, #bae6fd 50%, #e0e7ff 100%);
@@ -499,6 +507,7 @@
             padding-bottom: 0.8rem;
         }
 
+        /* v7.7.0：删除 padding-top: 0.5rem，避免虚拟列表顶部系统性偏移 */
         .password-list-scroll {
             flex: 1 1 auto;
             overflow-y: auto;
@@ -508,7 +517,6 @@
             display: block;
             position: relative;
             min-height: 220px;
-            padding-top: 0.5rem;
             -webkit-overflow-scrolling: touch;
             overscroll-behavior: contain;
             touch-action: pan-y;
@@ -1175,6 +1183,10 @@
             :root { --item-height: 290px; }
             .password-list-scroll { scrollbar-width: none; }
             .password-list-scroll::-webkit-scrollbar { display: none; }
+            /* v7.7.0：移动端禁用 will-change，避免低端设备创建过多合成层 */
+            .virtual-list-grid {
+                will-change: auto;
+            }
         }
 
         @media (max-width: 380px) {
@@ -1312,7 +1324,7 @@
 
     // ===================== 常量与配置 =====================
     const CONFIG = {
-        APP_VERSION: '7.6.0',
+        APP_VERSION: '7.7.0',
         STORAGE_VAULT: 'serene_vault_enc_v3',
         STORAGE_SALT: 'serene_vault_salt_v3',
         STORAGE_AUTH: 'serene_vault_auth_v3',
@@ -1345,7 +1357,8 @@
         VIRTUAL_GAP: 16,
         VIRTUAL_MOBILE_BREAKPOINT: 640,
         VIRTUAL_RESIZE_DEBOUNCE_MS: 150,
-        VIRTUAL_ELEMENT_POOL_MAX: 100
+        VIRTUAL_ELEMENT_POOL_MAX: 100,
+        VIRTUAL_LAYOUT_RECOMPUTE_DELAY_MS: 320
     };
 
     // ===================== 主题定义 =====================
@@ -1628,6 +1641,29 @@
         };
     }
 
+    // v7.7.0：安全聚焦辅助，避免焦点目标已被移除时静默失败
+    function safeRestoreFocus(element) {
+        if (!element) return;
+        if (typeof element.focus !== 'function') return;
+        if (!element.isConnected) return;
+        try {
+            element.focus();
+        } catch (error) {
+            // 忽略焦点恢复失败（例如元素隐藏、disabled 等）
+        }
+    }
+
+    // v7.7.0：keydown Enter 统一判断
+    function attachEnterToClick(inputElement, clickHandler) {
+        if (!inputElement) return;
+        inputElement.addEventListener('keydown', function(event) {
+            if (event.key === 'Enter') {
+                event.preventDefault();
+                clickHandler();
+            }
+        });
+    }
+
     // ===================== 工具函数 =====================
     const Util = {
         escapeHtml: function(text) {
@@ -1709,6 +1745,10 @@
     function secureRandomInt(maxExclusive) {
         if (maxExclusive <= 0) return 0;
         if (maxExclusive === 1) return 0;
+        // v7.7.0：增加断言，避免未来扩展字符集时的静默错误
+        if (maxExclusive > 256) {
+            throw new Error('secureRandomInt 不支持 maxExclusive > 256，请使用扩展实现');
+        }
         const maxValid = 256 - (256 % maxExclusive);
         const buffer = new Uint8Array(1);
         while (true) {
@@ -1853,20 +1893,31 @@
         cachedItems: [],
         scrollRAF: null,
         resizeTimer: null,
+        cachedItemHeightFromCSS: null,
 
         elementPool: [],
         renderedItemElements: new Map(),
 
-        readItemHeightFromCSS: function() {
+        // v7.7.0：缓存行高，forceRefresh 时重新读取
+        readItemHeightFromCSS: function(forceRefresh) {
+            if (!forceRefresh && this.cachedItemHeightFromCSS !== null) {
+                this.itemHeight = this.cachedItemHeightFromCSS;
+                return;
+            }
             try {
                 const rawValue = getComputedStyle(document.documentElement).getPropertyValue('--item-height').trim();
                 const parsedValue = parseFloat(rawValue);
                 if (!isNaN(parsedValue) && parsedValue > 0) {
                     this.itemHeight = parsedValue;
+                    this.cachedItemHeightFromCSS = parsedValue;
                 }
             } catch (error) {
                 console.warn('读取 --item-height 失败，使用默认值:', error);
             }
+        },
+
+        invalidateItemHeightCache: function() {
+            this.cachedItemHeightFromCSS = null;
         },
 
         computeColumns: function(containerWidth) {
@@ -1879,7 +1930,7 @@
         },
 
         computeLayout: function(containerWidth, itemCount) {
-            this.readItemHeightFromCSS();
+            this.readItemHeightFromCSS(false);
             this.columns = this.computeColumns(containerWidth);
             this.totalRows = Math.max(1, Math.ceil(itemCount / this.columns));
             const itemsHeightTotal = this.totalRows * this.itemHeight;
@@ -1928,6 +1979,7 @@
             this.reset();
             this.lastContainerWidth = -1;
             this.cachedItems = [];
+            this.invalidateItemHeightCache();
             this.clearRenderedElements();
             if (this.scrollRAF) {
                 cancelAnimationFrame(this.scrollRAF);
@@ -1948,6 +2000,8 @@
 
         passwordIdIndex: new Map(),
         searchableIndex: new Map(),
+        // v7.7.0：过滤排序后位置索引，供键盘导航 O(1) 查询
+        passwordPositionIndex: new Map(),
 
         visibleLoginPasswords: new Set(),
         visibleTransactionPasswords: new Set(),
@@ -1978,7 +2032,6 @@
         renderFrameRequest: null,
         lastCategoryEditClickTime: 0,
 
-        // 键盘导航
         keyboardFocusedItemId: null,
 
         rebuildIndex: function() {
@@ -1997,6 +2050,13 @@
             });
         },
 
+        rebuildPositionIndex: function(orderedItems) {
+            this.passwordPositionIndex.clear();
+            orderedItems.forEach(function(item, index) {
+                State.passwordPositionIndex.set(item.id, index);
+            });
+        },
+
         reset: function() {
             if (this.passwords) {
                 this.passwords.forEach(function(p) {
@@ -2009,6 +2069,7 @@
             this.customCategories = [];
             this.passwordIdIndex.clear();
             this.searchableIndex.clear();
+            this.passwordPositionIndex.clear();
             this.visibleLoginPasswords.clear();
             this.visibleTransactionPasswords.clear();
             this.selectedIds.clear();
@@ -2193,6 +2254,7 @@
             State.customCategories = [];
             State.passwordIdIndex.clear();
             State.searchableIndex.clear();
+            State.passwordPositionIndex.clear();
             State.visibleLoginPasswords.clear();
             State.visibleTransactionPasswords.clear();
             State.lastReauthenticationTime = 0;
@@ -2311,7 +2373,6 @@
                             }
                             migrateOldData();
                             State.rebuildIndex();
-                            // v7.6.0 修复：跨窗口更新前先重置虚拟滚动缓存，避免漏渲染
                             VirtualScroll.reset();
                             if (typeof renderListOnly === 'function') renderListOnly();
                             if (typeof refreshDatalist === 'function') refreshDatalist();
@@ -2526,12 +2587,12 @@
             const confirmationInput = modal.querySelector('#confirmDialogInput');
             if (confirmationInput) {
                 requestAnimationFrame(function() {
-                    try { confirmationInput.focus(); } catch (e) { /* 忽略 iOS 键盘聚焦失败 */ }
+                    try { confirmationInput.focus(); } catch (e) { /* iOS 兼容 */ }
                 });
             }
 
             let removeEscapeListener = null;
-            let isClosed = false;  // v7.6.0：关闭守卫
+            let isClosed = false;
 
             const cleanupDialog = function(result) {
                 if (isClosed) return;
@@ -2541,7 +2602,7 @@
                 modal.remove();
                 popModalOpen();
                 unregisterActiveModal(cleanupDialog);
-                if (previousFocus && typeof previousFocus.focus === 'function') previousFocus.focus();
+                safeRestoreFocus(previousFocus);
                 resolve(result);
             };
             registerActiveModal(cleanupDialog);
@@ -2564,10 +2625,8 @@
             };
 
             if (confirmationInput) {
-                confirmationInput.addEventListener('keypress', function(event) {
-                    if (event.key === 'Enter') {
-                        modal.querySelector('#confirmDialogConfirm').click();
-                    }
+                attachEnterToClick(confirmationInput, function() {
+                    modal.querySelector('#confirmDialogConfirm').click();
                 });
             }
 
@@ -2646,7 +2705,7 @@
                 modal.remove();
                 popModalOpen();
                 unregisterActiveModal(cleanup);
-                if (previousFocus && typeof previousFocus.focus === 'function') previousFocus.focus();
+                safeRestoreFocus(previousFocus);
                 resolve(value);
             };
             registerActiveModal(cleanup);
@@ -2683,7 +2742,7 @@
                 }
             };
             modal.querySelector('#cancelVerify').onclick = function() { cleanup(returnPassword ? null : false); };
-            input.addEventListener('keypress', function(e) { if (e.key==='Enter') confirmButton.click(); });
+            attachEnterToClick(input, function() { confirmButton.click(); });
         });
     }
     async function requireReauthentication(actionDesc, force) {
@@ -2738,22 +2797,6 @@
         }
     }
 
-    function toggleEditPasswordVisibility(inputElement, toggleButton, passwordValueProvider) {
-        if (!inputElement || !toggleButton) return;
-        if (inputElement.type === 'password') {
-            const passwordValue = typeof passwordValueProvider === 'function' ? passwordValueProvider() : (passwordValueProvider || '');
-            inputElement.type = 'text';
-            inputElement.value = passwordValue;
-            toggleButton.innerHTML = '<svg class="icon"><use href="#icon-eye-off"/></svg>';
-            toggleButton.setAttribute('aria-label', '隐藏密码');
-        } else {
-            inputElement.type = 'password';
-            toggleButton.innerHTML = '<svg class="icon"><use href="#icon-eye"/></svg>';
-            toggleButton.setAttribute('aria-label', '显示密码');
-        }
-        inputElement.focus();
-    }
-
     function resetPasswordVisibilityButtons() {
         const loginPwInput = document.getElementById('inpLoginPw');
         const toggleLoginBtn = document.getElementById('toggleLoginPwVis');
@@ -2803,7 +2846,7 @@
                 modal.remove();
                 popModalOpen();
                 unregisterActiveModal(cleanup);
-                if (previousFocus && typeof previousFocus.focus === 'function') previousFocus.focus();
+                safeRestoreFocus(previousFocus);
                 resolve(result);
             };
             registerActiveModal(cleanup);
@@ -3032,7 +3075,7 @@
                 modal.remove();
                 popModalOpen();
                 unregisterActiveModal(cleanup);
-                if (previousFocus && typeof previousFocus.focus === 'function') previousFocus.focus();
+                safeRestoreFocus(previousFocus);
                 resolve(result);
             };
             registerActiveModal(cleanup);
@@ -3048,7 +3091,7 @@
                     input.focus();
                 }
             };
-            input.addEventListener('keypress', function(e) { if (e.key === 'Enter') modal.querySelector('#confirmCategoryDeletion').click(); });
+            attachEnterToClick(input, function() { modal.querySelector('#confirmCategoryDeletion').click(); });
         });
     }
 
@@ -3088,7 +3131,7 @@
                 modal.remove();
                 popModalOpen();
                 unregisterActiveModal(cleanup);
-                if (previousFocus && typeof previousFocus.focus === 'function') previousFocus.focus();
+                safeRestoreFocus(previousFocus);
                 resolve(result);
             };
             registerActiveModal(cleanup);
@@ -3108,9 +3151,7 @@
                 }
                 cleanup(newName);
             };
-            input.addEventListener('keypress', function(e) {
-                if (e.key === 'Enter') modal.querySelector('#confirmRenameCategory').click();
-            });
+            attachEnterToClick(input, function() { modal.querySelector('#confirmRenameCategory').click(); });
         });
     }
 
@@ -3143,9 +3184,8 @@
         return Util.escapeHtml(text).replace(regex, '<span class="highlight">$1</span>');
     }
 
-    // ===================== 密码列表渲染（虚拟滚动 + 元素池） =====================
+    // ===================== 密码列表渲染（虚拟滚动 + 元素池 + 键盘导航） =====================
 
-    // 填充元素（供虚拟滚动复用）
     function fillPasswordItemElement(element, item, keyword) {
         const loginVisible = State.visibleLoginPasswords.has(item.id);
         const transactionVisible = State.visibleTransactionPasswords.has(item.id);
@@ -3210,7 +3250,6 @@
             }
         }
 
-        // 键盘焦点视觉反馈
         if (State.keyboardFocusedItemId === item.id) {
             element.classList.add('keyboard-focus');
         } else {
@@ -3220,14 +3259,12 @@
         return element;
     }
 
-    // 兼容原 API（新建元素），内部调用 fill
     function createPasswordItemElement(item, keyword) {
         const element = document.createElement('div');
         fillPasswordItemElement(element, item, keyword);
         return element;
     }
 
-    // 计算可见范围并渲染（v7.6.0：使用元素池复用 DOM）
     function renderVisibleItems(listContainer, grid, items, keyword) {
         const scrollTop = listContainer.scrollTop;
         const containerHeight = listContainer.clientHeight;
@@ -3255,10 +3292,8 @@
         const startIndex = startRow * VirtualScroll.columns;
         const endIndex = Math.min(items.length - 1, (endRow + 1) * VirtualScroll.columns - 1);
 
-        // 使用 transform 定位，避免触发布局重排
         grid.style.transform = `translate3d(0, ${startRow * rowHeight}px, 0)`;
 
-        // 收集新的可见 item IDs
         const visibleItemIds = new Set();
         const visibleItemsOrdered = [];
         for (let i = startIndex; i <= endIndex; i++) {
@@ -3269,7 +3304,6 @@
             }
         }
 
-        // 回收不再可见的元素
         const toRelease = [];
         VirtualScroll.renderedItemElements.forEach((element, id) => {
             if (!visibleItemIds.has(id)) {
@@ -3285,21 +3319,18 @@
             VirtualScroll.renderedItemElements.delete(id);
         });
 
-        // 填充缺失的可见项（从池中取出或新建）
         visibleItemsOrdered.forEach((item) => {
             if (!VirtualScroll.renderedItemElements.has(item.id)) {
                 const element = VirtualScroll.acquireElement();
                 fillPasswordItemElement(element, item, keyword);
                 VirtualScroll.renderedItemElements.set(item.id, element);
             } else if (itemsChanged) {
-                // items 引用变化时，重新填充以刷新可见性状态、搜索高亮等
                 const element = VirtualScroll.renderedItemElements.get(item.id);
                 fillPasswordItemElement(element, item, keyword);
             }
         });
 
-        // 按顺序重新组装 grid
-        grid.innerHTML = '';
+        // v7.7.0：使用 replaceChildren 单次操作替代 innerHTML='' + appendChild
         const fragment = document.createDocumentFragment();
         visibleItemsOrdered.forEach((item) => {
             const element = VirtualScroll.renderedItemElements.get(item.id);
@@ -3307,16 +3338,21 @@
                 fragment.appendChild(element);
             }
         });
-        grid.appendChild(fragment);
-
-        // 批量模式下勾选事件处理（事件委托统一在 appContainer，不需要单独绑定）
+        if (typeof grid.replaceChildren === 'function') {
+            grid.replaceChildren(fragment);
+        } else {
+            grid.innerHTML = '';
+            grid.appendChild(fragment);
+        }
     }
 
-    // 滚动事件（rAF 节流）
     function handleListScroll() {
         if (VirtualScroll.scrollRAF) return;
         VirtualScroll.scrollRAF = requestAnimationFrame(function() {
             VirtualScroll.scrollRAF = null;
+            // v7.7.0：滚动也算作活动，避免"只滚动不操作"被误锁定
+            State.lastActivity = Date.now();
+            if (State.masterKey) scheduleIdleLock();
             const listContainer = document.getElementById('listContainer');
             if (!listContainer) return;
             const grid = listContainer.querySelector('.virtual-list-grid');
@@ -3325,29 +3361,35 @@
         });
     }
 
-    // 键盘导航处理（v7.6.0 新增：让键盘用户能访问虚拟列表外的条目）
+    // v7.7.0：键盘导航（仅在 listContainer 自身获得焦点时生效）
     function handleListKeydown(event) {
         const listContainer = document.getElementById('listContainer');
         if (!listContainer) return;
+        // v7.7.0：仅在 listContainer 自身聚焦时处理，避免 Tab 到内部按钮后按方向键误触发列表导航
+        if (event.target !== listContainer) return;
+
         const items = VirtualScroll.cachedItems;
         if (!items || !items.length) return;
 
         const rowHeight = VirtualScroll.itemHeight + VirtualScroll.gap;
-        const currentIndex = VirtualScroll.lastRenderedStartRow * VirtualScroll.columns;
         let targetIndex = -1;
+
+        // v7.7.0：O(1) 通过 position index 查询当前项位置
+        let currentItemIndex = -1;
+        if (State.keyboardFocusedItemId) {
+            if (State.passwordPositionIndex.has(State.keyboardFocusedItemId)) {
+                currentItemIndex = State.passwordPositionIndex.get(State.keyboardFocusedItemId);
+            }
+        }
 
         switch (event.key) {
             case 'ArrowDown':
                 event.preventDefault();
-                targetIndex = (State.keyboardFocusedItemId
-                    ? items.findIndex(function(it) { return it.id === State.keyboardFocusedItemId; }) + 1
-                    : 0);
+                targetIndex = currentItemIndex + 1;
                 break;
             case 'ArrowUp':
                 event.preventDefault();
-                targetIndex = (State.keyboardFocusedItemId
-                    ? items.findIndex(function(it) { return it.id === State.keyboardFocusedItemId; }) - 1
-                    : items.length - 1);
+                targetIndex = currentItemIndex < 0 ? items.length - 1 : currentItemIndex - 1;
                 break;
             case 'Home':
                 event.preventDefault();
@@ -3366,7 +3408,6 @@
                 targetIndex = Math.max(0, (VirtualScroll.lastRenderedStartRow - 3) * VirtualScroll.columns);
                 break;
             case 'Tab':
-                // Tab 键交给浏览器，但如果当前元素在虚拟列表中，滚出视口时自动跟随
                 return;
             default:
                 return;
@@ -3380,7 +3421,6 @@
 
         State.keyboardFocusedItemId = targetItem.id;
 
-        // 计算目标行的位置，滚动到可见区域
         const targetRow = Math.floor(targetIndex / VirtualScroll.columns);
         const targetTop = targetRow * rowHeight;
         const targetBottom = targetTop + VirtualScroll.itemHeight;
@@ -3393,20 +3433,11 @@
             listContainer.scrollTop = targetBottom - listContainer.clientHeight;
         }
 
-        // 强制重渲染并聚焦
+        // v7.7.0：不再调用 scrollIntoView（已有精确 scrollTop 计算），避免双次滚动
         VirtualScroll.reset();
         renderListOnly();
-
-        requestAnimationFrame(function() {
-            const element = VirtualScroll.renderedItemElements.get(targetItem.id);
-            if (element) {
-                element.classList.add('keyboard-focus');
-                element.scrollIntoView({ block: 'nearest', behavior: 'auto' });
-            }
-        });
     }
 
-    // 让每次 renderListOnly 使用 requestAnimationFrame 节流
     let renderListOnly = function() {
         if (State.renderFrameRequest) {
             cancelAnimationFrame(State.renderFrameRequest);
@@ -3421,7 +3452,6 @@
         const listContainer = document.getElementById('listContainer');
         if (!listContainer) return;
 
-        // 1. 过滤（使用 searchableIndex 缓存，避免重复 toLowerCase）
         let filtered = [...State.passwords];
         const query = State.searchQuery.trim().toLowerCase();
         if (query) {
@@ -3442,7 +3472,6 @@
             });
         }
 
-        // 2. 排序
         const sortFieldSelect = document.getElementById('sortFieldSelect');
         const sortField = sortFieldSelect ? sortFieldSelect.value : 'name';
         filtered.sort(function(a, b) {
@@ -3459,11 +3488,12 @@
             return State.sortAscending ? comparisonResult : -comparisonResult;
         });
 
-        // 3. 更新计数徽标
+        // v7.7.0：重建位置索引，供键盘导航 O(1) 查询
+        State.rebuildPositionIndex(filtered);
+
         const countSpan = document.getElementById('countSpan');
         if (countSpan) countSpan.innerText = State.passwords.length;
 
-        // 4. 空状态
         if (!filtered.length) {
             VirtualScroll.cachedItems = [];
             VirtualScroll.reset();
@@ -3472,7 +3502,6 @@
             return;
         }
 
-        // 5. 计算布局
         let containerWidth = listContainer.clientWidth;
         if (containerWidth <= 0) {
             const appContainer = document.getElementById('appContainer');
@@ -3486,7 +3515,6 @@
         VirtualScroll.computeLayout(containerWidth, filtered.length);
         VirtualScroll.cachedItems = filtered;
 
-        // 6. 确保虚拟滚动结构存在
         let spacer = listContainer.querySelector('.virtual-list-spacer');
         let grid = spacer ? spacer.querySelector('.virtual-list-grid') : null;
         if (!spacer || !grid) {
@@ -3499,7 +3527,6 @@
             spacer.appendChild(grid);
             listContainer.appendChild(spacer);
 
-            // 首次创建时绑定 scroll 监听
             if (!listContainer.dataset.virtualScrollBound) {
                 listContainer.addEventListener('scroll', handleListScroll, { passive: true });
                 listContainer.addEventListener('keydown', handleListKeydown);
@@ -3508,20 +3535,15 @@
             }
         }
 
-        // 7. 设置 spacer 高度
         spacer.style.height = VirtualScroll.totalHeight + 'px';
-
-        // 8. 设置 grid 列数与间距
         grid.style.gridTemplateColumns = `repeat(${VirtualScroll.columns}, 1fr)`;
         grid.style.gap = VirtualScroll.gap + 'px';
 
-        // 9. 容器宽度变化时重置缓存
         if (VirtualScroll.lastContainerWidth !== containerWidth) {
             VirtualScroll.lastContainerWidth = containerWidth;
             VirtualScroll.reset();
         }
 
-        // 10. 渲染可见项
         renderVisibleItems(listContainer, grid, filtered, State.searchQuery.trim());
     }
 
@@ -3605,9 +3627,7 @@
             unregisterActiveModal(closeModal);
             State.activeEditItemId = null;
             State.activeEditModalCleanup = null;
-            if (previousFocus && typeof previousFocus.focus === 'function') {
-                previousFocus.focus();
-            }
+            safeRestoreFocus(previousFocus);
         };
         State.activeEditModalCleanup = closeModal;
         registerActiveModal(closeModal);
@@ -4154,7 +4174,7 @@
                 modal.remove();
                 popModalOpen();
                 unregisterActiveModal(cleanup);
-                if (previousFocus && typeof previousFocus.focus === 'function') previousFocus.focus();
+                safeRestoreFocus(previousFocus);
                 resolve(value);
             };
             registerActiveModal(cleanup);
@@ -4162,9 +4182,7 @@
 
             modal.querySelector('#modalOk').onclick = function() { cleanup(inputElement ? inputElement.value : null); };
             modal.querySelector('#modalCancel').onclick = function() { cleanup(null); };
-            if (inputElement) {
-                inputElement.addEventListener('keypress', function(event) { if (event.key === 'Enter') modal.querySelector('#modalOk').click(); });
-            }
+            attachEnterToClick(inputElement, function() { modal.querySelector('#modalOk').click(); });
         });
     }
 
@@ -4248,7 +4266,7 @@
                 modal.remove();
                 popModalOpen();
                 unregisterActiveModal(cleanup);
-                if (previousFocus && typeof previousFocus.focus === 'function') previousFocus.focus();
+                safeRestoreFocus(previousFocus);
                 resolve(result);
             };
             registerActiveModal(cleanup);
@@ -4264,7 +4282,7 @@
                     input.focus();
                 }
             };
-            input.addEventListener('keypress', function(e) { if (e.key === 'Enter') modal.querySelector('#confirmBatchDelete').click(); });
+            attachEnterToClick(input, function() { modal.querySelector('#confirmBatchDelete').click(); });
         });
     }
 
@@ -4357,7 +4375,7 @@
                 modal.remove();
                 popModalOpen();
                 unregisterActiveModal(cleanup);
-                if (previousFocus && typeof previousFocus.focus === 'function') previousFocus.focus();
+                safeRestoreFocus(previousFocus);
                 resolve(result);
             };
             registerActiveModal(cleanup);
@@ -4373,7 +4391,7 @@
                     input.focus();
                 }
             };
-            input.addEventListener('keypress', function(e) { if (e.key === 'Enter') modal.querySelector('#confirmWipe').click(); });
+            attachEnterToClick(input, function() { modal.querySelector('#confirmWipe').click(); });
         });
     }
 
@@ -4427,7 +4445,7 @@
             modal.remove();
             popModalOpen();
             unregisterActiveModal(closeChangePwModal);
-            if (previousFocus && typeof previousFocus.focus === 'function') previousFocus.focus();
+            safeRestoreFocus(previousFocus);
         };
         registerActiveModal(closeChangePwModal);
         removeEscapeListener = attachEscapeToClose(modal, closeChangePwModal);
@@ -4565,7 +4583,7 @@
             modal.remove();
             popModalOpen();
             unregisterActiveModal(closeLogsModal);
-            if (previousFocus && typeof previousFocus.focus === 'function') previousFocus.focus();
+            safeRestoreFocus(previousFocus);
         };
         registerActiveModal(closeLogsModal);
         removeEscapeListener = attachEscapeToClose(modal, closeLogsModal);
@@ -4620,7 +4638,7 @@
                 modal.remove();
                 popModalOpen();
                 unregisterActiveModal(cleanup);
-                if (previousFocus && typeof previousFocus.focus === 'function') previousFocus.focus();
+                safeRestoreFocus(previousFocus);
                 resolve(result);
             };
             registerActiveModal(cleanup);
@@ -4668,7 +4686,7 @@
             popModalOpen();
             unregisterActiveModal(closeModal);
             State.activeCategoryModal = null;
-            if (previousFocus && typeof previousFocus.focus === 'function') previousFocus.focus();
+            safeRestoreFocus(previousFocus);
         };
         registerActiveModal(closeModal);
         removeEscapeListener = attachEscapeToClose(modal, closeModal);
@@ -4741,6 +4759,8 @@
         const dropdown = document.getElementById('themeDropdown');
         if (dropdown) dropdown.classList.remove('show');
         updateAllSelectColors();
+        // v7.7.0：主题切换后行高缓存作废
+        VirtualScroll.invalidateItemHeightCache();
         VirtualScroll.reset();
     }
 
@@ -4760,7 +4780,7 @@
         });
     }
 
-    // ===================== 搜索防抖（v7.6.0：scrollTop 在回调中重置） =====================
+    // ===================== 搜索防抖 =====================
     function debouncedSearch() {
         if (State.searchDebounceTimer) clearTimeout(State.searchDebounceTimer);
         State.searchDebounceTimer = setTimeout(function() {
@@ -4944,8 +4964,8 @@
         const collapseBtn = document.getElementById('collapseTopBarBtn');
         const expandBtn = document.getElementById('expandTopBarBtn');
 
-        // v7.6.0：折叠/展开用 transitionend 触发重渲染，避免固定 setTimeout 错位
         const scheduleVirtualReRender = function() {
+            VirtualScroll.invalidateItemHeightCache();
             VirtualScroll.reset();
             renderListOnly();
         };
@@ -4955,9 +4975,8 @@
                 collapse = !appContainer.classList.contains('top-collapsed');
             }
             appContainer.classList.toggle('top-collapsed', collapse);
-            // 使用 requestAnimationFrame + setTimeout 兜底（transitionend 在快速切换时可能漏触发）
             requestAnimationFrame(function() {
-                setTimeout(scheduleVirtualReRender, 320);
+                setTimeout(scheduleVirtualReRender, CONFIG.VIRTUAL_LAYOUT_RECOMPUTE_DELAY_MS);
             });
         };
 
@@ -4980,6 +4999,7 @@
             }
             if (VirtualScroll.resizeTimer) clearTimeout(VirtualScroll.resizeTimer);
             VirtualScroll.resizeTimer = setTimeout(function() {
+                VirtualScroll.invalidateItemHeightCache();
                 VirtualScroll.reset();
                 VirtualScroll.lastContainerWidth = -1;
                 renderListOnly();
@@ -4991,6 +5011,13 @@
         }, { signal });
 
         appContainer.addEventListener('click', async function(event) {
+            // v7.7.0：鼠标/触摸点击后清除键盘导航视觉残留
+            if (State.keyboardFocusedItemId) {
+                State.keyboardFocusedItemId = null;
+                const currentFocused = document.querySelector('.password-item.keyboard-focus');
+                if (currentFocused) currentFocused.classList.remove('keyboard-focus');
+            }
+
             const editButton = event.target.closest('.edit-btn');
             const deleteButton = event.target.closest('.del-btn');
             if (editButton) {
@@ -5054,7 +5081,6 @@
             }
         });
 
-        // 批量勾选事件委托
         appContainer.addEventListener('change', function(event) {
             if (event.target && event.target.classList.contains('batch-check')) {
                 const checkbox = event.target;
@@ -5074,7 +5100,6 @@
         if (searchInput) {
             searchInput.addEventListener('input', function(event) {
                 State.searchQuery = event.target.value;
-                // v7.6.0：scrollTop = 0 移入 debounce 回调，与过滤同步
                 VirtualScroll.reset();
                 debouncedSearch();
             });
@@ -5083,7 +5108,6 @@
         if (searchFieldSelect) {
             searchFieldSelect.addEventListener('change', function(event) {
                 State.searchField = event.target.value;
-                // v7.6.0：切换搜索字段时同步重置 scrollTop
                 const listContainer = document.getElementById('listContainer');
                 if (listContainer) listContainer.scrollTop = 0;
                 VirtualScroll.reset();
@@ -5128,7 +5152,7 @@
                     if (toggleOptionalBtn) toggleOptionalBtn.textContent = '更多信息';
                 }
                 requestAnimationFrame(function() {
-                    setTimeout(scheduleVirtualReRender, 320);
+                    setTimeout(scheduleVirtualReRender, CONFIG.VIRTUAL_LAYOUT_RECOMPUTE_DELAY_MS);
                 });
             };
         }
@@ -5295,7 +5319,7 @@
                 modal.remove();
                 popModalOpen();
                 unregisterActiveModal(closeModal);
-                if (previousFocus && typeof previousFocus.focus === 'function') previousFocus.focus();
+                safeRestoreFocus(previousFocus);
             };
             registerActiveModal(closeModal);
             removeEscapeListener = attachEscapeToClose(modal, closeModal);
@@ -5357,7 +5381,7 @@
                 modal.remove();
                 popModalOpen();
                 unregisterActiveModal(closeImportSmallModal);
-                if (previousFocus && typeof previousFocus.focus === 'function') previousFocus.focus();
+                safeRestoreFocus(previousFocus);
             };
             registerActiveModal(closeImportSmallModal);
             removeEscapeListener = attachEscapeToClose(modal, closeImportSmallModal);
@@ -5421,7 +5445,7 @@
                 modal.remove();
                 popModalOpen();
                 unregisterActiveModal(closeImportModal);
-                if (previousFocus && typeof previousFocus.focus === 'function') previousFocus.focus();
+                safeRestoreFocus(previousFocus);
             };
             registerActiveModal(closeImportModal);
             removeEscapeListener = attachEscapeToClose(modal, closeImportModal);
@@ -5578,7 +5602,7 @@
                     modal.remove();
                     popModalOpen();
                     unregisterActiveModal(closeSetupModal);
-                    if (previousFocus && typeof previousFocus.focus === 'function') previousFocus.focus();
+                    safeRestoreFocus(previousFocus);
                 };
                 registerActiveModal(closeSetupModal);
                 removeEscapeListener = attachEscapeToClose(modal, closeSetupModal);
@@ -5663,20 +5687,31 @@
                 loginButton.disabled = true;
                 try { await doLogin(); } finally { loginButton.disabled = false; }
             };
-            loginPasswordInput.addEventListener('keypress', function(event) {
-                if (event.key === 'Enter' && !loginButton.disabled) doLogin();
+            loginPasswordInput.addEventListener('keydown', function(event) {
+                if (event.key === 'Enter' && !loginButton.disabled) {
+                    event.preventDefault();
+                    doLogin();
+                }
             });
         }
     };
 
     // ===================== 空闲与可见性事件绑定 =====================
+    // v7.7.0：使用 AbortController 便于清理，避免未来重复调用时监听器泄漏
+    let idleEventsAbortController = null;
+
     function bindIdleEvents() {
+        if (idleEventsAbortController) {
+            idleEventsAbortController.abort();
+        }
+        idleEventsAbortController = new AbortController();
+        const signal = idleEventsAbortController.signal;
         const activityEvents = ['click', 'keydown', 'touchstart', 'scroll', 'mousemove'];
         activityEvents.forEach(function(eventName) {
             window.addEventListener(eventName, function() {
                 State.lastActivity = Date.now();
                 if (State.masterKey) scheduleIdleLock();
-            }, { passive: true });
+            }, { passive: true, signal: signal });
         });
     }
 
