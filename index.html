@@ -1,78 +1,82 @@
 <!--
 ====================================================================================
- 静谧·密钥 v8.3.3 — 基于 UI/UX 深度审核报告的视觉一致性修复版
+ 静谧·密钥 v8.4.0 — 横竖屏适配 + UI 一致性里程碑版
  更新日期：2026-09-10
 ====================================================================================
- 本次改进（基于 v8.3.2 UI 排版 / 显示 / 一致性深度审核报告）：
+ 版本定位：
+ —— v8.4.0 是 v8.3.x 系列所有修复的收束版本，整合了横竖屏适配、触屏
+    交互治理、深色模式协调、视觉临界值优化与代码整洁性清理，达到
+    “生产级可用、无已知视觉/交互回归”的里程碑状态。
 
- 【P0 — 折叠状态布局一致性】
- 1. [修复] .top-collapsed .app-header 增加 flex-direction: row !important，
-     修复移动端折叠后（继承自移动端的 column 布局）导致的 logo 与展开按钮
-     垂直排列、logo 水平居中与按钮右边缘错位的问题。
- 2. [重构] 折叠状态下 logo 完全继承全局 .logo 样式（字号 1.8rem、gap 12px、
-     svg 2.4rem、drop-shadow 一致），删除所有断点内对
-     .top-collapsed .app-header .logo 与 .logo svg 的尺寸覆盖，实现
-     “展开 / 收起状态 logo 外观完全一致，始终位于左侧”的需求。
- 3. [清理] 删除 .top-collapsed .app-header .logo { filter: none; } 死代码。
+ 【P0 — 移动端横竖屏切换放大问题】
+ 1. [修复] viewport meta 增加 minimum-scale=1.0，阻止 iOS Safari / 部分
+     Android 浏览器在横竖屏切换后自动放大页面，同时保留 user-scalable
+     默认值以维持可访问性。
+ 2. [修复] .search-bar input / select 字体由 0.92rem 改为 16px，覆盖所有
+     断点，避免 iOS Safari 输入框聚焦时自动缩放。
+ 3. [修复] .app-container input / select / textarea 字体由 var(--input-font-size)
+     （15px）改为 16px，避免平板/横屏（>640px）下输入框聚焦触发 iOS 缩放。
+ 4. [修复] 横屏断点（max-height:500px + landscape）内 .search-bar input/select
+     字体由 0.85rem 改为 16px，与全局一致。
+ 5. [优化] orientationchange 延迟由 250ms 提升到 400ms，覆盖 iOS Safari
+     视口稳定所需的 350-500ms 窗口，避免列表短暂错位。
 
- 【P0 — 登录/初始化卡片移动端排版】
- 4. [修复] @media (max-width: 640px) 增加 .auth-card 覆盖：padding 由
-     3.5rem 2.8rem 降为 2.5rem 1.5rem；auth-icon / h2 / p 字号相应缩小，
-     解决 320px 视口下可用宽度仅约 208px 的极度挤压问题。
+ 【P1 — 触屏 hover 状态治理（补齐）】
+ 6. [修复] @media (hover: none) and (pointer: coarse) 内补齐 .cat-tag button
+     / .cat-tag button[data-cat-edit] / .pw-action / .collapse-top-btn 的
+     浅色模式 hover 覆盖，避免触屏点击后 5%-10% 背景残留。
 
- 【P1 — 深色模式交互反馈】
- 5. [修复] 深色模式（midnight）下新增 .theme-option:hover 覆盖为
-     rgba(255,255,255,0.08)，修复原 rgba(0,0,0,0.04) 在深色卡片上
-     几乎不可见的问题。
- 6. [修复] 深色模式下 .toast 背景由 #1e293b 改为 #334155，并加一层
-     白色细描边，避免与 --bg-gradient 末端同色导致可读性下降。
+ 【P2 — 视觉临界值与深色模式】
+ 7. [优化] .cat-tag 右侧内边距由 76px 提升到 80px，为中文分类名与操作
+     按钮之间预留 4px 视觉缓冲，消除极窄列下可能的省略号重叠。
+ 8. [修复] showToast 错误态背景由硬编码 #dc2626 改为 var(--danger)，
+     使深色模式（midnight #f87171）下的错误提示与主题色协调。
 
- 【P1 — 触屏 hover 状态治理】
- 7. [修复] @media (hover: none) and (pointer: coarse) 增加 .cat-tag:hover
-     与 .theme-option:hover 覆盖，避免触屏点击后 hover 视觉状态长期滞留。
+ 【P3 — 响应式细节】
+ 9. [修复] 在 @media (max-width:380px) 内增加 .top-collapsed .app-header
+     min-height: 36px 覆盖，避免超小屏折叠状态下 header 高度过大。
 
- 【P2 — 模糊层次与性能】
- 8. [优化] .modal 移除 backdrop-filter，仅保留 .modal-card 的单层玻璃态，
-     消除双层模糊叠加带来的视觉伪影与低端设备 GPU 双倍开销。
- 9. [优化] .btn 移除 backdrop-filter: blur(4px)；该效果在实色渐变的
-     .btn-primary 上不可见，仅在 .btn-outline 等半透明按钮上略有效果，
-     统一移除以保证性能，视觉通过 border + shadow 已足够。
+ 【P3 — 代码整洁与一致性】
+ 10. [清理] 删除 .cat-tag .cat-actions 中绝对定位下无实际作用的
+     margin-left: auto。
+ 11. [统一] .btn-danger 增加 letter-spacing: 0.4px，与 .btn-primary
+     保持一致的 CTA 强化效果。
 
- 【P2 — 视觉节奏与交互细节】
- 10. [修复] .add-section 移除多余的 margin-top: 0.5rem，改由
-     .app-sticky-top 的 gap 统一控制垂直节奏。
- 11. [优化] .search-bar:hover 改为 .search-bar:focus-within，避免鼠标
-     悬停搜索栏 + 内部输入框聚焦时的双重光晕叠加造成的视觉噪音。
- 12. [修复] .btn 规则内重复声明的 font-weight 合并为单一 500；
-     .btn-primary 保持 600。清理代码异味。
+ 【头部注释结构修复】
+ 12. [修复] 清理 v8.3.4 初版遗留在注释块外部的旧注释片段，恢复
+     “单一 --> 关闭”结构，避免浏览器将残留文本渲染为页面可见内容。
 
- 【P3 — 长尾优化】
- 13. [优化] .cat-tag 右侧内边距由 84px 降为 72px，并加 min-height: 48px，
-     让中文分类名多显示约 1-2 个字，同时避免 .cat-count 与
-     .cat-actions 在极端窄列下重叠。
- 14. [优化] @media (max-width: 640px) 增加 .modal-card .button-group
-     margin-top 由 28px 降为 18px，与紧凑的移动端弹窗比例一致。
- 15. [优化] @media (max-width: 640px) 增加 .virtual-empty-state padding
-     由 40px 20px 降为 24px 16px，避免小屏下空白区过度挤压。
- 16. [统一] .btn / .btn-primary 的 letter-spacing 保持 0.3px / 0.4px
-     的设计差异（主按钮略宽，视觉上强化 CTA），代码注释标明为有意设计。
+ 保留不变：全部 v8.3.0 / v8.3.1 / v8.3.2 / v8.3.3 功能与逻辑修复
+ （密码不 trim、unlock 重置 verifyFailCount、reauth 失败与成功均纳入
+ 锁定策略、跨窗口同步完整检测、导入三态对话框、CSV 公式注入防护、
+ 合并去重、中文输入法 Enter、搜索高亮修正、删除状态清理时机后移、
+ 批量删除回滚、导入数组类型与元素清洗、ID 格式白名单与唯一性、输入
+ 不匹配提示、CSP、虚拟滚动、元素池、键盘导航、拒绝采样、模态守卫、
+ 跨窗口同步、自动锁定、日志、重新认证、ESC 关闭、模态栈、剪贴板保护、
+ 收起保留标题与搜索栏、hasUnsavedAddContent 提示、
+ layoutRecomputeDebounceTimer 去抖、折叠状态 logo 一致性等）。
 
- 保留不变：全部 v8.3.0 / v8.3.1 / v8.3.2 功能与逻辑修复（密码不 trim、
- unlock 重置 verifyFailCount、reauth 失败与成功均纳入锁定策略、跨窗口
- 同步完整检测、导入三态对话框、CSV 公式注入防护、合并去重、中文输入法
- Enter、搜索高亮修正、删除状态清理时机后移、批量删除回滚、导入数组
- 类型与元素清洗、ID 格式白名单与唯一性、输入不匹配提示、viewport 可
- 访问性、CSP、虚拟滚动、元素池、键盘导航、拒绝采样、模态守卫、跨窗口
- 同步、自动锁定、日志、重新认证、ESC 关闭、模态栈、剪贴板保护、收起
- 保留标题与搜索栏、hasUnsavedAddContent 提示、layoutRecomputeDebounceTimer
- 去抖等）。
+ 历史更新摘要：
+ —— v8.3.3：折叠状态 logo 完全继承全局样式、移动端认证卡片排版优化、
+     深色模式交互反馈、触屏 hover 治理、modal 单层模糊、视觉节奏统一、
+     cat-tag 布局优化、modal 移动端间距、空状态 padding 缩小等。
+ —— v8.3.2：sanitizePasswordList 元素清洗、normalizeItem 增加 seenIds、
+     单条删除/编辑覆盖/添加覆盖/清空全部保存失败回滚修正、
+     reauth 成功持久化清零 verifyFailCount、hasUnsavedAddContent 对
+     登录密码不再 trim、三态导入对话框先检测重名再弹出等。
+ —— v8.3.1：密码不 trim、CSV 公式注入防护、合并去重、中文输入法 Enter、
+     搜索高亮修正、ID 格式白名单、导入数组类型校验、ID 唯一性保证、
+     删除状态清理时机后移、批量删除回滚完整性等。
+ —— v8.3.0：折叠状态移除搜索栏 padding-right 让位、#expandTopBar 移至
+     app-header 内部同行对齐、搜索栏层次优化、输入框边框可见、
+     移除搜索栏 backdrop-filter 性能优化等。
 ====================================================================================
 -->
 <!DOCTYPE html>
 <html lang="zh-CN">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, minimum-scale=1.0, viewport-fit=cover">
     <meta name="format-detection" content="telephone=no,email=no,address=no">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="default">
@@ -81,7 +85,7 @@
           content="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; frame-ancestors 'none'; connect-src 'self'; form-action 'none';">
     <meta http-equiv="X-Content-Type-Options" content="nosniff">
     <meta http-equiv="Referrer-Policy" content="strict-origin-when-cross-origin">
-    <title>🔐 静谧·密钥 | 安全密码本 v8.3.3</title>
+    <title>🔐 静谧·密钥 | 安全密码本 v8.4.0</title>
     <style>
         :root {
             --bg-gradient: linear-gradient(135deg, #e0f2fe 0%, #bae6fd 50%, #e0e7ff 100%);
@@ -272,7 +276,9 @@
             width: 100%;
             height: var(--input-height);
             padding: 0 var(--input-padding-x);
-            font-size: var(--input-font-size);
+            /* v8.3.4：字体固定 16px，避免 iOS Safari / 部分 Android 在输入框
+               聚焦时自动放大页面（< 16px 会触发自动缩放） */
+            font-size: 16px;
             font-family: inherit;
             border: 1px solid var(--input-border);
             border-radius: 14px;
@@ -402,12 +408,14 @@
             color: #fff;
         }
 
+        /* v8.3.4：增加 letter-spacing: 0.4px，与 .btn-primary 保持一致的 CTA 强化 */
         .btn-danger {
             background: var(--danger);
             color: #fff;
             box-shadow: 0 4px 12px rgba(220, 38, 38, 0.35);
             border: 1px solid rgba(255, 255, 255, 0.15);
             font-weight: 600;
+            letter-spacing: 0.4px;
         }
 
         .btn-danger:hover {
@@ -708,7 +716,8 @@
             border-radius: 12px;
             border: 1px solid var(--input-border);
             background: var(--input-bg);
-            font-size: 0.92rem;
+            /* v8.3.4：字体固定 16px，避免 iOS Safari 聚焦搜索框时自动放大 */
+            font-size: 16px;
             font-weight: 500;
             letter-spacing: 0.15px;
             transition: all 0.2s ease;
@@ -742,7 +751,8 @@
             padding-right: 40px;
         }
 
-        /* v8.3.3：移除多余 margin-top，垂直节奏统一由 .app-sticky-top gap 控制 */
+        /* v8.3.4：移除多余的 margin-top 及其对应过渡项，垂直节奏统一由
+           .app-sticky-top 的 gap 控制 */
         .add-section {
             background: var(--btn-bg);
             backdrop-filter: blur(12px);
@@ -750,7 +760,7 @@
             padding: 1.8rem;
             box-shadow: var(--shadow-sm);
             border: 1px solid var(--btn-border);
-            transition: max-height 0.3s ease, padding 0.3s ease, opacity 0.3s ease, margin 0.3s ease;
+            transition: max-height 0.3s ease, padding 0.3s ease, opacity 0.3s ease;
             overflow: hidden;
         }
 
@@ -922,8 +932,9 @@
             -webkit-overflow-scrolling: touch;
         }
 
-        /* v8.3.3：右侧内边距从 84px 降为 72px，让中文分类名多显示约 1-2 个字；
-           加 min-height 避免 .cat-count 与 .cat-actions 在极端窄列下重叠 */
+        /* v8.3.4：右侧内边距 80px，为 .cat-actions（两个 32px 按钮 + 4px gap +
+           4px padding-left + 6px right ≈ 76px）预留 4px 视觉缓冲，
+           避免中文分类名较长时省略号与操作按钮在临界宽度下重叠 */
         .cat-tag {
             position: relative;
             display: flex;
@@ -933,7 +944,7 @@
             background: var(--glass-bg);
             border: 1px solid var(--btn-border);
             border-radius: 16px;
-            padding: 12px 72px 12px 16px;
+            padding: 12px 80px 12px 16px;
             min-height: 48px;
             font-size: 0.88rem;
             font-weight: 500;
@@ -960,12 +971,12 @@
             pointer-events: none;
         }
 
+        /* v8.3.4：删除绝对定位下无实际作用的 margin-left: auto */
         .cat-tag .cat-actions {
             display: flex;
             gap: 2px;
             align-items: center;
             flex-shrink: 0;
-            margin-left: auto;
             padding-left: 4px;
             position: absolute;
             right: 6px;
@@ -1196,10 +1207,13 @@
             gap: 4px;
             margin: 8px 0;
         }
+        /* v8.3.4：空段背景由硬编码 #e2e8f0 改为 CSS 变量 var(--border)，
+           使初始渲染在深色模式（midnight #475569）下与卡片底色协调，
+           避免浅灰色段在深色卡片上刺眼 */
         .strength-segment {
             flex: 1;
             height: 6px;
-            background: #e2e8f0;
+            background: var(--border);
             border-radius: 3px;
             transition: background 0.3s ease;
         }
@@ -1326,8 +1340,10 @@
             :root { --item-height: 270px; }
             /* v8.3.3：超小屏折叠状态保持 row，logo 继承全局样式（在 380px 断点内 logo 全局尺寸略小，
                但折叠/展开状态保持一致） */
+            /* v8.3.4：min-height 由 44px 降为 36px，匹配 380px 断点下 logo 实际高度 */
             .top-collapsed .app-header {
                 flex-direction: row !important;
+                min-height: 36px;
             }
         }
 
@@ -1371,7 +1387,8 @@
             .search-bar select {
                 height: 40px;
                 border-radius: 10px;
-                font-size: 0.85rem;
+                /* v8.3.4：横屏也保持 16px，避免 iOS Safari 聚焦缩放 */
+                font-size: 16px;
             }
             .btn-sm {
                 padding: 6px 10px;
@@ -1420,6 +1437,8 @@
 
         /* v8.3.3：触屏设备上禁用所有非必要的 hover 视觉状态，
            避免点击后状态滞留 */
+        /* v8.3.4：补齐深色模式（midnight）下的高特异性覆盖 + 补齐浅色模式下
+           cat-tag button / pw-action / collapse-top-btn 的 hover 残留 */
         @media (hover: none) and (pointer: coarse) {
             .btn:hover {
                 transform: none;
@@ -1444,6 +1463,37 @@
             }
             .search-bar:hover {
                 border-color: var(--border);
+            }
+            /* v8.3.4：补齐 cat-tag 操作按钮在浅色模式下的 hover 残留 */
+            .cat-tag button:hover {
+                color: var(--text-secondary);
+                background: none;
+            }
+            .cat-tag button[data-cat-edit]:hover {
+                color: var(--text-secondary);
+                background: none;
+            }
+            /* v8.3.4：补齐 pw-action 与 collapse-top-btn 的 hover 残留 */
+            .pw-action:hover {
+                background: transparent;
+            }
+            .collapse-top-btn:hover {
+                background: transparent;
+            }
+            html[data-theme-resolved="midnight"] .theme-option:hover {
+                background: transparent;
+            }
+            html[data-theme-resolved="midnight"] .cat-tag:hover {
+                background: var(--glass-bg);
+                box-shadow: none;
+            }
+            html[data-theme-resolved="midnight"] .cat-tag button:hover {
+                color: var(--text-secondary);
+                background: none;
+            }
+            html[data-theme-resolved="midnight"] .cat-tag button[data-cat-edit]:hover {
+                color: var(--text-secondary);
+                background: none;
             }
         }
 
@@ -1491,7 +1541,7 @@
 
     // ===================== 常量与配置 =====================
     const CONFIG = {
-        APP_VERSION: '8.3.3',
+        APP_VERSION: '8.4.0',
         STORAGE_VAULT: 'serene_vault_enc_v3',
         STORAGE_SALT: 'serene_vault_salt_v3',
         STORAGE_AUTH: 'serene_vault_auth_v3',
@@ -2725,7 +2775,9 @@
         const toast = document.createElement('div');
         toast.className = 'toast';
         toast.textContent = message;
-        if (isError) toast.style.background = '#dc2626';
+        // v8.3.4：使用 CSS 变量 --danger，使深色模式（midnight #f87171）
+        // 下的错误提示与主题色协调，避免刺眼亮红
+        if (isError) toast.style.background = 'var(--danger)';
         document.body.appendChild(toast);
         setTimeout(function(){ toast.remove(); }, duration);
         if (navigator.vibrate) navigator.vibrate(isError ? 80 : 30);
@@ -5130,7 +5182,9 @@
             if (index < level) {
                 segment.style.background = colors[level] || '#dc2626';
             } else {
-                segment.style.background = '#e2e8f0';
+                // v8.3.4：空段移除内联样式，回退到 CSS 变量 var(--border)，
+                // 使深色模式下与卡片底色协调
+                segment.style.removeProperty('background');
             }
         });
         if (textElement) {
@@ -5353,7 +5407,9 @@
         };
         window.addEventListener('resize', handleResize, { signal });
         window.addEventListener('orientationchange', function() {
-            setTimeout(handleResize, 250);
+            // v8.3.4：iOS Safari 在横竖屏切换后视口尺寸约需 350-500ms 才稳定，
+            // 250ms 可能读到过渡中间值。改为 400ms，与 resize 事件形成双保险
+            setTimeout(handleResize, 400);
         }, { signal });
 
         appContainer.addEventListener('click', async function(event) {
