@@ -1,35 +1,48 @@
 <!--
 ====================================================================================
- 静谧·密钥 v7.1.0 — 深度修复与健壮性增强
- 更新日期：2026-09-08
+ 静谧·密钥 v7.3.0 — 深度修复与体验优化
+ 更新日期：2026-09-10
 ====================================================================================
- 更新内容（v6.10.0 → v7.1.0）：
+ 更新内容（v7.2.0 → v7.3.0）：
 
- 1. [版本] 版本号更新至 V7.1.0，保持所有功能与稳定性不变。
- 2. [其他] 代码完整无简写，所有变量名和功能逻辑保持一致。
+ 1. [修复] 暗色系统+浅色主题时 .warning-box / .highlight 错色：
+     改为完全由主题变量控制，移除冲突的硬编码媒体查询。
+     每个主题新增 --warning-box-bg/color、--highlight-bg/color。
+ 2. [修复] 嵌套模态 ESC 键冲突：引入模态栈 ModalStack，
+     只有栈顶模态响应 ESC，子模态打开时按 ESC 不会再误关父模态。
+ 3. [修复] lockAndLogout 时 ESC 监听器泄漏：引入全局活跃模态清理集合，
+     锁定前主动调用所有模态清理函数，避免残留监听器。
+ 4. [修复] copyAndClear 读取剪贴板失败时误清空：新增 canRead 判断，
+     只有成功读取且内容仍为原密码时才清空。
+ 5. [增强] ESC 关闭支持：编辑/日志/确认/重新认证/修改主密码/重名冲突/
+     导出选择/导入选项 等所有模态均支持 ESC 关闭。
+ 6. [优化] 空闲锁定改为活动事件驱动 + 1 秒节流，
+     空闲到期后立即锁定，不再最多延迟 30 秒。
+ 7. [优化] 主题变量体系扩展，所有组件颜色统一由主题控制，
+     系统暗色切换更稳定，视觉一致性更好。
 
- 历史更新（v6.9.0 → v6.10.0）：
- 修复编辑保存竞态、分类编辑防抖、暗色角标对比度、分类管理器关闭交互、
- showConfirmDialog 默认转义、启动时 localStorage 不可用检查等。
+ 历史更新（v7.1.0 → v7.2.0）：
+ 修复编辑保存失败重试、旧格式解锁兼容、部分初始化误判、
+ 嵌套模态错乱、二次转义、空分类保持、剪贴板定时器、
+ 清空日志顺序、下载文件名跨平台等。
 
- 历史更新（v6.8.1 → v6.9.0）：
- 深度优化分类库布局、新增密码生成器、保存队列、自定义确认对话框等。
+ 历史更新（v7.0.0 → v7.1.0）：
+ 深度修复与健壮性增强，代码完整无简写。
 ====================================================================================
 -->
 <!DOCTYPE html>
 <html lang="zh-CN">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=yes, viewport-fit=cover, shrink-to-fit=no">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
     <meta name="format-detection" content="telephone=no">
     <meta http-equiv="Content-Security-Policy"
           content="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; frame-ancestors 'none'; connect-src 'self'; form-action 'none';">
     <meta http-equiv="X-Frame-Options" content="DENY">
     <meta http-equiv="X-Content-Type-Options" content="nosniff">
     <meta http-equiv="Referrer-Policy" content="strict-origin-when-cross-origin">
-    <title>🔐 静谧·密钥 | 安全密码本 v7.1.0</title>
+    <title>🔐 静谧·密钥 | 安全密码本 v7.3.0</title>
     <style>
-        /* ===== 样式保持完整，基于 v6.9.0 优化 ===== */
         :root {
             --bg-gradient: linear-gradient(135deg, #e0f2fe 0%, #bae6fd 50%, #e0e7ff 100%);
             --glass-bg: rgba(255, 255, 255, 0.75);
@@ -47,6 +60,19 @@
             --warning: #b45309;
             --success: #059669;
             --placeholder-color: #8a94a6;
+            --input-bg: rgba(255, 255, 255, 0.8);
+            --input-border: rgba(0, 0, 0, 0.08);
+            --input-focus-bg: #ffffff;
+            --btn-bg: rgba(255, 255, 255, 0.6);
+            --btn-border: rgba(0, 0, 0, 0.08);
+            --btn-bg-hover: rgba(255, 255, 255, 0.9);
+            --btn-bg-active: rgba(255, 255, 255, 0.8);
+            --cat-count-bg: rgba(0, 0, 0, 0.08);
+            --cat-count-color: #334155;
+            --warning-box-bg: #fff8eb;
+            --warning-box-color: #8c4f00;
+            --highlight-bg: #ffe484;
+            --highlight-color: #0f172a;
             --shadow-xs: 0 1px 3px rgba(0, 0, 0, 0.04);
             --shadow-sm: 0 2px 6px rgba(0, 0, 0, 0.06), 0 1px 3px rgba(0, 0, 0, 0.04);
             --shadow-md: 0 6px 16px rgba(0, 0, 0, 0.08), 0 2px 8px rgba(0, 0, 0, 0.05);
@@ -66,6 +92,8 @@
             --safe-area-right: env(safe-area-inset-right, 0px);
         }
 
+        /* 系统暗色偏好只作为首屏兜底；applyTheme 会用内联变量覆盖，
+           因此保留这些默认值可避免白屏闪烁。 */
         @media (prefers-color-scheme: dark) {
             :root {
                 --bg-gradient: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
@@ -84,26 +112,19 @@
                 --warning: #fbbf24;
                 --success: #34d399;
                 --placeholder-color: #94a3b8;
-            }
-            .btn {
-                border-color: rgba(255, 255, 255, 0.12);
-            }
-            .btn:hover {
-                border-color: var(--primary);
-            }
-            input, select, textarea {
-                background: rgba(0, 0, 0, 0.3);
-                border-color: rgba(255, 255, 255, 0.1);
-                color: #f8fafc;
-            }
-            input:focus, select:focus, textarea:focus {
-                background: rgba(255, 255, 255, 0.08);
-                border-color: var(--primary);
-                box-shadow: 0 0 0 4px var(--primary-light);
-            }
-            .cat-tag .cat-count {
-                background: rgba(255, 255, 255, 0.18);
-                color: #e2e8f0;
+                --input-bg: rgba(0, 0, 0, 0.3);
+                --input-border: rgba(255, 255, 255, 0.1);
+                --input-focus-bg: rgba(255, 255, 255, 0.08);
+                --btn-bg: rgba(255, 255, 255, 0.06);
+                --btn-border: rgba(255, 255, 255, 0.12);
+                --btn-bg-hover: rgba(255, 255, 255, 0.12);
+                --btn-bg-active: rgba(255, 255, 255, 0.08);
+                --cat-count-bg: rgba(255, 255, 255, 0.18);
+                --cat-count-color: #e2e8f0;
+                --warning-box-bg: #2f2412;
+                --warning-box-color: #fadf8a;
+                --highlight-bg: #4a3a0a;
+                --highlight-color: #fbbf24;
             }
         }
 
@@ -133,7 +154,7 @@
             justify-content: flex-start;
             padding: calc(16px + var(--safe-area-top)) calc(16px + var(--safe-area-right)) calc(16px + var(--safe-area-bottom)) calc(16px + var(--safe-area-left));
             color: var(--text);
-            transition: background 0.4s ease;
+            transition: background 0.4s ease, color 0.3s ease;
             line-height: 1.5;
             -webkit-font-smoothing: antialiased;
             font-weight: 400;
@@ -208,12 +229,12 @@
             padding: 0 var(--input-padding-x);
             font-size: var(--input-font-size);
             font-family: inherit;
-            border: 1px solid rgba(0, 0, 0, 0.08);
+            border: 1px solid var(--input-border);
             border-radius: 14px;
-            background: rgba(255, 255, 255, 0.8);
+            background: var(--input-bg);
             color: var(--text);
             outline: none;
-            transition: all 0.2s ease;
+            transition: all 0.2s ease, background 0.3s ease, border-color 0.3s ease, color 0.3s ease;
             box-sizing: border-box;
             -webkit-appearance: none;
         }
@@ -238,18 +259,13 @@
 
         select option {
             color: var(--text);
-        }
-
-        @media (prefers-color-scheme: dark) {
-            select {
-                background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='14' height='14' viewBox='0 0 24 24' fill='none' stroke='%23cbd5e1' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'%3E%3C/polyline%3E%3C/svg%3E");
-            }
+            background: var(--surface);
         }
 
         input:focus, select:focus, textarea:focus {
             border-color: var(--primary);
             box-shadow: 0 0 0 4px var(--primary-light);
-            background: #fff;
+            background: var(--input-focus-bg);
         }
 
         ::placeholder {
@@ -268,7 +284,7 @@
             font-weight: 600;
             font-size: 0.9rem;
             cursor: pointer;
-            border: none;
+            border: 1px solid var(--btn-border);
             transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
             min-height: 48px;
             touch-action: manipulation;
@@ -279,8 +295,7 @@
             overflow: hidden;
             text-decoration: none;
             backdrop-filter: blur(4px);
-            background: rgba(255, 255, 255, 0.6);
-            border: 1px solid rgba(0, 0, 0, 0.08);
+            background: var(--btn-bg);
             color: var(--text);
             box-shadow: var(--shadow-sm);
             font-weight: 500;
@@ -305,7 +320,7 @@
         }
 
         .btn:hover {
-            background: rgba(255, 255, 255, 0.9);
+            background: var(--btn-bg-hover);
             border-color: var(--primary);
             box-shadow: 0 6px 18px rgba(0, 0, 0, 0.06);
             transform: translateY(-1px);
@@ -313,7 +328,7 @@
 
         .btn:active {
             transform: scale(0.98);
-            background: rgba(255, 255, 255, 0.8);
+            background: var(--btn-bg-active);
         }
 
         .btn-primary {
@@ -326,14 +341,16 @@
         }
 
         .btn-primary:hover {
-            background: linear-gradient(135deg, var(--primary-hover) 0%, #0369a1 100%);
+            background: linear-gradient(135deg, var(--primary-hover) 0%, var(--primary-hover) 100%);
             box-shadow: 0 8px 22px rgba(2, 132, 199, 0.45);
             transform: translateY(-2px);
+            color: #fff;
         }
 
         .btn-primary:active {
             transform: scale(0.98);
             box-shadow: 0 4px 14px rgba(2, 132, 199, 0.35);
+            color: #fff;
         }
 
         .btn-danger {
@@ -348,6 +365,7 @@
             background: var(--danger-hover);
             box-shadow: 0 8px 20px rgba(220, 38, 38, 0.45);
             transform: translateY(-1px);
+            color: #fff;
         }
 
         .btn-sm {
@@ -499,7 +517,7 @@
         }
 
         .badge {
-            background: rgba(255, 255, 255, 0.6);
+            background: var(--btn-bg);
             backdrop-filter: blur(8px);
             padding: 10px 22px;
             border-radius: 36px;
@@ -507,7 +525,7 @@
             font-weight: 600;
             color: var(--text-secondary);
             box-shadow: var(--shadow-sm);
-            border: 1px solid rgba(0, 0, 0, 0.05);
+            border: 1px solid var(--btn-border);
             display: flex;
             align-items: center;
             gap: 8px;
@@ -531,12 +549,12 @@
         .search-bar select { width: auto; min-width: 120px; max-width: 150px; flex: 0 0 auto; }
 
         .add-section {
-            background: rgba(255, 255, 255, 0.5);
+            background: var(--btn-bg);
             backdrop-filter: blur(12px);
             border-radius: var(--radius-lg);
             padding: 1.8rem;
             box-shadow: var(--shadow-sm);
-            border: 1px solid rgba(0, 0, 0, 0.04);
+            border: 1px solid var(--btn-border);
             margin-top: 0.5rem;
             transition: all 0.3s ease;
         }
@@ -568,11 +586,11 @@
             flex-direction: column;
             gap: 12px;
             padding: 16px;
-            background: rgba(255, 255, 255, 0.7);
+            background: var(--glass-bg);
             backdrop-filter: blur(12px);
             -webkit-backdrop-filter: blur(12px);
             border-radius: 20px;
-            border: 1px solid rgba(0, 0, 0, 0.04);
+            border: 1px solid var(--btn-border);
             box-shadow: var(--shadow-sm);
             transition: all 0.2s;
         }
@@ -675,10 +693,9 @@
             height: 1.1em;
         }
 
-        /* ===== 分类网格优化（v6.9.0 起） ===== */
         .cat-grid {
             display: grid;
-            grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+            grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
             gap: 12px;
             max-height: 320px;
             overflow-y: auto;
@@ -692,10 +709,10 @@
             align-items: center;
             justify-content: space-between;
             gap: 8px;
-            background: rgba(255, 255, 255, 0.7);
-            border: 1px solid rgba(0, 0, 0, 0.05);
+            background: var(--glass-bg);
+            border: 1px solid var(--btn-border);
             border-radius: 16px;
-            padding: 12px 36px 12px 16px;
+            padding: 12px 84px 12px 16px;
             font-size: 0.88rem;
             font-weight: 500;
             transition: all var(--transition);
@@ -705,15 +722,15 @@
             text-overflow: ellipsis;
         }
 
-        .cat-tag:hover { background: #fff; box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05); }
+        .cat-tag:hover { background: var(--btn-bg-hover); box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05); }
 
         .cat-tag .cat-count {
             position: absolute;
             top: 4px;
             right: 4px;
             font-size: 0.65rem;
-            background: rgba(0, 0, 0, 0.08);
-            color: var(--text-secondary);
+            background: var(--cat-count-bg);
+            color: var(--cat-count-color);
             border-radius: 10px;
             padding: 2px 8px;
             font-weight: 600;
@@ -728,6 +745,9 @@
             flex-shrink: 0;
             margin-left: auto;
             padding-left: 4px;
+            position: absolute;
+            right: 6px;
+            bottom: 6px;
         }
 
         .cat-tag .cat-name-text {
@@ -837,48 +857,36 @@
             to { opacity: 1; transform: translateX(-50%) translateY(0); }
         }
 
+        /* 完全由主题变量控制，消除暗色系统与浅色主题的错色问题 */
         .warning-box {
-            background: #fff8eb;
+            background: var(--warning-box-bg);
             border-left: 5px solid var(--warning);
             padding: 14px 20px;
             border-radius: 14px;
             margin: 16px 0;
             font-size: 0.88rem;
-            color: #8c4f00;
+            color: var(--warning-box-color);
             line-height: 1.6;
             font-weight: 500;
+            transition: background 0.3s ease, color 0.3s ease;
         }
 
-        @media (prefers-color-scheme: dark) {
-            .warning-box { background: #2f2412; color: #fadf8a; }
-            .password-item:hover {
-                border-color: var(--primary);
-            }
-            .cat-tag button:hover {
-                background: rgba(248, 113, 113, 0.25);
-            }
-            .cat-tag button[data-cat-edit]:hover {
-                background: rgba(56, 189, 248, 0.2);
-            }
-            .card, .password-item, .modal-card {
-                box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
-                border-color: rgba(255, 255, 255, 0.15);
-            }
+        html[data-theme-resolved="midnight"] .cat-tag button:hover { background: rgba(248, 113, 113, 0.25); }
+        html[data-theme-resolved="midnight"] .cat-tag button[data-cat-edit]:hover { background: rgba(56, 189, 248, 0.2); }
+        html[data-theme-resolved="midnight"] .card,
+        html[data-theme-resolved="midnight"] .password-item,
+        html[data-theme-resolved="midnight"] .modal-card {
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
+            border-color: rgba(255, 255, 255, 0.15);
         }
 
         .highlight {
-            background-color: #ffe484;
-            color: #0f172a;
+            background-color: var(--highlight-bg);
+            color: var(--highlight-color);
             border-radius: 4px;
             padding: 0 3px;
             font-weight: 600;
-        }
-
-        @media (prefers-color-scheme: dark) {
-            .highlight {
-                background-color: #4a3a0a;
-                color: #fbbf24;
-            }
+            transition: background-color 0.3s ease, color 0.3s ease;
         }
 
         .batch-bar {
@@ -926,6 +934,7 @@
             scrollbar-width: none;
             border: 1px solid rgba(0, 0, 0, 0.05);
             line-height: 1.7;
+            color: var(--text);
         }
 
         .log-view::-webkit-scrollbar { display: none; }
@@ -973,7 +982,6 @@
             transition: color 0.3s ease;
         }
 
-        /* ===== 顶部折叠控制样式（仅移动端） ===== */
         .collapse-top-btn {
             display: none;
             background: transparent;
@@ -1071,12 +1079,12 @@
             .btn-sm { padding: 10px 14px; font-size: 0.85rem; min-height: 44px; }
             .modal-card { max-width: 92vw; max-height: 90vh; padding: 1.8rem; }
             .pw-text-input { font-size: 0.95rem; min-width: 12ch; }
-            .cat-grid { grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); }
+            .cat-grid { grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); }
             .password-item { padding: 18px 16px; gap: 14px; }
             .password-item:hover {
                 transform: none;
                 box-shadow: var(--shadow-sm);
-                border-color: rgba(0, 0, 0, 0.04);
+                border-color: var(--btn-border);
             }
             .item-actions .btn-sm { min-height: 44px; min-width: 44px; }
         }
@@ -1087,7 +1095,7 @@
             .logo { font-size: 1.4rem; }
             .logo svg { width: 2rem; height: 2rem; }
             .pw-text-input { min-width: 10ch; }
-            .cat-grid { grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); }
+            .cat-grid { grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); }
             .search-bar { flex-wrap: wrap; }
             .search-bar input { flex: 1 1 100%; }
             .search-bar select { flex: 1 1 auto; max-width: none; min-width: 0; }
@@ -1133,7 +1141,6 @@
 </head>
 <body>
 <svg display="none" aria-hidden="true">
-    <!-- SVG symbols 完整保留，包含新增 icon-dice -->
     <symbol id="icon-lock" viewBox="0 0 24 24"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></symbol>
     <symbol id="icon-unlock" viewBox="0 0 24 24"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 9.9-1"/></symbol>
     <symbol id="icon-eye" viewBox="0 0 24 24"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></symbol>
@@ -1163,7 +1170,7 @@
 
     // ===================== 常量与配置 =====================
     const CONFIG = {
-        APP_VERSION: '7.1.0',
+        APP_VERSION: '7.3.0',
         STORAGE_VAULT: 'serene_vault_enc_v3',
         STORAGE_SALT: 'serene_vault_salt_v3',
         STORAGE_AUTH: 'serene_vault_auth_v3',
@@ -1182,123 +1189,334 @@
         PBKDF2_ITERATIONS: 600000,
         REAUTH_VALIDITY_MS: 30000,
         IDLE_TIMEOUT: 60000,
+        IDLE_RESCHEDULE_THROTTLE_MS: 1000,
         VISIBILITY_LOCK_DELAY: 10000,
         MAX_FAIL_COUNT: 5,
         BASE_DELAY_MS: 1000,
         LOCK_DURATION_INCREMENT_MS: 60000,
         SEARCH_DEBOUNCE_MS: 300,
         GENERATED_PASSWORD_LENGTH: 16,
-        EDIT_BUTTON_DEBOUNCE_MS: 500
+        EDIT_BUTTON_DEBOUNCE_MS: 500,
+        CLIPBOARD_CLEAR_DELAY_MS: 10000
     };
 
-    // 完整主题定义（与 v6.9.0 相同，此处略去以节省篇幅但实际完整保留）
+    // ===================== 主题定义 =====================
+    // 每个主题都提供完整的输入/按钮/警示/高亮变量，
+    // 使组件颜色完全由主题控制，不再与系统暗色媒体查询产生冲突。
     const THEMES = {
-        ocean: { name:'海洋微风', icon:'🌊', vars:{
-            '--bg-gradient':'linear-gradient(135deg, #e0f2fe 0%, #bae6fd 50%, #e0e7ff 100%)',
-            '--glass-bg':'rgba(255, 255, 255, 0.75)',
-            '--glass-border':'rgba(255, 255, 255, 0.6)',
-            '--surface':'#ffffff',
-            '--surface-alt':'#f0f9ff',
-            '--text':'#0b1a2f',
-            '--text-secondary':'#334155',
-            '--border':'#cbd5e1',
-            '--primary':'#0284c7',
-            '--primary-hover':'#0369a1',
-            '--primary-light':'rgba(2,132,199,0.15)',
-            '--danger':'#dc2626',
-            '--danger-hover':'#b91c1c',
-            '--warning':'#b45309',
-            '--success':'#059669',
-            '--placeholder-color':'#8a94a6'
-        }},
-        sunset: { name:'温暖日落', icon:'🌅', vars:{
-            '--bg-gradient':'linear-gradient(135deg, #fff7ed 0%, #fed7aa 50%, #fde68a 100%)',
-            '--glass-bg':'rgba(255, 255, 255, 0.75)',
-            '--glass-border':'rgba(255, 255, 255, 0.6)',
-            '--surface':'#ffffff',
-            '--surface-alt':'#fff1e6',
-            '--text':'#0b1a2f',
-            '--text-secondary':'#334155',
-            '--border':'#e2c9b3',
-            '--primary':'#ea580c',
-            '--primary-hover':'#c2410c',
-            '--primary-light':'rgba(234,88,12,0.2)',
-            '--danger':'#b91c1c',
-            '--danger-hover':'#991b1b',
-            '--warning':'#b45309',
-            '--success':'#059669',
-            '--placeholder-color':'#9a7b6a'
-        }},
-        forest: { name:'森林绿意', icon:'🌿', vars:{
-            '--bg-gradient':'linear-gradient(135deg, #ecfdf5 0%, #a7f3d0 50%, #d1fae5 100%)',
-            '--glass-bg':'rgba(255, 255, 255, 0.75)',
-            '--glass-border':'rgba(255, 255, 255, 0.6)',
-            '--surface':'#ffffff',
-            '--surface-alt':'#ecfdf5',
-            '--text':'#0b1a2f',
-            '--text-secondary':'#334155',
-            '--border':'#b8d8c3',
-            '--primary':'#059669',
-            '--primary-hover':'#047857',
-            '--primary-light':'rgba(5,150,105,0.2)',
-            '--danger':'#dc2626',
-            '--danger-hover':'#b91c1c',
-            '--warning':'#b45309',
-            '--success':'#059669',
-            '--placeholder-color':'#6b8a7a'
-        }},
-        sakura: { name:'樱花粉彩', icon:'🌸', vars:{
-            '--bg-gradient':'linear-gradient(135deg, #fce7f3 0%, #fbcfe8 50%, #ede9fe 100%)',
-            '--glass-bg':'rgba(255, 255, 255, 0.75)',
-            '--glass-border':'rgba(255, 255, 255, 0.6)',
-            '--surface':'#ffffff',
-            '--surface-alt':'#fce7f3',
-            '--text':'#0b1a2f',
-            '--text-secondary':'#334155',
-            '--border':'#e6c8d8',
-            '--primary':'#db2777',
-            '--primary-hover':'#be185d',
-            '--primary-light':'rgba(219,39,119,0.2)',
-            '--danger':'#b91c1c',
-            '--danger-hover':'#991b1b',
-            '--warning':'#b45309',
-            '--success':'#059669',
-            '--placeholder-color':'#b08a9a'
-        }},
-        lavender: { name:'紫罗兰梦', icon:'💜', vars:{
-            '--bg-gradient':'linear-gradient(135deg, #ede9fe 0%, #c4b5fd 50%, #e0e7ff 100%)',
-            '--glass-bg':'rgba(255, 255, 255, 0.75)',
-            '--glass-border':'rgba(255, 255, 255, 0.6)',
-            '--surface':'#ffffff',
-            '--surface-alt':'#ede9fe',
-            '--text':'#0b1a2f',
-            '--text-secondary':'#334155',
-            '--border':'#c5b8e0',
-            '--primary':'#7c3aed',
-            '--primary-hover':'#6d28d9',
-            '--primary-light':'rgba(124,58,237,0.2)',
-            '--danger':'#dc2626',
-            '--danger-hover':'#b91c1c',
-            '--warning':'#b45309',
-            '--success':'#059669',
-            '--placeholder-color':'#8b8bb0'
-        }}
+        ocean: {
+            name: '海洋微风',
+            icon: '🌊',
+            vars: {
+                '--bg-gradient': 'linear-gradient(135deg, #e0f2fe 0%, #bae6fd 50%, #e0e7ff 100%)',
+                '--glass-bg': 'rgba(255, 255, 255, 0.75)',
+                '--glass-border': 'rgba(255, 255, 255, 0.6)',
+                '--surface': '#ffffff',
+                '--surface-alt': '#f0f9ff',
+                '--text': '#0b1a2f',
+                '--text-secondary': '#334155',
+                '--border': '#cbd5e1',
+                '--primary': '#0284c7',
+                '--primary-hover': '#0369a1',
+                '--primary-light': 'rgba(2,132,199,0.15)',
+                '--danger': '#dc2626',
+                '--danger-hover': '#b91c1c',
+                '--warning': '#b45309',
+                '--success': '#059669',
+                '--placeholder-color': '#8a94a6',
+                '--input-bg': 'rgba(255, 255, 255, 0.8)',
+                '--input-border': 'rgba(0, 0, 0, 0.08)',
+                '--input-focus-bg': '#ffffff',
+                '--btn-bg': 'rgba(255, 255, 255, 0.6)',
+                '--btn-border': 'rgba(0, 0, 0, 0.08)',
+                '--btn-bg-hover': 'rgba(255, 255, 255, 0.9)',
+                '--btn-bg-active': 'rgba(255, 255, 255, 0.8)',
+                '--cat-count-bg': 'rgba(0, 0, 0, 0.08)',
+                '--cat-count-color': '#334155',
+                '--warning-box-bg': '#fff8eb',
+                '--warning-box-color': '#8c4f00',
+                '--highlight-bg': '#ffe484',
+                '--highlight-color': '#0f172a'
+            }
+        },
+        sunset: {
+            name: '温暖日落',
+            icon: '🌅',
+            vars: {
+                '--bg-gradient': 'linear-gradient(135deg, #fff7ed 0%, #fed7aa 50%, #fde68a 100%)',
+                '--glass-bg': 'rgba(255, 255, 255, 0.75)',
+                '--glass-border': 'rgba(255, 255, 255, 0.6)',
+                '--surface': '#ffffff',
+                '--surface-alt': '#fff1e6',
+                '--text': '#0b1a2f',
+                '--text-secondary': '#334155',
+                '--border': '#e2c9b3',
+                '--primary': '#ea580c',
+                '--primary-hover': '#c2410c',
+                '--primary-light': 'rgba(234,88,12,0.2)',
+                '--danger': '#b91c1c',
+                '--danger-hover': '#991b1b',
+                '--warning': '#b45309',
+                '--success': '#059669',
+                '--placeholder-color': '#9a7b6a',
+                '--input-bg': 'rgba(255, 255, 255, 0.8)',
+                '--input-border': 'rgba(0, 0, 0, 0.08)',
+                '--input-focus-bg': '#ffffff',
+                '--btn-bg': 'rgba(255, 255, 255, 0.6)',
+                '--btn-border': 'rgba(0, 0, 0, 0.08)',
+                '--btn-bg-hover': 'rgba(255, 255, 255, 0.9)',
+                '--btn-bg-active': 'rgba(255, 255, 255, 0.8)',
+                '--cat-count-bg': 'rgba(0, 0, 0, 0.08)',
+                '--cat-count-color': '#334155',
+                '--warning-box-bg': '#fff8eb',
+                '--warning-box-color': '#8c4f00',
+                '--highlight-bg': '#ffe484',
+                '--highlight-color': '#0f172a'
+            }
+        },
+        forest: {
+            name: '森林绿意',
+            icon: '🌿',
+            vars: {
+                '--bg-gradient': 'linear-gradient(135deg, #ecfdf5 0%, #a7f3d0 50%, #d1fae5 100%)',
+                '--glass-bg': 'rgba(255, 255, 255, 0.75)',
+                '--glass-border': 'rgba(255, 255, 255, 0.6)',
+                '--surface': '#ffffff',
+                '--surface-alt': '#ecfdf5',
+                '--text': '#0b1a2f',
+                '--text-secondary': '#334155',
+                '--border': '#b8d8c3',
+                '--primary': '#059669',
+                '--primary-hover': '#047857',
+                '--primary-light': 'rgba(5,150,105,0.2)',
+                '--danger': '#dc2626',
+                '--danger-hover': '#b91c1c',
+                '--warning': '#b45309',
+                '--success': '#059669',
+                '--placeholder-color': '#6b8a7a',
+                '--input-bg': 'rgba(255, 255, 255, 0.8)',
+                '--input-border': 'rgba(0, 0, 0, 0.08)',
+                '--input-focus-bg': '#ffffff',
+                '--btn-bg': 'rgba(255, 255, 255, 0.6)',
+                '--btn-border': 'rgba(0, 0, 0, 0.08)',
+                '--btn-bg-hover': 'rgba(255, 255, 255, 0.9)',
+                '--btn-bg-active': 'rgba(255, 255, 255, 0.8)',
+                '--cat-count-bg': 'rgba(0, 0, 0, 0.08)',
+                '--cat-count-color': '#334155',
+                '--warning-box-bg': '#fff8eb',
+                '--warning-box-color': '#8c4f00',
+                '--highlight-bg': '#ffe484',
+                '--highlight-color': '#0f172a'
+            }
+        },
+        sakura: {
+            name: '樱花粉彩',
+            icon: '🌸',
+            vars: {
+                '--bg-gradient': 'linear-gradient(135deg, #fce7f3 0%, #fbcfe8 50%, #ede9fe 100%)',
+                '--glass-bg': 'rgba(255, 255, 255, 0.75)',
+                '--glass-border': 'rgba(255, 255, 255, 0.6)',
+                '--surface': '#ffffff',
+                '--surface-alt': '#fce7f3',
+                '--text': '#0b1a2f',
+                '--text-secondary': '#334155',
+                '--border': '#e6c8d8',
+                '--primary': '#db2777',
+                '--primary-hover': '#be185d',
+                '--primary-light': 'rgba(219,39,119,0.2)',
+                '--danger': '#b91c1c',
+                '--danger-hover': '#991b1b',
+                '--warning': '#b45309',
+                '--success': '#059669',
+                '--placeholder-color': '#b08a9a',
+                '--input-bg': 'rgba(255, 255, 255, 0.8)',
+                '--input-border': 'rgba(0, 0, 0, 0.08)',
+                '--input-focus-bg': '#ffffff',
+                '--btn-bg': 'rgba(255, 255, 255, 0.6)',
+                '--btn-border': 'rgba(0, 0, 0, 0.08)',
+                '--btn-bg-hover': 'rgba(255, 255, 255, 0.9)',
+                '--btn-bg-active': 'rgba(255, 255, 255, 0.8)',
+                '--cat-count-bg': 'rgba(0, 0, 0, 0.08)',
+                '--cat-count-color': '#334155',
+                '--warning-box-bg': '#fff8eb',
+                '--warning-box-color': '#8c4f00',
+                '--highlight-bg': '#ffe484',
+                '--highlight-color': '#0f172a'
+            }
+        },
+        lavender: {
+            name: '紫罗兰梦',
+            icon: '💜',
+            vars: {
+                '--bg-gradient': 'linear-gradient(135deg, #ede9fe 0%, #c4b5fd 50%, #e0e7ff 100%)',
+                '--glass-bg': 'rgba(255, 255, 255, 0.75)',
+                '--glass-border': 'rgba(255, 255, 255, 0.6)',
+                '--surface': '#ffffff',
+                '--surface-alt': '#ede9fe',
+                '--text': '#0b1a2f',
+                '--text-secondary': '#334155',
+                '--border': '#c5b8e0',
+                '--primary': '#7c3aed',
+                '--primary-hover': '#6d28d9',
+                '--primary-light': 'rgba(124,58,237,0.2)',
+                '--danger': '#dc2626',
+                '--danger-hover': '#b91c1c',
+                '--warning': '#b45309',
+                '--success': '#059669',
+                '--placeholder-color': '#8b8bb0',
+                '--input-bg': 'rgba(255, 255, 255, 0.8)',
+                '--input-border': 'rgba(0, 0, 0, 0.08)',
+                '--input-focus-bg': '#ffffff',
+                '--btn-bg': 'rgba(255, 255, 255, 0.6)',
+                '--btn-border': 'rgba(0, 0, 0, 0.08)',
+                '--btn-bg-hover': 'rgba(255, 255, 255, 0.9)',
+                '--btn-bg-active': 'rgba(255, 255, 255, 0.8)',
+                '--cat-count-bg': 'rgba(0, 0, 0, 0.08)',
+                '--cat-count-color': '#334155',
+                '--warning-box-bg': '#fff8eb',
+                '--warning-box-color': '#8c4f00',
+                '--highlight-bg': '#ffe484',
+                '--highlight-color': '#0f172a'
+            }
+        },
+        midnight: {
+            name: '午夜蓝',
+            icon: '🌙',
+            vars: {
+                '--bg-gradient': 'linear-gradient(135deg, #0f172a 0%, #1e293b 100%)',
+                '--glass-bg': 'rgba(30, 41, 59, 0.92)',
+                '--glass-border': 'rgba(255, 255, 255, 0.12)',
+                '--surface': '#1e293b',
+                '--surface-alt': '#17212e',
+                '--text': '#f8fafc',
+                '--text-secondary': '#cbd5e1',
+                '--border': '#475569',
+                '--primary': '#38bdf8',
+                '--primary-hover': '#7dd3fc',
+                '--primary-light': 'rgba(56, 189, 248, 0.2)',
+                '--danger': '#f87171',
+                '--danger-hover': '#ef4444',
+                '--warning': '#fbbf24',
+                '--success': '#34d399',
+                '--placeholder-color': '#94a3b8',
+                '--input-bg': 'rgba(0, 0, 0, 0.3)',
+                '--input-border': 'rgba(255, 255, 255, 0.1)',
+                '--input-focus-bg': 'rgba(255, 255, 255, 0.08)',
+                '--btn-bg': 'rgba(255, 255, 255, 0.06)',
+                '--btn-border': 'rgba(255, 255, 255, 0.12)',
+                '--btn-bg-hover': 'rgba(255, 255, 255, 0.12)',
+                '--btn-bg-active': 'rgba(255, 255, 255, 0.08)',
+                '--cat-count-bg': 'rgba(255, 255, 255, 0.18)',
+                '--cat-count-color': '#e2e8f0',
+                '--warning-box-bg': '#2f2412',
+                '--warning-box-color': '#fadf8a',
+                '--highlight-bg': '#4a3a0a',
+                '--highlight-color': '#fbbf24'
+            }
+        }
     };
+
+    // ===================== 全局模态栈管理 =====================
+    // modalOpenCount: 用于 body.modal-open 的引用计数
+    // activeModalClosers: 记录当前活跃模态的"强制关闭"函数，
+    //                     在 lockAndLogout 时统一调用，避免监听器泄漏
+    let modalOpenCount = 0;
+    const activeModalClosers = new Set();
+
+    function pushModalOpen() {
+        modalOpenCount++;
+        if (modalOpenCount === 1) {
+            document.body.classList.add('modal-open');
+        }
+    }
+
+    function popModalOpen() {
+        modalOpenCount = Math.max(0, modalOpenCount - 1);
+        if (modalOpenCount === 0) {
+            document.body.classList.remove('modal-open');
+        }
+    }
+
+    function resetModalOpen() {
+        modalOpenCount = 0;
+        document.body.classList.remove('modal-open');
+    }
+
+    // 注册一个模态框清理函数（在 lockAndLogout 时统一调用）
+    function registerActiveModal(cleanupFn) {
+        if (typeof cleanupFn === 'function') {
+            activeModalClosers.add(cleanupFn);
+        }
+    }
+
+    // 注销一个模态框清理函数
+    function unregisterActiveModal(cleanupFn) {
+        activeModalClosers.delete(cleanupFn);
+    }
+
+    // 关闭所有活跃模态（用于锁屏 / 重置）
+    function closeAllActiveModals() {
+        const closers = Array.from(activeModalClosers);
+        activeModalClosers.clear();
+        closers.forEach(function(cleanupFn) {
+            try {
+                cleanupFn();
+            } catch (error) {
+                console.warn('关闭模态时出现异常:', error);
+            }
+        });
+    }
+
+    // 判断某个模态元素是否为当前最顶层模态
+    // 通过检查它在 DOM 中的顺序：DOM 中最后出现的 .modal 即最顶层
+    function isTopmostModal(modalElement) {
+        const allModals = document.querySelectorAll('.modal');
+        if (allModals.length === 0) return false;
+        return allModals[allModals.length - 1] === modalElement;
+    }
+
+    // 为模态框绑定 ESC 关闭，只有最顶层模态响应
+    // 返回一个移除监听器的函数
+    function attachEscapeToClose(modalElement, closeFunction) {
+        const keydownHandler = function(event) {
+            if (event.key !== 'Escape') return;
+            if (isTopmostModal(modalElement)) {
+                event.preventDefault();
+                event.stopPropagation();
+                closeFunction();
+            }
+        };
+        document.addEventListener('keydown', keydownHandler);
+        return function removeEscapeListener() {
+            document.removeEventListener('keydown', keydownHandler);
+        };
+    }
 
     // ===================== 工具函数 =====================
     const Util = {
         escapeHtml: function(text) {
-            if (!text) return '';
+            if (text === null || text === undefined) return '';
             const map = {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'};
             return String(text).replace(/[&<>"']/g, function(match) { return map[match]; });
         },
         escapeAttr: function(text) {
+            if (text === null || text === undefined) return '';
             return String(text).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
         },
         formatDate: function(timestamp) {
             if (!timestamp) return '';
             const date = new Date(timestamp);
             return `${date.getFullYear()}-${String(date.getMonth()+1).padStart(2,'0')}-${String(date.getDate()).padStart(2,'0')}`;
+        },
+        formatTimestampForFilename: function(date) {
+            const safe = new Date(date || Date.now());
+            const year = safe.getFullYear();
+            const month = String(safe.getMonth() + 1).padStart(2, '0');
+            const day = String(safe.getDate()).padStart(2, '0');
+            const hours = String(safe.getHours()).padStart(2, '0');
+            const minutes = String(safe.getMinutes()).padStart(2, '0');
+            const seconds = String(safe.getSeconds()).padStart(2, '0');
+            return `${year}${month}${day}_${hours}${minutes}${seconds}`;
         },
         escapeRegex: function(text) {
             return text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
@@ -1420,14 +1638,18 @@
     let securityStateMemory = null;
 
     function loadSecurityState() {
+        let loaded = null;
         try {
             const raw = localStorage.getItem(CONFIG.SECURITY_STORAGE);
-            if (raw) return JSON.parse(raw);
+            if (raw) loaded = JSON.parse(raw);
         } catch (e) {
             console.warn('安全状态读取失败，使用内存存储:', e);
         }
+        if (loaded && typeof loaded === 'object') {
+            return Object.assign({ bruteFailCount: 0, lockoutUntil: 0, verifyFailCount: 0 }, loaded);
+        }
         if (securityStateMemory) return securityStateMemory;
-        return { bruteFailCount: 0, lockoutUntil: 0 };
+        return { bruteFailCount: 0, lockoutUntil: 0, verifyFailCount: 0 };
     }
     function saveSecurityState(securityData) {
         securityStateMemory = securityData;
@@ -1478,8 +1700,10 @@
         activeEditModalCleanup: null,
 
         idleTimer: null,
+        idleLastScheduleTime: 0,
         lastActivity: Date.now(),
         clipboardTimer: null,
+        clipboardExpectedValue: null,
         saveLock: null,
         lastReauthenticationTime: 0,
         currentTheme: 'ocean',
@@ -1525,10 +1749,16 @@
             this.activeEditModalCleanup = null;
             this.activeCategoryModal = null;
             this.lastCategoryEditClickTime = 0;
+            if (this.idleTimer) {
+                clearTimeout(this.idleTimer);
+                this.idleTimer = null;
+            }
+            this.idleLastScheduleTime = 0;
             if (this.clipboardTimer) {
                 clearTimeout(this.clipboardTimer);
                 this.clipboardTimer = null;
             }
+            this.clipboardExpectedValue = null;
             if (this.visibilityLockTimer) {
                 clearTimeout(this.visibilityLockTimer);
                 this.visibilityLockTimer = null;
@@ -1665,7 +1895,7 @@
             localStorage.setItem(CONFIG.STORAGE_SALT, JSON.stringify(Array.from(salt)));
             localStorage.setItem(CONFIG.STORAGE_AUTH, JSON.stringify(authData));
             localStorage.setItem(CONFIG.STORAGE_INIT, 'true');
-            saveSecurityState({ bruteFailCount: 0, lockoutUntil: 0 });
+            saveSecurityState({ bruteFailCount: 0, lockoutUntil: 0, verifyFailCount: 0 });
             State.masterKey = key;
             State.passwords = [];
             State.customCategories = ['E-Mail','工作','社交','银行','购物','娱乐','其他'];
@@ -1731,9 +1961,17 @@
             throw new Error('解密失败，可能主密码错误或数据损坏');
         }
 
-        State.passwords = decrypted.passwords || [];
-        State.customCategories = decrypted.customCategories || [];
-        if (!State.customCategories.length) State.customCategories = ['E-Mail','工作','社交','银行','购物','娱乐','其他'];
+        if (Array.isArray(decrypted)) {
+            State.passwords = decrypted;
+            State.customCategories = [];
+        } else {
+            State.passwords = decrypted.passwords || [];
+            if (decrypted.customCategories === undefined || decrypted.customCategories === null) {
+                State.customCategories = ['E-Mail','工作','社交','银行','购物','娱乐','其他'];
+            } else {
+                State.customCategories = decrypted.customCategories;
+            }
+        }
         migrateOldData();
         State.rebuildIndex();
 
@@ -1782,9 +2020,17 @@
                             const vaultRawReload = localStorage.getItem(CONFIG.STORAGE_VAULT);
                             if (!vaultRawReload) return;
                             const decryptedReload = await CryptoModule.decrypt(State.masterKey, JSON.parse(vaultRawReload));
-                            State.passwords = decryptedReload.passwords || [];
-                            State.customCategories = decryptedReload.customCategories || [];
-                            if (!State.customCategories.length) State.customCategories = ['E-Mail','工作','社交','银行','购物','娱乐','其他'];
+                            if (Array.isArray(decryptedReload)) {
+                                State.passwords = decryptedReload;
+                                State.customCategories = [];
+                            } else {
+                                State.passwords = decryptedReload.passwords || [];
+                                if (decryptedReload.customCategories === undefined || decryptedReload.customCategories === null) {
+                                    State.customCategories = ['E-Mail','工作','社交','银行','购物','娱乐','其他'];
+                                } else {
+                                    State.customCategories = decryptedReload.customCategories;
+                                }
+                            }
                             migrateOldData();
                             State.rebuildIndex();
                             if (typeof renderListOnly === 'function') renderListOnly();
@@ -1823,26 +2069,45 @@
                 State.visibilityLockTimer = null;
             }
             State.lastActivity = Date.now();
+            scheduleIdleLock();
         }
     }
 
-    function startIdleMonitor() {
-        if (State.idleTimer) clearInterval(State.idleTimer);
-        State.idleTimer = setInterval(function() {
-            if (State.masterKey && (Date.now() - State.lastActivity) >= CONFIG.IDLE_TIMEOUT) {
+    // v7.3.0：改为活动事件驱动 + 节流，锁定更及时
+    function scheduleIdleLock() {
+        const now = Date.now();
+        // 节流：距离上次重新调度不足 1 秒时不再重新调度
+        if (now - State.idleLastScheduleTime < CONFIG.IDLE_RESCHEDULE_THROTTLE_MS && State.idleTimer) {
+            return;
+        }
+        State.idleLastScheduleTime = now;
+        if (State.idleTimer) clearTimeout(State.idleTimer);
+        State.idleTimer = setTimeout(function() {
+            State.idleTimer = null;
+            if (State.masterKey) {
                 lockAndLogout();
             }
-        }, 30000);
+        }, CONFIG.IDLE_TIMEOUT);
+    }
+
+    function startIdleMonitor() {
+        if (State.idleTimer) {
+            clearTimeout(State.idleTimer);
+            State.idleTimer = null;
+        }
+        State.idleLastScheduleTime = 0;
+        scheduleIdleLock();
 
         document.removeEventListener('visibilitychange', onVisibilityChange);
         document.addEventListener('visibilitychange', onVisibilityChange);
     }
 
     function lockAndLogout() {
-        if (State.idleTimer) { clearInterval(State.idleTimer); State.idleTimer = null; }
+        if (State.idleTimer) { clearTimeout(State.idleTimer); State.idleTimer = null; }
         if (State.visibilityLockTimer) { clearTimeout(State.visibilityLockTimer); State.visibilityLockTimer = null; }
         if (State.channel) { State.channel.close(); State.channel = null; }
 
+        // v7.3.0：主动关闭所有活跃模态（含各自 ESC 监听器清理）
         try {
             if (typeof State.activeEditModalCleanup === 'function') {
                 State.activeEditModalCleanup();
@@ -1850,9 +2115,11 @@
         } catch(e) {
             console.warn('编辑模态框清理失败:', e);
         }
+        closeAllActiveModals();
 
+        // 兜底：清除所有残留的 .modal 元素
         document.querySelectorAll('.modal').forEach(function(modal) { modal.remove(); });
-        document.body.classList.remove('modal-open');
+        resetModalOpen();
 
         State.reset();
         showToast('⏰ 已自动锁定');
@@ -1906,20 +2173,45 @@
         setTimeout(function(){ toast.remove(); }, duration);
         if (navigator.vibrate) navigator.vibrate(isError ? 80 : 30);
     }
+
     async function copyAndClear(text) {
+        if (text === null || text === undefined) return;
+        const stringValue = String(text);
+        // 清空旧定时器
+        if (State.clipboardTimer) {
+            clearTimeout(State.clipboardTimer);
+            State.clipboardTimer = null;
+        }
         try {
-            await navigator.clipboard.writeText(text);
+            await navigator.clipboard.writeText(stringValue);
+            State.clipboardExpectedValue = stringValue;
             showToast('📋 已复制，10秒后自动清空剪贴板，期间请勿复制其他内容');
-            State.clipboardTimer = setTimeout(function() {
-                navigator.clipboard.writeText('').catch(function() {});
+            State.clipboardTimer = setTimeout(async function() {
                 State.clipboardTimer = null;
-            }, 10000);
+                let currentClipboard = null;
+                let canReadClipboard = true;
+                try {
+                    currentClipboard = await navigator.clipboard.readText();
+                } catch (readError) {
+                    // v7.3.0：读取失败时保守不清空，避免误清用户新内容
+                    canReadClipboard = false;
+                }
+                // 只有成功读取到，且内容仍是我们写入的密码，才清空
+                if (canReadClipboard && currentClipboard === State.clipboardExpectedValue) {
+                    try {
+                        await navigator.clipboard.writeText('');
+                    } catch (clearError) {
+                        // 忽略清空失败
+                    }
+                }
+                State.clipboardExpectedValue = null;
+            }, CONFIG.CLIPBOARD_CLEAR_DELAY_MS);
         } catch(e) {
             showToast('复制失败，请手动复制', true);
         }
     }
 
-    // ===================== 自定义确认对话框（带 allowHtml 支持） =====================
+    // ===================== 自定义确认对话框 =====================
     function showConfirmDialog(options) {
         return new Promise(function(resolve) {
             const dialogTitle = options.title || '确认操作';
@@ -1955,19 +2247,26 @@
                 </div>`;
 
             document.body.appendChild(modal);
-            document.body.classList.add('modal-open');
+            pushModalOpen();
 
             const previousFocus = document.activeElement;
             const confirmationInput = modal.querySelector('#confirmDialogInput');
             if (confirmationInput) confirmationInput.focus();
 
+            let removeEscapeListener = null;
+
             const cleanupDialog = function(result) {
+                if (removeEscapeListener) removeEscapeListener();
                 if (confirmationInput) confirmationInput.value = '';
                 modal.remove();
-                document.body.classList.remove('modal-open');
+                popModalOpen();
+                unregisterActiveModal(cleanupDialog);
                 if (previousFocus && typeof previousFocus.focus === 'function') previousFocus.focus();
                 resolve(result);
             };
+            registerActiveModal(cleanupDialog);
+
+            removeEscapeListener = attachEscapeToClose(modal, function() { cleanupDialog(false); });
 
             modal.querySelector('#confirmDialogCancel').onclick = function() { cleanupDialog(false); };
             modal.querySelector('#confirmDialogConfirm').onclick = function() {
@@ -2050,38 +2349,56 @@
             return true;
         }
         return new Promise(function(resolve) {
-            const modal = document.createElement('div'); modal.className='modal';
+            const modal = document.createElement('div');
+            modal.className = 'modal';
             modal.innerHTML = `<div class="modal-card"><h3><svg class="icon" style="width:1.4rem;height:1.4rem;"><use href="#icon-lock"/></svg> 验证身份</h3><p style="color:var(--text-secondary);margin-bottom:12px;">执行「${Util.escapeHtml(actionDescription)}」需要验证主密码</p><input type="password" id="verifyPw" placeholder="请输入当前主密码" autocomplete="off" autocapitalize="none" autofocus><div class="button-group"><button id="cancelVerify" class="btn btn-outline">取消</button><button id="confirmVerify" class="btn btn-primary">确认</button></div></div>`;
-            document.body.appendChild(modal); document.body.classList.add('modal-open');
+            document.body.appendChild(modal);
+            pushModalOpen();
             const previousFocus = document.activeElement;
             const input = modal.querySelector('#verifyPw');
             const confirmButton = modal.querySelector('#confirmVerify');
+            let removeEscapeListener = null;
+
             const cleanup = function(value) {
+                if (removeEscapeListener) removeEscapeListener();
                 if (input) input.value = '';
                 modal.remove();
-                document.body.classList.remove('modal-open');
+                popModalOpen();
+                unregisterActiveModal(cleanup);
                 if (previousFocus && typeof previousFocus.focus === 'function') previousFocus.focus();
                 resolve(value);
             };
+            registerActiveModal(cleanup);
+
+            removeEscapeListener = attachEscapeToClose(modal, function() {
+                cleanup(returnPassword ? null : false);
+            });
+
             confirmButton.onclick = async function() {
                 const password = input.value;
                 if (!password) { showToast('请输入主密码', true); return; }
                 try {
                     const isValid = await verifyMasterPassword(password);
                     if (!isValid) {
-                        State.verifyFailCount = (State.verifyFailCount || 0) + 1;
-                        await applyRateLimit(State.verifyFailCount);
+                        const security = getSecurityState();
+                        const newVerifyFailCount = (security.verifyFailCount || 0) + 1;
+                        updateSecurityState({ verifyFailCount: newVerifyFailCount });
+                        State.verifyFailCount = newVerifyFailCount;
+                        await applyRateLimit(newVerifyFailCount);
                         showToast('主密码错误', true);
-                        input.value = ''; input.focus();
+                        input.value = '';
+                        input.focus();
                         return;
                     }
                     State.verifyFailCount = 0;
+                    updateSecurityState({ verifyFailCount: 0 });
                     State.lastReauthenticationTime = Date.now();
                     const result = returnPassword ? password : true;
                     cleanup(result);
                 } catch(error) {
                     showToast(error.message, true);
-                    input.value = ''; input.focus();
+                    input.value = '';
+                    input.focus();
                 }
             };
             modal.querySelector('#cancelVerify').onclick = function() { cleanup(returnPassword ? null : false); };
@@ -2193,14 +2510,21 @@
                     </div>
                 </div>`;
             document.body.appendChild(modal);
-            document.body.classList.add('modal-open');
+            pushModalOpen();
             const previousFocus = document.activeElement;
+            let removeEscapeListener = null;
+
             const cleanup = function(result) {
+                if (removeEscapeListener) removeEscapeListener();
                 modal.remove();
-                document.body.classList.remove('modal-open');
+                popModalOpen();
+                unregisterActiveModal(cleanup);
                 if (previousFocus && typeof previousFocus.focus === 'function') previousFocus.focus();
                 resolve(result);
             };
+            registerActiveModal(cleanup);
+            removeEscapeListener = attachEscapeToClose(modal, function() { cleanup('cancel'); });
+
             modal.querySelector('#dupOverwrite').onclick = function() { cleanup('overwrite'); };
             modal.querySelector('#dupKeepBoth').onclick = function() { cleanup('keepBoth'); };
             modal.querySelector('#dupCancel').onclick = function() { cleanup('cancel'); };
@@ -2258,7 +2582,7 @@
         return rows;
     }
 
-    // ===================== 分类列表渲染（带防抖编辑） =====================
+    // ===================== 分类列表渲染 =====================
     function renderCategoryList(container) {
         const categories = loadCategories();
         const countMap = new Map();
@@ -2280,56 +2604,76 @@
                 <span class="cat-name-text">${Util.escapeHtml(category)}</span>
                 <span class="cat-count">${count}</span>
                 <span class="cat-actions">
+                    <button data-cat-edit="${Util.escapeAttr(category)}" title="重命名分类" aria-label="重命名分类 ${Util.escapeAttr(category)}">
+                        <svg class="icon"><use href="#icon-edit"/></svg>
+                    </button>
                     <button data-cat-delete="${Util.escapeAttr(category)}" title="删除分类" aria-label="删除分类 ${Util.escapeAttr(category)}">
                         <svg class="icon"><use href="#icon-trash"/></svg>
                     </button>
                 </span>`;
             container.appendChild(tag);
+        });
 
-            tag.addEventListener('dblclick', function(event) {
-                if (event.target.closest('button')) return;
-                const oldCategory = category;
-                promptRenameCategory(oldCategory).then(async function(newCategory) {
-                    if (!newCategory || newCategory === oldCategory) return;
-                    const oldPasswords = State.passwords.map(function(p) { return {...p}; });
-                    const oldCategories = [...State.customCategories];
-                    const exists = State.customCategories.some(function(c) { return c === newCategory; });
-                    if (exists) {
-                        showToast('分类名称已存在', true);
-                        return;
+        const performRenameCategory = function(oldCategory) {
+            promptRenameCategory(oldCategory).then(async function(newCategory) {
+                if (!newCategory || newCategory === oldCategory) return;
+                const oldPasswords = State.passwords.map(function(p) { return {...p}; });
+                const oldCategories = [...State.customCategories];
+                const exists = State.customCategories.some(function(c) { return c === newCategory; });
+                if (exists) {
+                    showToast('分类名称已存在', true);
+                    return;
+                }
+                const index = State.customCategories.indexOf(oldCategory);
+                if (index !== -1) {
+                    State.customCategories.splice(index, 1, newCategory);
+                    State.customCategories.sort(function(a, b) { return a.localeCompare(b); });
+                }
+                State.passwords.forEach(function(item) {
+                    if (item.category === oldCategory) {
+                        item.category = newCategory;
                     }
-                    const index = State.customCategories.indexOf(oldCategory);
-                    if (index !== -1) {
-                        State.customCategories.splice(index, 1, newCategory);
-                        State.customCategories.sort(function(a, b) { return a.localeCompare(b); });
-                    }
-                    State.passwords.forEach(function(item) {
-                        if (item.category === oldCategory) {
-                            item.category = newCategory;
-                        }
-                    });
+                });
+                State.rebuildIndex();
+                try {
+                    await saveEncrypted();
+                } catch (error) {
+                    State.passwords = oldPasswords;
+                    State.customCategories = oldCategories;
                     State.rebuildIndex();
-                    try {
-                        await saveEncrypted();
-                    } catch (error) {
-                        State.passwords = oldPasswords;
-                        State.customCategories = oldCategories;
-                        State.rebuildIndex();
-                        renderCategoryList(container);
-                        renderListOnly();
-                        refreshDatalist();
-                        showToast('保存失败：' + error.message, true, 5000);
-                        return;
-                    }
+                    renderCategoryList(container);
                     renderListOnly();
                     refreshDatalist();
-                    renderCategoryList(container);
-                    showToast(`分类已重命名为「${newCategory}」`);
-                });
+                    showToast('保存失败：' + error.message, true, 5000);
+                    return;
+                }
+                renderListOnly();
+                refreshDatalist();
+                renderCategoryList(container);
+                showToast(`分类已重命名为「${newCategory}」`);
+            });
+        };
+
+        container.querySelectorAll('button[data-cat-edit]').forEach(function(button) {
+            button.addEventListener('click', function(event) {
+                event.stopPropagation();
+                const category = button.dataset.catEdit;
+                if (!category) return;
+                performRenameCategory(category);
             });
         });
 
-        // 绑定删除按钮事件
+        container.querySelectorAll('.cat-tag').forEach(function(tagElement) {
+            tagElement.addEventListener('dblclick', function(event) {
+                if (event.target.closest('button')) return;
+                const nameText = tagElement.querySelector('.cat-name-text');
+                if (!nameText) return;
+                const category = nameText.textContent;
+                if (!category) return;
+                performRenameCategory(category);
+            });
+        });
+
         container.querySelectorAll('button[data-cat-delete]').forEach(function(button) {
             button.addEventListener('click', async function(event) {
                 event.stopPropagation();
@@ -2387,17 +2731,24 @@
                     </div>
                 </div>`;
             document.body.appendChild(modal);
-            document.body.classList.add('modal-open');
+            pushModalOpen();
             const previousFocus = document.activeElement;
             const input = modal.querySelector('#confirmCategoryInput');
             input.focus();
+            let removeEscapeListener = null;
+
             const cleanup = function(result) {
+                if (removeEscapeListener) removeEscapeListener();
                 input.value = '';
                 modal.remove();
-                document.body.classList.remove('modal-open');
+                popModalOpen();
+                unregisterActiveModal(cleanup);
                 if (previousFocus && typeof previousFocus.focus === 'function') previousFocus.focus();
                 resolve(result);
             };
+            registerActiveModal(cleanup);
+            removeEscapeListener = attachEscapeToClose(modal, function() { cleanup(false); });
+
             modal.querySelector('#cancelCategoryDeletion').onclick = function() { cleanup(false); };
             modal.querySelector('#confirmCategoryDeletion').onclick = function() {
                 if (input.value.trim() === category) {
@@ -2411,6 +2762,7 @@
             input.addEventListener('keypress', function(e) { if (e.key === 'Enter') modal.querySelector('#confirmCategoryDeletion').click(); });
         });
     }
+
     // 自定义分类重命名对话框
     function promptRenameCategory(oldCategory) {
         return new Promise(function(resolve) {
@@ -2427,18 +2779,25 @@
                     </div>
                 </div>`;
             document.body.appendChild(modal);
-            document.body.classList.add('modal-open');
+            pushModalOpen();
             const previousFocus = document.activeElement;
             const input = modal.querySelector('#renameCategoryInput');
             input.focus();
             input.select();
+            let removeEscapeListener = null;
+
             const cleanup = function(result) {
+                if (removeEscapeListener) removeEscapeListener();
                 input.value = '';
                 modal.remove();
-                document.body.classList.remove('modal-open');
+                popModalOpen();
+                unregisterActiveModal(cleanup);
                 if (previousFocus && typeof previousFocus.focus === 'function') previousFocus.focus();
                 resolve(result);
             };
+            registerActiveModal(cleanup);
+            removeEscapeListener = attachEscapeToClose(modal, function() { cleanup(null); });
+
             modal.querySelector('#cancelRenameCategory').onclick = function() { cleanup(null); };
             modal.querySelector('#confirmRenameCategory').onclick = function() {
                 const newName = input.value.trim();
@@ -2657,7 +3016,7 @@
                 </div>
             </div>`;
         document.body.appendChild(modal);
-        document.body.classList.add('modal-open');
+        pushModalOpen();
 
         State.activeEditItemId = item.id;
 
@@ -2665,7 +3024,9 @@
         const firstInput = modal.querySelector('input');
         if (firstInput) firstInput.focus();
 
+        let removeEscapeListener = null;
         const closeModal = function() {
+            if (removeEscapeListener) removeEscapeListener();
             const loginPwInput = modal.querySelector('#editLoginPw');
             if (loginPwInput) {
                 loginPwInput.type = 'password';
@@ -2687,7 +3048,8 @@
                 toggleTranBtn.setAttribute('aria-label', '显示交易密码');
             }
             modal.remove();
-            document.body.classList.remove('modal-open');
+            popModalOpen();
+            unregisterActiveModal(closeModal);
             State.activeEditItemId = null;
             State.activeEditModalCleanup = null;
             if (previousFocus && typeof previousFocus.focus === 'function') {
@@ -2695,6 +3057,8 @@
             }
         };
         State.activeEditModalCleanup = closeModal;
+        registerActiveModal(closeModal);
+        removeEscapeListener = attachEscapeToClose(modal, closeModal);
 
         const originalLoginPassword = item.loginPassword;
         const originalTransactionPassword = item.transactionPassword;
@@ -2781,8 +3145,8 @@
         categorySelect.addEventListener('change', function() { updateSelectPlaceholderColor(categorySelect); });
 
         modal.querySelector('#saveEdit').onclick = async function() {
-            // v6.10.0 修复：检查条目是否仍存在，防止其他窗口删除后保存失效
-            if (!State.passwordIdIndex.has(item.id)) {
+            const currentItem = State.passwordIdIndex.get(item.id);
+            if (!currentItem) {
                 showToast('⚠️ 该条目已被其他窗口删除，无法保存', true, 3000);
                 closeModal();
                 return;
@@ -2801,10 +3165,20 @@
             if (newLoginPassword.length < CONFIG.LOGIN_PW_MIN || newLoginPassword.length > CONFIG.LOGIN_PW_MAX) return showToast(`登录密码需${CONFIG.LOGIN_PW_MIN}-${CONFIG.LOGIN_PW_MAX}位`, true);
             if (newTransactionPassword && !/^\d{6}$/.test(newTransactionPassword)) return showToast('交易密码必须为6位数字', true);
 
-            const passwordsBeforeSave = State.passwords.map(function(p) { return { ...p }; });
-            const oldCategories = [...State.customCategories];
+            const passwordsSnapshot = State.passwords.slice();
+            const categoriesSnapshot = [...State.customCategories];
+            const currentItemFieldsSnapshot = {
+                name: currentItem.name,
+                username: currentItem.username,
+                loginPassword: currentItem.loginPassword,
+                transactionPassword: currentItem.transactionPassword,
+                email: currentItem.email,
+                phone: currentItem.phone,
+                category: currentItem.category,
+                note: currentItem.note
+            };
 
-            const existingItem = State.passwords.find(function(p) { return p.name === newName && p.id !== item.id; });
+            const existingItem = State.passwords.find(function(p) { return p.name === newName && p.id !== currentItem.id; });
             if (existingItem) {
                 const resolution = await promptDuplicateNameResolution(newName, false);
                 if (resolution === 'cancel') return;
@@ -2812,28 +3186,29 @@
                     State.passwords = State.passwords.filter(function(p) { return p.id !== existingItem.id; });
                 }
             }
-            item.name = newName;
-            item.username = modal.querySelector('#editUsername').value.trim();
-            item.loginPassword = newLoginPassword;
-            item.transactionPassword = newTransactionPassword;
-            item.email = modal.querySelector('#editEmail').value.trim();
-            item.phone = modal.querySelector('#editPhone').value.trim();
-            item.category = modal.querySelector('#editCategory').value || '';
-            item.note = modal.querySelector('#editNote').value.trim();
+
+            currentItem.name = newName;
+            currentItem.username = modal.querySelector('#editUsername').value.trim();
+            currentItem.loginPassword = newLoginPassword;
+            currentItem.transactionPassword = newTransactionPassword;
+            currentItem.email = modal.querySelector('#editEmail').value.trim();
+            currentItem.phone = modal.querySelector('#editPhone').value.trim();
+            currentItem.category = modal.querySelector('#editCategory').value || '';
+            currentItem.note = modal.querySelector('#editNote').value.trim();
 
             State.rebuildIndex();
             try {
                 await saveEncrypted();
-                if (State.visibleLoginPasswords.has(item.id)) {
-                    const inputEl = document.getElementById('login-' + item.id);
+                if (State.visibleLoginPasswords.has(currentItem.id)) {
+                    const inputEl = document.getElementById('login-' + currentItem.id);
                     if (inputEl && inputEl.type === 'text') {
-                        inputEl.value = item.loginPassword || '';
+                        inputEl.value = currentItem.loginPassword || '';
                     }
                 }
-                if (State.visibleTransactionPasswords.has(item.id)) {
-                    const inputEl = document.getElementById('tran-' + item.id);
+                if (State.visibleTransactionPasswords.has(currentItem.id)) {
+                    const inputEl = document.getElementById('tran-' + currentItem.id);
                     if (inputEl && inputEl.type === 'text') {
-                        inputEl.value = item.transactionPassword || '';
+                        inputEl.value = currentItem.transactionPassword || '';
                     }
                 }
                 renderListOnly();
@@ -2841,8 +3216,9 @@
                 closeModal();
                 showToast('✅ 已更新');
             } catch (error) {
-                State.passwords = passwordsBeforeSave;
-                State.customCategories = oldCategories;
+                Object.assign(currentItem, currentItemFieldsSnapshot);
+                State.passwords = passwordsSnapshot;
+                State.customCategories = categoriesSnapshot;
                 State.rebuildIndex();
 
                 const loginPwField = modal.querySelector('#editLoginPw');
@@ -2893,7 +3269,7 @@
         const headers = ['name', 'username', 'loginPassword', 'transactionPassword', 'category', 'email', 'phone', 'note'];
         const rows = State.passwords.map(function(item) { return headers.map(function(header) { return escapeCsvField(item[header] || ''); }).join(','); });
         const csvContent = '\uFEFF' + [headers.join(',')].concat(rows).join('\n');
-        downloadBlob(new Blob([csvContent], { type: 'text/csv;charset=utf-8;' }), `静谧密钥_导出_${new Date().toISOString().slice(0,19)}.csv`);
+        downloadBlob(new Blob([csvContent], { type: 'text/csv;charset=utf-8;' }), `静谧密钥_导出_${Util.formatTimestampForFilename()}.csv`);
         addLog('导出CSV', `${State.passwords.length}条`);
         showToast('📎 CSV已导出，请妥善保管');
     }
@@ -2905,7 +3281,7 @@
         const vaultData = { passwords: State.passwords, customCategories: State.customCategories };
         const exportData = await CryptoModule.encrypt(State.masterKey, vaultData);
         const exportObject = { version: 5, encrypted: true, salt: JSON.parse(localStorage.getItem(CONFIG.STORAGE_SALT)), data: exportData, plainChecksum: exportData.checksum };
-        downloadBlob(new Blob([JSON.stringify(exportObject)], { type: 'application/json' }), `静谧密钥_加密备份_${new Date().toISOString().slice(0,19)}.json`);
+        downloadBlob(new Blob([JSON.stringify(exportObject)], { type: 'application/json' }), `静谧密钥_加密备份_${Util.formatTimestampForFilename()}.json`);
         try {
             localStorage.setItem(CONFIG.LAST_EXPORT_KEY, String(Date.now()));
         } catch (error) {
@@ -2917,7 +3293,7 @@
 
     async function exportPlaintextJSON() {
         const confirmed = await showConfirmDialog({
-            title: '导文明文JSON警告',
+            title: '导出明文JSON警告',
             message: '⚠️ 明文JSON会暴露所有密码，任何人打开即可查看。是否继续？',
             confirmText: '继续导出',
             cancelText: '取消',
@@ -2933,7 +3309,7 @@
             passwords: State.passwords.map(function(item) { return { ...item }; }),
             customCategories: loadCategories()
         };
-        downloadBlob(new Blob([JSON.stringify(exportData, null, 2)], { type: 'application/json' }), `静谧密钥_明文导出_${new Date().toISOString().slice(0,19)}.json`);
+        downloadBlob(new Blob([JSON.stringify(exportData, null, 2)], { type: 'application/json' }), `静谧密钥_明文导出_${Util.formatTimestampForFilename()}.json`);
         addLog('导出明文JSON', `${State.passwords.length}条`);
         showToast('📄 明文JSON已导出，请妥善保管');
     }
@@ -2944,8 +3320,12 @@
             const anchor = document.createElement('a');
             anchor.href = url;
             anchor.download = filename;
+            document.body.appendChild(anchor);
             anchor.click();
-            URL.revokeObjectURL(url);
+            setTimeout(function() {
+                URL.revokeObjectURL(url);
+                anchor.remove();
+            }, 1500);
         } catch (error) {
             console.error('下载文件失败:', error);
             showToast('下载失败，请重试或检查浏览器权限', true);
@@ -3108,7 +3488,7 @@
                 confirmText: '导入',
                 cancelText: '取消',
                 isDanger: false,
-                allowHtml: true   // 显式允许 HTML，因为包含 <br> 和 <pre>
+                allowHtml: true
             });
             if (shouldImport) {
                 const baseTime = Date.now();
@@ -3213,16 +3593,23 @@
                     </div>
                 </div>`;
             document.body.appendChild(modal);
-            document.body.classList.add('modal-open');
+            pushModalOpen();
             const previousFocus = document.activeElement;
             const inputElement = modal.querySelector('#modalPw');
+            let removeEscapeListener = null;
+
             const cleanup = function(value) {
+                if (removeEscapeListener) removeEscapeListener();
                 if (inputElement) inputElement.value = '';
                 modal.remove();
-                document.body.classList.remove('modal-open');
+                popModalOpen();
+                unregisterActiveModal(cleanup);
                 if (previousFocus && typeof previousFocus.focus === 'function') previousFocus.focus();
                 resolve(value);
             };
+            registerActiveModal(cleanup);
+            removeEscapeListener = attachEscapeToClose(modal, function() { cleanup(null); });
+
             modal.querySelector('#modalOk').onclick = function() { cleanup(inputElement ? inputElement.value : null); };
             modal.querySelector('#modalCancel').onclick = function() { cleanup(null); };
             if (inputElement) {
@@ -3291,17 +3678,24 @@
                     </div>
                 </div>`;
             document.body.appendChild(modal);
-            document.body.classList.add('modal-open');
+            pushModalOpen();
             const previousFocus = document.activeElement;
             const input = modal.querySelector('#confirmBatchDeleteInput');
             input.focus();
+            let removeEscapeListener = null;
+
             const cleanup = function(result) {
+                if (removeEscapeListener) removeEscapeListener();
                 input.value = '';
                 modal.remove();
-                document.body.classList.remove('modal-open');
+                popModalOpen();
+                unregisterActiveModal(cleanup);
                 if (previousFocus && typeof previousFocus.focus === 'function') previousFocus.focus();
                 resolve(result);
             };
+            registerActiveModal(cleanup);
+            removeEscapeListener = attachEscapeToClose(modal, function() { cleanup(false); });
+
             modal.querySelector('#cancelBatchDelete').onclick = function() { cleanup(false); };
             modal.querySelector('#confirmBatchDelete').onclick = function() {
                 if (input.value.trim() === phrase) {
@@ -3384,17 +3778,24 @@
                     </div>
                 </div>`;
             document.body.appendChild(modal);
-            document.body.classList.add('modal-open');
+            pushModalOpen();
             const previousFocus = document.activeElement;
             const input = modal.querySelector('#confirmWipeInput');
             input.focus();
+            let removeEscapeListener = null;
+
             const cleanup = function(result) {
+                if (removeEscapeListener) removeEscapeListener();
                 input.value = '';
                 modal.remove();
-                document.body.classList.remove('modal-open');
+                popModalOpen();
+                unregisterActiveModal(cleanup);
                 if (previousFocus && typeof previousFocus.focus === 'function') previousFocus.focus();
                 resolve(result);
             };
+            registerActiveModal(cleanup);
+            removeEscapeListener = attachEscapeToClose(modal, function() { cleanup(false); });
+
             modal.querySelector('#cancelWipe').onclick = function() { cleanup(false); };
             modal.querySelector('#confirmWipe').onclick = function() {
                 if (input.value.trim() === '清空全部') {
@@ -3437,19 +3838,25 @@
                 </div>
             </div>`;
         document.body.appendChild(modal);
-        document.body.classList.add('modal-open');
+        pushModalOpen();
         const previousFocus = document.activeElement;
         const newPasswordInput = modal.querySelector('#newPw');
         newPasswordInput.addEventListener('input', function() {
             updateStrengthIndicator('changePwStrengthIndicator', 'changePwStrengthText', newPasswordInput.value);
         });
+        let removeEscapeListener = null;
         const closeChangePwModal = function() {
+            if (removeEscapeListener) removeEscapeListener();
             newPasswordInput.value = '';
             modal.querySelector('#confirmPw').value = '';
             modal.remove();
-            document.body.classList.remove('modal-open');
+            popModalOpen();
+            unregisterActiveModal(closeChangePwModal);
             if (previousFocus && typeof previousFocus.focus === 'function') previousFocus.focus();
         };
+        registerActiveModal(closeChangePwModal);
+        removeEscapeListener = attachEscapeToClose(modal, closeChangePwModal);
+
         modal.querySelector('#cancelChangePw').onclick = closeChangePwModal;
         modal.addEventListener('click', function(e) { if (e.target === modal) closeChangePwModal(); });
         modal.querySelector('#doChange').onclick = async function() {
@@ -3461,10 +3868,12 @@
             if (newPassword === oldPassword) return showToast('新旧密码不能相同', true);
             try {
                 await changeMasterPassword(oldPassword, newPassword);
+                if (removeEscapeListener) removeEscapeListener();
                 newPasswordInput.value = '';
                 modal.querySelector('#confirmPw').value = '';
                 modal.remove();
-                document.body.classList.remove('modal-open');
+                popModalOpen();
+                unregisterActiveModal(closeChangePwModal);
                 if (previousFocus && typeof previousFocus.focus === 'function') previousFocus.focus();
             } catch (error) { showToast(error.message, true); }
         };
@@ -3566,7 +3975,7 @@
                 </div>
             </div>`;
         document.body.appendChild(modal);
-        document.body.classList.add('modal-open');
+        pushModalOpen();
         const previousFocus = document.activeElement;
         const refreshLogs = function() {
             let newLogs = [];
@@ -3578,11 +3987,19 @@
             }
             modal.querySelector('.log-view').innerHTML = newLogs.length ? newLogs.map(function(log) { return `<div>${Util.escapeHtml(log.time)} | ${Util.escapeHtml(log.action)} | ${Util.escapeHtml(log.details)}</div>`; }).join('') : '暂无日志记录';
         };
-        modal.querySelector('#closeLog').onclick = function() {
+        let removeEscapeListener = null;
+        const closeLogsModal = function() {
+            if (removeEscapeListener) removeEscapeListener();
             modal.remove();
-            document.body.classList.remove('modal-open');
+            popModalOpen();
+            unregisterActiveModal(closeLogsModal);
             if (previousFocus && typeof previousFocus.focus === 'function') previousFocus.focus();
         };
+        registerActiveModal(closeLogsModal);
+        removeEscapeListener = attachEscapeToClose(modal, closeLogsModal);
+
+        modal.querySelector('#closeLog').onclick = closeLogsModal;
+        modal.addEventListener('click', function(e) { if (e.target === modal) closeLogsModal(); });
         modal.querySelector('#exportLogBtn').onclick = function() {
             let data = [];
             try {
@@ -3591,14 +4008,14 @@
                 console.warn('日志导出读取失败:', error);
                 data = [];
             }
-            downloadBlob(new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' }), `静谧密钥_日志_${new Date().toISOString().slice(0,19)}.json`);
+            downloadBlob(new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' }), `静谧密钥_日志_${Util.formatTimestampForFilename()}.json`);
             showToast('日志已导出');
         };
         modal.querySelector('#clearLogBtn').onclick = async function() {
             const userConfirmed = await promptForLogClear();
             if (userConfirmed) {
-                addLog('清空日志', '手动清空');
                 localStorage.setItem(CONFIG.LOG_STORAGE, '[]');
+                addLog('清空日志', '手动清空');
                 refreshLogs();
                 showToast('日志已清空');
             }
@@ -3619,14 +4036,21 @@
                     </div>
                 </div>`;
             document.body.appendChild(modal);
-            document.body.classList.add('modal-open');
+            pushModalOpen();
             const previousFocus = document.activeElement;
+            let removeEscapeListener = null;
+
             const cleanup = function(result) {
+                if (removeEscapeListener) removeEscapeListener();
                 modal.remove();
-                document.body.classList.remove('modal-open');
+                popModalOpen();
+                unregisterActiveModal(cleanup);
                 if (previousFocus && typeof previousFocus.focus === 'function') previousFocus.focus();
                 resolve(result);
             };
+            registerActiveModal(cleanup);
+            removeEscapeListener = attachEscapeToClose(modal, function() { cleanup(false); });
+
             modal.querySelector('#cancelLogClear').onclick = function() { cleanup(false); };
             modal.querySelector('#confirmLogClear').onclick = function() { cleanup(true); };
         });
@@ -3653,32 +4077,29 @@
                 <div id="catListManage" class="cat-grid"></div>
             </div>`;
         document.body.appendChild(modal);
-        document.body.classList.add('modal-open');
+        pushModalOpen();
         const previousFocus = document.activeElement;
         State.activeCategoryModal = modal;
         const container = modal.querySelector('#catListManage');
         renderCategoryList(container);
 
+        let removeEscapeListener = null;
         const closeModal = function() {
-            document.removeEventListener('keydown', handleKeyDown);
+            if (removeEscapeListener) removeEscapeListener();
             modal.remove();
-            document.body.classList.remove('modal-open');
+            popModalOpen();
+            unregisterActiveModal(closeModal);
             State.activeCategoryModal = null;
             if (previousFocus && typeof previousFocus.focus === 'function') previousFocus.focus();
         };
+        registerActiveModal(closeModal);
+        removeEscapeListener = attachEscapeToClose(modal, closeModal);
 
         modal.querySelector('#closeCatBtn').onclick = closeModal;
 
-        // v6.10.0 新增：点击背景关闭与 ESC 键关闭
         modal.addEventListener('click', function(event) {
             if (event.target === modal) closeModal();
         });
-        const handleKeyDown = function(event) {
-            if (event.key === 'Escape') {
-                closeModal();
-            }
-        };
-        document.addEventListener('keydown', handleKeyDown);
 
         modal.querySelector('#addCatBtn').onclick = async function() {
             const name = modal.querySelector('#newCatName').value.trim();
@@ -3704,18 +4125,38 @@
     }
 
     // ===================== 主题管理 =====================
-    function applyTheme(themeKey) {
+    function getPreferredInitialTheme() {
+        let savedTheme = null;
+        try {
+            savedTheme = localStorage.getItem(CONFIG.THEME_STORAGE);
+        } catch (e) {
+            console.warn('读取主题设置失败:', e);
+        }
+        if (savedTheme && THEMES[savedTheme]) {
+            return savedTheme;
+        }
+        if (typeof window.matchMedia === 'function' && window.matchMedia('(prefers-color-scheme: dark)').matches) {
+            return 'midnight';
+        }
+        return 'ocean';
+    }
+
+    function applyTheme(themeKey, saveToStorage) {
+        if (saveToStorage === undefined) saveToStorage = true;
         const theme = THEMES[themeKey];
         if (!theme) return;
         const root = document.documentElement;
         Object.entries(theme.vars).forEach(function(entry) {
             root.style.setProperty(entry[0], entry[1]);
         });
+        root.setAttribute('data-theme-resolved', themeKey);
         State.currentTheme = themeKey;
-        try {
-            localStorage.setItem(CONFIG.THEME_STORAGE, themeKey);
-        } catch (error) {
-            console.warn('主题设置保存失败:', error);
+        if (saveToStorage) {
+            try {
+                localStorage.setItem(CONFIG.THEME_STORAGE, themeKey);
+            } catch (error) {
+                console.warn('主题设置保存失败:', error);
+            }
         }
         const themeButton = document.getElementById('themeSwitcherBtn');
         if (themeButton) themeButton.innerHTML = `<svg class="icon"><use href="#icon-palette"/></svg> ${theme.icon}`;
@@ -3736,7 +4177,7 @@
             </div>`;
         }).join('');
         dropdown.querySelectorAll('.theme-option').forEach(function(option) {
-            option.addEventListener('click', function() { applyTheme(option.dataset.theme); });
+            option.addEventListener('click', function() { applyTheme(option.dataset.theme, true); });
         });
     }
 
@@ -3746,6 +4187,7 @@
         State.searchDebounceTimer = setTimeout(function() {
             renderListOnly();
             State.lastActivity = Date.now();
+            scheduleIdleLock();
         }, CONFIG.SEARCH_DEBOUNCE_MS);
     }
 
@@ -3960,7 +4402,7 @@
                 if (item) {
                     const confirmed = await showConfirmDialog({
                         title: '删除确认',
-                        message: `确定删除「${Util.escapeHtml(item.name)}」吗？`,
+                        message: `确定删除「${item.name}」吗？`,
                         confirmText: '删除',
                         cancelText: '取消',
                         isDanger: true
@@ -4139,6 +4581,7 @@
             resetPasswordVisibilityButtons();
             updateAllSelectColors();
             State.lastActivity = Date.now();
+            scheduleIdleLock();
         };
 
         document.getElementById('clearForm').onclick = function() {
@@ -4201,14 +4644,20 @@
                     <button class="btn btn-outline btn-sm" id="cancelExport" style="margin-top:6px;">取消</button>
                 </div>`;
             document.body.appendChild(modal);
-            document.body.classList.add('modal-open');
+            pushModalOpen();
             const previousFocus = document.activeElement;
+            let removeEscapeListener = null;
 
             const closeModal = function() {
+                if (removeEscapeListener) removeEscapeListener();
                 modal.remove();
-                document.body.classList.remove('modal-open');
+                popModalOpen();
+                unregisterActiveModal(closeModal);
                 if (previousFocus && typeof previousFocus.focus === 'function') previousFocus.focus();
             };
+            registerActiveModal(closeModal);
+            removeEscapeListener = attachEscapeToClose(modal, closeModal);
+
             modal.querySelector('#exportEncryptChoice').onclick = function() { closeModal(); exportEncryptedBackup(); };
             modal.querySelector('#exportPlainChoice').onclick = function() { closeModal(); exportPlaintextJSON(); };
             modal.querySelector('#exportCsvChoice').onclick = function() { closeModal(); exportCSV(); };
@@ -4255,13 +4704,18 @@
                     </div>
                 </div>`;
             document.body.appendChild(modal);
-            document.body.classList.add('modal-open');
+            pushModalOpen();
             const previousFocus = document.activeElement;
+            let removeEscapeListener = null;
             const closeImportSmallModal = function() {
+                if (removeEscapeListener) removeEscapeListener();
                 modal.remove();
-                document.body.classList.remove('modal-open');
+                popModalOpen();
+                unregisterActiveModal(closeImportSmallModal);
                 if (previousFocus && typeof previousFocus.focus === 'function') previousFocus.focus();
             };
+            registerActiveModal(closeImportSmallModal);
+            removeEscapeListener = attachEscapeToClose(modal, closeImportSmallModal);
             modal.querySelector('#cancelImportSmallBtn').onclick = closeImportSmallModal;
             modal.addEventListener('click', function(e) { if (e.target === modal) closeImportSmallModal(); });
             modal.querySelector('#importFileBtnSmall').onclick = function() {
@@ -4311,13 +4765,18 @@
                     </div>
                 </div>`;
             document.body.appendChild(modal);
-            document.body.classList.add('modal-open');
+            pushModalOpen();
             const previousFocus = document.activeElement;
+            let removeEscapeListener = null;
             const closeImportModal = function() {
+                if (removeEscapeListener) removeEscapeListener();
                 modal.remove();
-                document.body.classList.remove('modal-open');
+                popModalOpen();
+                unregisterActiveModal(closeImportModal);
                 if (previousFocus && typeof previousFocus.focus === 'function') previousFocus.focus();
             };
+            registerActiveModal(closeImportModal);
+            removeEscapeListener = attachEscapeToClose(modal, closeImportModal);
             modal.querySelector('#cancelImportBtn').onclick = closeImportModal;
             modal.addEventListener('click', function(e) { if (e.target === modal) closeImportModal(); });
             modal.querySelector('#importFileBtn').onclick = function() {
@@ -4354,6 +4813,7 @@
 
         updateAllSelectColors();
         State.lastActivity = Date.now();
+        scheduleIdleLock();
     };
 
     // ===================== 认证界面 =====================
@@ -4361,11 +4821,63 @@
         const root = document.getElementById('root');
         if (!root) return;
         cleanMigrationBackup();
-        const initialized = localStorage.getItem(CONFIG.STORAGE_INIT) === 'true' &&
-            localStorage.getItem(CONFIG.STORAGE_SALT) &&
-            localStorage.getItem(CONFIG.STORAGE_AUTH) &&
-            localStorage.getItem(CONFIG.STORAGE_VAULT);
-        if (!initialized) {
+
+        let hasSalt = false, hasAuth = false, hasVault = false, initFlag = false;
+        try {
+            hasSalt = !!localStorage.getItem(CONFIG.STORAGE_SALT);
+            hasAuth = !!localStorage.getItem(CONFIG.STORAGE_AUTH);
+            hasVault = !!localStorage.getItem(CONFIG.STORAGE_VAULT);
+            initFlag = localStorage.getItem(CONFIG.STORAGE_INIT) === 'true';
+        } catch (e) {
+            console.warn('初始化状态检查失败:', e);
+        }
+        const anyStored = hasSalt || hasAuth || hasVault;
+        const fullyInitialized = initFlag && hasSalt && hasAuth && hasVault;
+        const partiallyInitialized = anyStored && !fullyInitialized;
+
+        if (partiallyInitialized) {
+            root.innerHTML = `
+                <div class="card auth-card">
+                    <div class="auth-icon"><svg viewBox="0 0 24 24" style="width:4rem;height:4rem;fill:none;stroke:currentColor;stroke-width:1.8;"><use href="#icon-alert-triangle"/></svg></div>
+                    <h2>⚠️ 数据状态异常</h2>
+                    <p style="font-size:0.95rem;">检测到本地存储中的部分数据缺失或损坏。</p>
+                    <p style="font-size:0.85rem;color:var(--text-secondary);">为避免覆盖您原有的密码数据，程序已暂停自动初始化。</p>
+                    <button class="btn btn-primary" id="partialResetBtn" style="width:100%;">重置保险库（危险）</button>
+                    <p style="font-size:0.72rem;color:var(--text-secondary);margin-top:12px;">重置将清除本地所有密码与设置，且不可恢复。如有备份请先在其他设备恢复。</p>
+                </div>`;
+            const partialResetBtn = document.getElementById('partialResetBtn');
+            if (partialResetBtn) {
+                partialResetBtn.onclick = async function() {
+                    const confirmed = await showConfirmDialog({
+                        title: '重置保险库',
+                        message: '⚠️ 确定重置保险库吗？此操作将清除本地所有密码和设置，且不可恢复！',
+                        confirmText: '重置',
+                        cancelText: '取消',
+                        isDanger: true,
+                        requireConfirmationText: '重置'
+                    });
+                    if (confirmed) {
+                        try {
+                            localStorage.removeItem(CONFIG.STORAGE_VAULT);
+                            localStorage.removeItem(CONFIG.STORAGE_SALT);
+                            localStorage.removeItem(CONFIG.STORAGE_AUTH);
+                            localStorage.removeItem(CONFIG.STORAGE_INIT);
+                            localStorage.removeItem(CONFIG.LOG_STORAGE);
+                            localStorage.removeItem(CONFIG.MIGRATION_BACKUP_KEY);
+                            saveSecurityState({ bruteFailCount: 0, lockoutUntil: 0, verifyFailCount: 0 });
+                            State.reset();
+                            showToast('保险库已重置，请重新设置主密码');
+                            showAuth();
+                        } catch (error) {
+                            showToast('重置失败：' + error.message, true);
+                        }
+                    }
+                };
+            }
+            return;
+        }
+
+        if (!fullyInitialized) {
             root.innerHTML = `
                 <div class="card auth-card">
                     <div class="auth-icon"><svg viewBox="0 0 24 24" style="width:4rem;height:4rem;fill:none;stroke:currentColor;stroke-width:1.8;"><use href="#icon-shield"/></svg></div>
@@ -4396,19 +4908,24 @@
                         </div>
                     </div>`;
                 document.body.appendChild(modal);
-                document.body.classList.add('modal-open');
+                pushModalOpen();
                 const previousFocus = document.activeElement;
                 const passwordInput1 = modal.querySelector('#newPw1');
                 passwordInput1.addEventListener('input', function() {
                     updateStrengthIndicator('setupPwStrengthIndicator', 'setupPwStrengthText', passwordInput1.value);
                 });
+                let removeEscapeListener = null;
                 const closeSetupModal = function() {
+                    if (removeEscapeListener) removeEscapeListener();
                     passwordInput1.value = '';
                     modal.querySelector('#newPw2').value = '';
                     modal.remove();
-                    document.body.classList.remove('modal-open');
+                    popModalOpen();
+                    unregisterActiveModal(closeSetupModal);
                     if (previousFocus && typeof previousFocus.focus === 'function') previousFocus.focus();
                 };
+                registerActiveModal(closeSetupModal);
+                removeEscapeListener = attachEscapeToClose(modal, closeSetupModal);
                 modal.querySelector('#cancelSetup').onclick = closeSetupModal;
                 modal.querySelector('#confirmSetup').onclick = async function() {
                     const password1 = passwordInput1.value;
@@ -4417,7 +4934,12 @@
                     if (password1 !== password2) return showToast('两次输入不一致', true);
                     try {
                         await initializeNewVault(password1);
-                        closeSetupModal();
+                        if (removeEscapeListener) removeEscapeListener();
+                        passwordInput1.value = '';
+                        modal.querySelector('#newPw2').value = '';
+                        modal.remove();
+                        popModalOpen();
+                        unregisterActiveModal(closeSetupModal);
                         showToast('✅ 保险库创建成功！');
                         showAuth();
                     } catch (error) { showToast(error.message, true); }
@@ -4470,7 +4992,7 @@
                                     localStorage.removeItem(CONFIG.STORAGE_INIT);
                                     localStorage.removeItem(CONFIG.LOG_STORAGE);
                                     localStorage.removeItem(CONFIG.MIGRATION_BACKUP_KEY);
-                                    saveSecurityState({ bruteFailCount: 0, lockoutUntil: 0 });
+                                    saveSecurityState({ bruteFailCount: 0, lockoutUntil: 0, verifyFailCount: 0 });
                                     State.reset();
                                     showToast('保险库已重置，请重新设置主密码');
                                     showAuth();
@@ -4496,8 +5018,12 @@
 
     // ===================== 空闲与可见性事件绑定 =====================
     function bindIdleEvents() {
-        ['click', 'keydown', 'touchstart', 'scroll'].forEach(function(eventName) {
-            window.addEventListener(eventName, function() { State.lastActivity = Date.now(); }, { passive: true });
+        const activityEvents = ['click', 'keydown', 'touchstart', 'scroll', 'mousemove'];
+        activityEvents.forEach(function(eventName) {
+            window.addEventListener(eventName, function() {
+                State.lastActivity = Date.now();
+                if (State.masterKey) scheduleIdleLock();
+            }, { passive: true });
         });
     }
 
@@ -4518,8 +5044,11 @@
             document.getElementById('root').innerHTML = `<div class="card auth-card"><h2>⚠️ 存储不可用</h2><p>您的浏览器似乎禁用了本地存储（localStorage），静谧·密钥无法正常运行。</p><p style="color:var(--text-secondary);">请检查隐私设置或更换浏览器后重试。</p></div>`;
         } else {
             bindIdleEvents();
-            const savedTheme = localStorage.getItem(CONFIG.THEME_STORAGE);
-            applyTheme(savedTheme && THEMES[savedTheme] ? savedTheme : 'ocean');
+            const initialTheme = getPreferredInitialTheme();
+            const savedThemeExists = (function() {
+                try { return !!localStorage.getItem(CONFIG.THEME_STORAGE); } catch (e) { return false; }
+            })();
+            applyTheme(initialTheme, savedThemeExists);
             showAuth();
         }
     } else {
