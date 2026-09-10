@@ -1,52 +1,57 @@
 <!--
 ====================================================================================
- 静谧·密钥 v8.4.0 — 横竖屏适配 + UI 一致性里程碑版
+ 静谧·密钥 v8.5.0 — 深度健壮性 · 一致性 · 可访问性里程碑版
  更新日期：2026-09-10
 ====================================================================================
  版本定位：
- —— v8.4.0 是 v8.3.x 系列所有修复的收束版本，整合了横竖屏适配、触屏
-    交互治理、深色模式协调、视觉临界值优化与代码整洁性清理，达到
-    “生产级可用、无已知视觉/交互回归”的里程碑状态。
+ —— v8.5.0 是 v8.4.0 之后的一次深度重构版本，收束静态审核中发现的
+    一致性、健壮性、可访问性与边界缺陷，在不删除、不降级任何既有
+    功能的前提下，整合出最佳实施方案。
 
- 【P0 — 移动端横竖屏切换放大问题】
- 1. [修复] viewport meta 增加 minimum-scale=1.0，阻止 iOS Safari / 部分
-     Android 浏览器在横竖屏切换后自动放大页面，同时保留 user-scalable
-     默认值以维持可访问性。
- 2. [修复] .search-bar input / select 字体由 0.92rem 改为 16px，覆盖所有
-     断点，避免 iOS Safari 输入框聚焦时自动缩放。
- 3. [修复] .app-container input / select / textarea 字体由 var(--input-font-size)
-     （15px）改为 16px，避免平板/横屏（>640px）下输入框聚焦触发 iOS 缩放。
- 4. [修复] 横屏断点（max-height:500px + landscape）内 .search-bar input/select
-     字体由 0.85rem 改为 16px，与全局一致。
- 5. [优化] orientationchange 延迟由 250ms 提升到 400ms，覆盖 iOS Safari
-     视口稳定所需的 350-500ms 窗口，避免列表短暂错位。
+ 【P0 — 一致性修复】
+ 1. [修复] CSV 导入现在也走三态重名对话框（覆盖/合并/取消），与
+    JSON 明文导入、加密备份导入行为完全一致。
+ 2. [修复] 覆盖模式下按名称对导入数据内部去重，保证名称唯一性
+    不被破坏，避免后续添加/编辑/删除时 find() 歧义。
+ 3. [修复] CSV 导入移除重复日志（applyImport 已统一记录一次）。
 
- 【P1 — 触屏 hover 状态治理（补齐）】
- 6. [修复] @media (hover: none) and (pointer: coarse) 内补齐 .cat-tag button
-     / .cat-tag button[data-cat-edit] / .pw-action / .collapse-top-btn 的
-     浅色模式 hover 覆盖，避免触屏点击后 5%-10% 背景残留。
+ 【P0 — 迁移备份与崩溃恢复】
+ 4. [修复] 移除 showAuth() 中对 MIGRATION_BACKUP_KEY 的无条件清理，
+    改由 unlockVault() 成功解密后清理，避免修改主密码过程中崩溃
+    导致旧数据备份被误删、无法恢复。
+ 5. [新增] 登录界面检测到迁移备份时展示“恢复备份数据”入口，给用户
+    一条显式的崩溃恢复通道。
 
- 【P2 — 视觉临界值与深色模式】
- 7. [优化] .cat-tag 右侧内边距由 76px 提升到 80px，为中文分类名与操作
-     按钮之间预留 4px 视觉缓冲，消除极窄列下可能的省略号重叠。
- 8. [修复] showToast 错误态背景由硬编码 #dc2626 改为 var(--danger)，
-     使深色模式（midnight #f87171）下的错误提示与主题色协调。
+ 【P1 — 加密备份完整性】
+ 6. [修复] 移除 importFromFile() 中对 plainChecksum 的二次校验，
+    仅依赖 CryptoModule.decrypt() 的 AES-GCM + additionalData 完整性
+    校验，避免 JSON.parse/stringify 键序、空白差异导致的有效备份
+    被误判为损坏。
+ 7. [加固] 导入加密备份时校验 salt 长度必须为 16、iv 长度必须为 12，
+    防止恶意备份文件造成 PBKDF2 / AES 处理异常或 DoS。
 
- 【P3 — 响应式细节】
- 9. [修复] 在 @media (max-width:380px) 内增加 .top-collapsed .app-header
-     min-height: 36px 覆盖，避免超小屏折叠状态下 header 高度过大。
+ 【P1 — CSV 公式注入还原】
+ 8. [修复] 新增 unescapeCsvFieldForImport()，导入时识别导出时加上的
+    前导单引号（'=、'+、'-、'@、'\t、'\r），仅在“确为公式防护前缀”
+    时剥离，不破坏用户原始密码中含单引号的合法内容。
 
- 【P3 — 代码整洁与一致性】
- 10. [清理] 删除 .cat-tag .cat-actions 中绝对定位下无实际作用的
-     margin-left: auto。
- 11. [统一] .btn-danger 增加 letter-spacing: 0.4px，与 .btn-primary
-     保持一致的 CTA 强化效果。
+ 【P1 — 可访问性与视觉】
+ 9. [修复] showToast 错误态改用 --toast-danger-bg / --toast-danger-color
+    变量；午夜蓝主题下使用深红底 + 浅红字，对比度提升至 AA 级。
+ 10. [修复] body / body.modal-open / .modal / .modal-card 的 dvh 之前
+     补充 100vh 回退，避免旧浏览器不支持 dvh 时布局异常。
+ 11. [新增] 主题下拉菜单标记当前主题（勾选 + 高亮背景）。
+ 12. [新增] 排序按钮显示方向箭头（↑ / ↓），状态可视化。
 
- 【头部注释结构修复】
- 12. [修复] 清理 v8.3.4 初版遗留在注释块外部的旧注释片段，恢复
-     “单一 --> 关闭”结构，避免浏览器将残留文本渲染为页面可见内容。
+ 【P2 — 交互与人性化】
+ 13. [修复] 登录页 Enter 键改为触发 loginButton.click()，复用按钮
+     disabled 状态，防止快速连按触发多次 PBKDF2 派生。
+ 14. [新增] 添加 / 编辑密码表单的登录密码输入框下方增加实时强度
+     指示器，与主密码设置体验一致。
+ 15. [新增] 批量操作栏新增“全选”“反选”按钮，大量条目下更便捷。
 
- 保留不变：全部 v8.3.0 / v8.3.1 / v8.3.2 / v8.3.3 功能与逻辑修复
+ 【保留不变】
+ —— 全部 v8.3.0 / v8.3.1 / v8.3.2 / v8.3.3 / v8.4.0 功能与逻辑修复
  （密码不 trim、unlock 重置 verifyFailCount、reauth 失败与成功均纳入
  锁定策略、跨窗口同步完整检测、导入三态对话框、CSV 公式注入防护、
  合并去重、中文输入法 Enter、搜索高亮修正、删除状态清理时机后移、
@@ -54,9 +59,13 @@
  不匹配提示、CSP、虚拟滚动、元素池、键盘导航、拒绝采样、模态守卫、
  跨窗口同步、自动锁定、日志、重新认证、ESC 关闭、模态栈、剪贴板保护、
  收起保留标题与搜索栏、hasUnsavedAddContent 提示、
- layoutRecomputeDebounceTimer 去抖、折叠状态 logo 一致性等）。
+ layoutRecomputeDebounceTimer 去抖、折叠状态 logo 一致性、
+ 横竖屏适配、触屏 hover 治理、深色模式协调、视觉临界值优化等）。
 
  历史更新摘要：
+ —— v8.4.0：横竖屏适配、iOS 输入框 16px 防缩放、触屏 hover 补齐、
+     深色模式视觉协调、cat-tag 内边距 80px、showToast 使用 --danger、
+     380px 断点 header min-height 36px、清理代码冗余等。
  —— v8.3.3：折叠状态 logo 完全继承全局样式、移动端认证卡片排版优化、
      深色模式交互反馈、触屏 hover 治理、modal 单层模糊、视觉节奏统一、
      cat-tag 布局优化、modal 移动端间距、空状态 padding 缩小等。
@@ -85,7 +94,7 @@
           content="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; frame-ancestors 'none'; connect-src 'self'; form-action 'none';">
     <meta http-equiv="X-Content-Type-Options" content="nosniff">
     <meta http-equiv="Referrer-Policy" content="strict-origin-when-cross-origin">
-    <title>🔐 静谧·密钥 | 安全密码本 v8.4.0</title>
+    <title>🔐 静谧·密钥 | 安全密码本 v8.5.0</title>
     <style>
         :root {
             --bg-gradient: linear-gradient(135deg, #e0f2fe 0%, #bae6fd 50%, #e0e7ff 100%);
@@ -117,6 +126,11 @@
             --warning-box-color: #8c4f00;
             --highlight-bg: #ffe484;
             --highlight-color: #0f172a;
+            /* v8.5.0：Toast 主题变量，深色模式可单独覆盖以保证对比度 */
+            --toast-bg: #1e293b;
+            --toast-color: #ffffff;
+            --toast-danger-bg: #dc2626;
+            --toast-danger-color: #ffffff;
             --shadow-xs: 0 1px 3px rgba(0, 0, 0, 0.04);
             --shadow-sm: 0 2px 6px rgba(0, 0, 0, 0.06), 0 1px 3px rgba(0, 0, 0, 0.04);
             --shadow-md: 0 6px 16px rgba(0, 0, 0, 0.08), 0 2px 8px rgba(0, 0, 0, 0.05);
@@ -135,6 +149,15 @@
             --safe-area-left: env(safe-area-inset-left, 0px);
             --safe-area-right: env(safe-area-inset-right, 0px);
             --item-height: 260px;
+        }
+
+        /* v8.5.0：午夜蓝主题下加深错误 Toast 底色、降低文字亮度，
+           保证 WCAG AA 对比度 */
+        html[data-theme-resolved="midnight"] {
+            --toast-bg: #334155;
+            --toast-color: #f8fafc;
+            --toast-danger-bg: #7f1d1d;
+            --toast-danger-color: #fecaca;
         }
 
         @media (prefers-color-scheme: dark) {
@@ -168,6 +191,10 @@
                 --warning-box-color: #fadf8a;
                 --highlight-bg: #4a3a0a;
                 --highlight-color: #fbbf24;
+                --toast-bg: #334155;
+                --toast-color: #f8fafc;
+                --toast-danger-bg: #7f1d1d;
+                --toast-danger-color: #fecaca;
             }
         }
 
@@ -185,11 +212,14 @@
             overflow: hidden;
         }
 
+        /* v8.5.0：dvh 之前补 100vh 回退，旧浏览器不支持 dvh 时保持布局 */
         body {
             font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Inter', Roboto, 'Helvetica Neue', Arial, 'Noto Sans', 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', sans-serif;
             background: var(--bg-gradient);
             background-attachment: fixed;
+            min-height: 100vh;
             min-height: 100dvh;
+            height: 100vh;
             height: 100dvh;
             display: flex;
             flex-direction: column;
@@ -210,7 +240,7 @@
             overflow: hidden;
             position: fixed;
             width: 100%;
-            height: 100%;
+            height: 100vh;
             height: 100dvh;
         }
 
@@ -327,7 +357,6 @@
             font-weight: 400;
         }
 
-        /* v8.3.3：清理重复的 font-weight 声明；移除无谓的 backdrop-filter: blur(4px) */
         .btn {
             display: inline-flex;
             align-items: center;
@@ -384,8 +413,6 @@
             background: var(--btn-bg-active);
         }
 
-        /* v8.3.3：.btn-primary 有意使用 0.4px letter-spacing（略宽于普通按钮 0.3px），
-           视觉上强化 CTA 层级 */
         .btn-primary {
             background: linear-gradient(135deg, var(--primary) 0%, var(--primary-hover) 100%);
             color: #fff;
@@ -408,7 +435,6 @@
             color: #fff;
         }
 
-        /* v8.3.4：增加 letter-spacing: 0.4px，与 .btn-primary 保持一致的 CTA 强化 */
         .btn-danger {
             background: var(--danger);
             color: #fff;
@@ -485,7 +511,18 @@
             background: rgba(0, 0, 0, 0.04);
         }
 
-        /* v8.3.3：深色模式下 hover 背景改用浅色叠加，保证可见 */
+        /* v8.5.0：主题下拉菜单标记当前主题 */
+        .theme-option.active {
+            background: var(--primary-light);
+            font-weight: 700;
+        }
+
+        .theme-option .theme-check {
+            margin-left: auto;
+            color: var(--primary);
+            font-weight: 700;
+        }
+
         html[data-theme-resolved="midnight"] .theme-option:hover {
             background: rgba(255, 255, 255, 0.08);
         }
@@ -549,9 +586,6 @@
             flex-shrink: 0;
         }
 
-        /* v8.3.3：折叠状态下 app-header 强制 row 布局（覆盖移动端 column），
-           logo 保持与展开状态一致的外观（1.8rem / 2.4rem svg / 12px gap），
-           始终位于左侧 */
         .top-collapsed .app-header {
             display: flex !important;
             flex-direction: row !important;
@@ -571,10 +605,6 @@
         .top-collapsed .app-header .header-actions {
             display: none !important;
         }
-
-        /* v8.3.3：折叠状态 logo 完全继承全局 .logo 样式（字号 1.8rem、
-           gap 12px、svg 2.4rem、drop-shadow 与展开状态一致）。
-           不再有任何局部尺寸覆盖，保证两种状态外观完全一致。 */
 
         .top-collapsed .add-section {
             display: none !important;
@@ -687,8 +717,6 @@
             align-items: center;
         }
 
-        /* v8.3.3：搜索栏 hover 从“外发光”改为“内阴影+边框色”，
-           与内部输入框聚焦光晕不再叠加。focus-within 状态反馈更精准。 */
         .search-bar {
             display: flex;
             gap: 12px;
@@ -751,8 +779,6 @@
             padding-right: 40px;
         }
 
-        /* v8.3.4：移除多余的 margin-top 及其对应过渡项，垂直节奏统一由
-           .app-sticky-top 的 gap 控制 */
         .add-section {
             background: var(--btn-bg);
             backdrop-filter: blur(12px);
@@ -932,9 +958,7 @@
             -webkit-overflow-scrolling: touch;
         }
 
-        /* v8.3.4：右侧内边距 80px，为 .cat-actions（两个 32px 按钮 + 4px gap +
-           4px padding-left + 6px right ≈ 76px）预留 4px 视觉缓冲，
-           避免中文分类名较长时省略号与操作按钮在临界宽度下重叠 */
+        /* v8.3.4：右侧内边距 80px，为 .cat-actions 预留 4px 视觉缓冲 */
         .cat-tag {
             position: relative;
             display: flex;
@@ -971,7 +995,6 @@
             pointer-events: none;
         }
 
-        /* v8.3.4：删除绝对定位下无实际作用的 margin-left: auto */
         .cat-tag .cat-actions {
             display: flex;
             gap: 2px;
@@ -1020,14 +1043,12 @@
             grid-column: 1 / -1;
         }
 
-        /* v8.3.3：.modal 移除 backdrop-filter，仅由 .modal-card 承担单层玻璃态，
-           消除双层模糊叠加带来的视觉伪影与 GPU 双倍开销 */
         .modal {
             position: fixed;
             top: 0;
             left: 0;
             width: 100%;
-            height: 100%;
+            height: 100vh;
             height: 100dvh;
             background: rgba(0, 0, 0, 0.55);
             display: flex;
@@ -1068,13 +1089,14 @@
 
         .modal-card .button-group button { flex: 1; min-width: 120px; }
 
+        /* v8.5.0：Toast 使用主题变量，午夜蓝下自动切换深色底 + 浅色字 */
         .toast {
             position: fixed;
             bottom: calc(36px + var(--safe-area-bottom));
             left: 50%;
             transform: translateX(-50%);
-            background: #1e293b;
-            color: #fff;
+            background: var(--toast-bg);
+            color: var(--toast-color);
             padding: 16px 32px;
             border-radius: 44px;
             font-size: 0.92rem;
@@ -1085,11 +1107,10 @@
             animation: fadeUp 0.3s ease;
             font-weight: 500;
             pointer-events: none;
+            transition: background 0.3s ease, color 0.3s ease;
         }
 
-        /* v8.3.3：深色模式下 toast 背景与 --bg-gradient 末端同色，改为略浅色 + 白色描边 */
         html[data-theme-resolved="midnight"] .toast {
-            background: #334155;
             box-shadow: 0 20px 50px rgba(0, 0, 0, 0.7), 0 0 0 1px rgba(255, 255, 255, 0.1);
         }
 
@@ -1135,7 +1156,7 @@
             border-radius: 20px;
             padding: 16px 22px;
             display: flex;
-            gap: 16px;
+            gap: 12px;
             justify-content: space-around;
             flex-wrap: wrap;
             box-shadow: 0 -8px 24px rgba(0, 0, 0, 0.08);
@@ -1207,9 +1228,6 @@
             gap: 4px;
             margin: 8px 0;
         }
-        /* v8.3.4：空段背景由硬编码 #e2e8f0 改为 CSS 变量 var(--border)，
-           使初始渲染在深色模式（midnight #475569）下与卡片底色协调，
-           避免浅灰色段在深色卡片上刺眼 */
         .strength-segment {
             flex: 1;
             height: 6px;
@@ -1269,6 +1287,19 @@
             font-size: 0.8rem;
         }
 
+        /* v8.5.0：迁移备份恢复提示条 */
+        .migration-backup-banner {
+            background: var(--warning-box-bg);
+            border-left: 5px solid var(--warning);
+            padding: 12px 16px;
+            border-radius: 14px;
+            margin: 12px 0;
+            font-size: 0.82rem;
+            color: var(--warning-box-color);
+            line-height: 1.6;
+            text-align: left;
+        }
+
         @media (max-width: 640px) {
             .collapse-top-btn {
                 display: inline-flex;
@@ -1282,8 +1313,6 @@
                 font-size: 0.74rem;
                 gap: 4px;
             }
-            /* v8.3.3：移动端折叠状态强制 row 布局，logo 继承全局样式（不再缩小），
-               保持与展开状态一致的外观，始终位于左侧 */
             .top-collapsed .app-header {
                 flex-direction: row !important;
             }
@@ -1293,7 +1322,6 @@
             html { font-size: 17px; }
             body { padding: calc(8px + var(--safe-area-top)) calc(8px + var(--safe-area-right)) calc(8px + var(--safe-area-bottom)) calc(8px + var(--safe-area-left)); }
             .app-container.card { padding: 1.2rem 1rem; border-radius: 24px; }
-            /* v8.3.3：移动端认证卡片补齐 padding/字号覆盖，避免 320px 屏挤压 */
             .auth-card { padding: 2.5rem 1.5rem; max-width: 100%; }
             .auth-icon { font-size: 3rem; margin-bottom: 0.8rem; }
             .auth-card h2 { font-size: 1.8rem; }
@@ -1306,7 +1334,6 @@
             .badge { align-self: center; }
             .form-row input, .form-row select, .form-row textarea { min-width: 100px; font-size: 16px; }
             .btn-sm { padding: 10px 14px; font-size: 0.85rem; min-height: 44px; }
-            /* v8.3.3：移动端弹窗底部按钮组间距缩小 */
             .modal-card { max-width: 92vw; max-height: 90vh; max-height: 90dvh; padding: 1.8rem; }
             .modal-card .button-group { margin-top: 18px; }
             .pw-text-input { font-size: 0.95rem; min-width: 12ch; }
@@ -1321,7 +1348,6 @@
             .password-list-scroll { scrollbar-width: none; }
             .password-list-scroll::-webkit-scrollbar { display: none; }
             .virtual-list-grid { will-change: auto; }
-            /* v8.3.3：移动端空状态 padding 缩小 */
             .virtual-empty-state { padding: 24px 16px; }
         }
 
@@ -1338,9 +1364,6 @@
             .export-import-group { display: none !important; }
             .export-more-wrapper { display: inline-block !important; position: relative; }
             :root { --item-height: 270px; }
-            /* v8.3.3：超小屏折叠状态保持 row，logo 继承全局样式（在 380px 断点内 logo 全局尺寸略小，
-               但折叠/展开状态保持一致） */
-            /* v8.3.4：min-height 由 44px 降为 36px，匹配 380px 断点下 logo 实际高度 */
             .top-collapsed .app-header {
                 flex-direction: row !important;
                 min-height: 36px;
@@ -1362,7 +1385,6 @@
                 gap: 3px;
             }
 
-            /* v8.3.3：横屏折叠状态保持 row，logo 与展开状态一致 */
             .top-collapsed .app-header {
                 flex-direction: row !important;
                 margin-bottom: 0;
@@ -1387,7 +1409,6 @@
             .search-bar select {
                 height: 40px;
                 border-radius: 10px;
-                /* v8.3.4：横屏也保持 16px，避免 iOS Safari 聚焦缩放 */
                 font-size: 16px;
             }
             .btn-sm {
@@ -1435,10 +1456,6 @@
             }
         }
 
-        /* v8.3.3：触屏设备上禁用所有非必要的 hover 视觉状态，
-           避免点击后状态滞留 */
-        /* v8.3.4：补齐深色模式（midnight）下的高特异性覆盖 + 补齐浅色模式下
-           cat-tag button / pw-action / collapse-top-btn 的 hover 残留 */
         @media (hover: none) and (pointer: coarse) {
             .btn:hover {
                 transform: none;
@@ -1464,7 +1481,6 @@
             .search-bar:hover {
                 border-color: var(--border);
             }
-            /* v8.3.4：补齐 cat-tag 操作按钮在浅色模式下的 hover 残留 */
             .cat-tag button:hover {
                 color: var(--text-secondary);
                 background: none;
@@ -1473,7 +1489,6 @@
                 color: var(--text-secondary);
                 background: none;
             }
-            /* v8.3.4：补齐 pw-action 与 collapse-top-btn 的 hover 残留 */
             .pw-action:hover {
                 background: transparent;
             }
@@ -1541,7 +1556,7 @@
 
     // ===================== 常量与配置 =====================
     const CONFIG = {
-        APP_VERSION: '8.4.0',
+        APP_VERSION: '8.5.0',
         STORAGE_VAULT: 'serene_vault_enc_v3',
         STORAGE_SALT: 'serene_vault_salt_v3',
         STORAGE_AUTH: 'serene_vault_auth_v3',
@@ -1576,7 +1591,10 @@
         VIRTUAL_RESIZE_DEBOUNCE_MS: 150,
         VIRTUAL_ELEMENT_POOL_MAX: 100,
         VIRTUAL_LAYOUT_RECOMPUTE_DELAY_MS: 320,
-        ADD_SECTION_UNSAVED_HINT_DURATION_MS: 2500
+        ADD_SECTION_UNSAVED_HINT_DURATION_MS: 2500,
+        // v8.5.0：加密备份结构校验常量
+        BACKUP_SALT_LENGTH: 16,
+        BACKUP_IV_LENGTH: 12
     };
 
     // ===================== 主题定义 =====================
@@ -1859,7 +1877,6 @@
         };
     }
 
-    // 安全聚焦辅助
     function safeRestoreFocus(element) {
         if (!element) return;
         if (typeof element.focus !== 'function') return;
@@ -1871,7 +1888,6 @@
         }
     }
 
-    // Enter 键统一处理（处理 IME 组合输入状态）
     function attachEnterToClick(inputElement, clickHandler) {
         if (!inputElement) return;
         inputElement.addEventListener('keydown', function(event) {
@@ -2087,7 +2103,6 @@
         saveSecurityState(merged);
     }
 
-    // 统一计算锁定时间的辅助函数
     function computeLockoutUntil(failCount, currentLockoutUntil) {
         if (failCount >= CONFIG.MAX_FAIL_COUNT) {
             const extraSteps = Math.min(failCount - CONFIG.MAX_FAIL_COUNT, 4);
@@ -2355,7 +2370,6 @@
     };
 
     // ===================== 数据规范化与迁移 =====================
-    // list 元素清洗，过滤非对象
     function sanitizePasswordList(list) {
         if (!Array.isArray(list)) return [];
         return list.filter(function(item) {
@@ -2363,8 +2377,6 @@
         });
     }
 
-    // normalizeItem 增加 seenIds 参数用于 ID 唯一性保证
-    // 同时对 item 做完整对象类型判空
     function normalizeItem(item, seenIds) {
         const source = (item && typeof item === 'object' && !Array.isArray(item)) ? item : {};
         let safeId = source.id ? String(source.id).trim() : '';
@@ -2403,7 +2415,6 @@
         State.rebuildIndex();
     }
 
-    // 统一清理已删除条目在各集合中的残留
     function cleanupDeletedItemStates(deletedIds) {
         const idArray = Array.isArray(deletedIds) ? deletedIds : [deletedIds];
         idArray.forEach(function(id) {
@@ -2479,6 +2490,46 @@
         }
     }
 
+    // v8.5.0：显式读取迁移备份是否存在，供 UI 与恢复流程使用
+    function hasMigrationBackup() {
+        try {
+            return !!localStorage.getItem(CONFIG.MIGRATION_BACKUP_KEY);
+        } catch (e) {
+            return false;
+        }
+    }
+
+    // v8.5.0：崩溃恢复 —— 将迁移备份中的 salt/auth/vault 写回主存储
+    async function restoreFromMigrationBackup() {
+        let backupRaw = null;
+        try {
+            backupRaw = localStorage.getItem(CONFIG.MIGRATION_BACKUP_KEY);
+        } catch (e) {
+            throw new Error('无法读取备份数据');
+        }
+        if (!backupRaw) throw new Error('未找到备份数据');
+        let backupObject = null;
+        try {
+            backupObject = JSON.parse(backupRaw);
+        } catch (e) {
+            throw new Error('备份数据格式无效');
+        }
+        if (!backupObject || !backupObject.salt || !backupObject.auth || !backupObject.vault) {
+            throw new Error('备份数据不完整，无法恢复');
+        }
+        try {
+            localStorage.setItem(CONFIG.STORAGE_SALT, JSON.stringify(backupObject.salt));
+            localStorage.setItem(CONFIG.STORAGE_AUTH, JSON.stringify(backupObject.auth));
+            localStorage.setItem(CONFIG.STORAGE_VAULT, JSON.stringify(backupObject.vault));
+            localStorage.setItem(CONFIG.STORAGE_INIT, 'true');
+            localStorage.removeItem(CONFIG.MIGRATION_BACKUP_KEY);
+        } catch (e) {
+            throw new Error('写入恢复数据失败：' + e.message);
+        }
+        saveSecurityState({ bruteFailCount: 0, lockoutUntil: 0, verifyFailCount: 0 });
+        addLog('恢复备份', '从迁移备份恢复旧数据');
+    }
+
     async function verifyMasterPassword(password) {
         const security = getSecurityState();
         if (security.lockoutUntil && Date.now() < security.lockoutUntil) {
@@ -2507,6 +2558,8 @@
             State.customCategories = ['E-Mail','工作','社交','银行','购物','娱乐','其他'];
             State.rebuildIndex();
             await saveVault();
+            // v8.5.0：初始化成功后清理可能残留的迁移备份
+            cleanMigrationBackup();
             addLog('初始化','创建新保险库');
         } catch (error) {
             try {
@@ -2591,6 +2644,7 @@
         State.verifyFailCount = 0;
         updateSecurityState({ bruteFailCount: 0, lockoutUntil: 0, verifyFailCount: 0 });
 
+        // v8.5.0：解锁成功后清理迁移备份（此前不再在 showAuth 中无条件清理）
         cleanMigrationBackup();
 
         if (State.channel) {
@@ -2775,9 +2829,11 @@
         const toast = document.createElement('div');
         toast.className = 'toast';
         toast.textContent = message;
-        // v8.3.4：使用 CSS 变量 --danger，使深色模式（midnight #f87171）
-        // 下的错误提示与主题色协调，避免刺眼亮红
-        if (isError) toast.style.background = 'var(--danger)';
+        // v8.5.0：使用主题变量，午夜蓝下自动切深红底+浅红字，对比度达到 AA
+        if (isError) {
+            toast.style.background = 'var(--toast-danger-bg)';
+            toast.style.color = 'var(--toast-danger-color)';
+        }
         document.body.appendChild(toast);
         setTimeout(function(){ toast.remove(); }, duration);
         if (navigator.vibrate) navigator.vibrate(isError ? 80 : 30);
@@ -3230,6 +3286,18 @@
         return rows;
     }
 
+    // v8.5.0：导入 CSV 时还原导出时的公式注入防护前缀，仅在“确为公式防护”时剥离
+    function unescapeCsvFieldForImport(value) {
+        if (typeof value !== 'string') return value;
+        if (value.length >= 2 && value.charCodeAt(0) === 0x27) {
+            const secondChar = value.charAt(1);
+            if (secondChar === '=' || secondChar === '+' || secondChar === '-' || secondChar === '@' || secondChar === '\t' || secondChar === '\r') {
+                return value.substring(1);
+            }
+        }
+        return value;
+    }
+
     // ===================== 分类列表渲染 =====================
     function renderCategoryList(container) {
         const categories = loadCategories();
@@ -3499,7 +3567,6 @@
         updateAllSelectColors();
     }
 
-    // 在原始文本上 split，再逐段 escapeHtml
     function highlightText(text, keyword) {
         if (!keyword || !text) return Util.escapeHtml(text);
         const escapedKeyword = Util.escapeRegex(keyword);
@@ -3514,7 +3581,6 @@
     }
 
     // ===================== 添加表单未保存内容检测 =====================
-    // 登录密码不再 trim，仅按原始 value.length 判断
     function hasUnsavedAddContent() {
         if (!State.addSectionVisible) return false;
         const checkFieldIds = ['inpName', 'inpUsername', 'inpLoginPw', 'inpTranPw', 'inpEmail', 'inpPhone', 'inpNote'];
@@ -3900,16 +3966,26 @@
         });
         const modal = document.createElement('div');
         modal.className = 'modal';
+        // v8.5.0：编辑登录密码输入框下方增加实时强度指示器
         modal.innerHTML = `
             <div class="modal-card">
                 <h3><svg class="icon" style="width:1.4rem;height:1.4rem;"><use href="#icon-edit"/></svg> 编辑密码条目</h3>
                 <div class="form-row"><input id="editName" value="${Util.escapeAttr(item.name)}" placeholder="名称 (必填)" maxlength="50" autocomplete="off" autocapitalize="none"></div>
                 <div class="form-row"><input id="editUsername" value="${Util.escapeAttr(item.username || '')}" placeholder="用户名" autocomplete="off" autocapitalize="none"></div>
-                <div class="form-row">
-                    <div style="display:flex; flex:1; gap:8px; align-items:center;">
-                        <input type="password" id="editLoginPw" value="" placeholder="登录密码 (${CONFIG.LOGIN_PW_MIN}-${CONFIG.LOGIN_PW_MAX}位)" maxlength="${CONFIG.LOGIN_PW_MAX}" style="flex:1;" autocomplete="new-password" autocapitalize="none">
-                        <button class="pw-action" id="generateEditLoginPwBtn" type="button" title="生成强密码" aria-label="生成强密码"><svg class="icon"><use href="#icon-dice"/></svg></button>
-                        <button class="pw-action" id="toggleEditLoginVis" type="button" aria-label="显示登录密码"><svg class="icon"><use href="#icon-eye"/></svg></button>
+                <div class="form-row" style="align-items:flex-start;">
+                    <div style="display:flex; flex-direction:column; flex:1; gap:6px;">
+                        <div style="display:flex; gap:8px; align-items:center;">
+                            <input type="password" id="editLoginPw" value="" placeholder="登录密码 (${CONFIG.LOGIN_PW_MIN}-${CONFIG.LOGIN_PW_MAX}位)" maxlength="${CONFIG.LOGIN_PW_MAX}" style="flex:1;" autocomplete="new-password" autocapitalize="none">
+                            <button class="pw-action" id="generateEditLoginPwBtn" type="button" title="生成强密码" aria-label="生成强密码"><svg class="icon"><use href="#icon-dice"/></svg></button>
+                            <button class="pw-action" id="toggleEditLoginVis" type="button" aria-label="显示登录密码"><svg class="icon"><use href="#icon-eye"/></svg></button>
+                        </div>
+                        <div class="strength-indicator" id="editLoginPwStrengthIndicator">
+                            <div class="strength-segment" data-index="0"></div>
+                            <div class="strength-segment" data-index="1"></div>
+                            <div class="strength-segment" data-index="2"></div>
+                            <div class="strength-segment" data-index="3"></div>
+                        </div>
+                        <div class="strength-text" id="editLoginPwStrengthText">隐藏密码不修改</div>
                     </div>
                 </div>
                 <div class="form-row">
@@ -3984,6 +4060,8 @@
         const editLoginPwInput = modal.querySelector('#editLoginPw');
         editLoginPwInput.addEventListener('input', function() {
             loginDirty = true;
+            // v8.5.0：实时更新编辑表单的密码强度指示器
+            updateStrengthIndicator('editLoginPwStrengthIndicator', 'editLoginPwStrengthText', editLoginPwInput.value);
         });
         modal.querySelector('#editTranPw').addEventListener('input', function() {
             tranDirty = true;
@@ -3994,6 +4072,7 @@
             editLoginPwInput.type = 'text';
             editLoginPwInput.value = generatedPassword;
             loginDirty = true;
+            updateStrengthIndicator('editLoginPwStrengthIndicator', 'editLoginPwStrengthText', generatedPassword);
             const toggleLoginButton = modal.querySelector('#toggleEditLoginVis');
             if (toggleLoginButton) {
                 toggleLoginButton.innerHTML = '<svg class="icon"><use href="#icon-eye-off"/></svg>';
@@ -4194,6 +4273,7 @@
         } catch(e) { return; }
         const vaultData = { passwords: State.passwords, customCategories: State.customCategories };
         const exportData = await CryptoModule.encrypt(State.masterKey, vaultData);
+        // v8.5.0：仍保留 plainChecksum 字段以兼容旧版本读取，但导入时不再二次校验
         const exportObject = { version: 5, encrypted: true, salt: JSON.parse(localStorage.getItem(CONFIG.STORAGE_SALT)), data: exportData, plainChecksum: exportData.checksum };
         downloadBlob(new Blob([JSON.stringify(exportObject)], { type: 'application/json' }), `静谧密钥_加密备份_${Util.formatTimestampForFilename()}.json`);
         try {
@@ -4283,15 +4363,25 @@
         for (let i = 1; i < lines.length; i++) {
             const row = lines[i];
             if (!row.length || (row.length === 1 && !row[0])) continue;
+            // v8.5.0：还原导出时的公式注入防护前缀（仅在确为公式字符时才剥离）
+            const rawName = (columnIndex.name >= 0 && row[columnIndex.name] !== undefined) ? unescapeCsvFieldForImport(String(row[columnIndex.name])) : '';
+            const rawUsername = (columnIndex.username >= 0 && row[columnIndex.username] !== undefined) ? unescapeCsvFieldForImport(String(row[columnIndex.username])) : '';
+            const rawLoginPassword = (columnIndex.loginPassword >= 0 && row[columnIndex.loginPassword] !== undefined && row[columnIndex.loginPassword] !== '') ? unescapeCsvFieldForImport(String(row[columnIndex.loginPassword])) : '';
+            const rawTransactionPassword = (columnIndex.transactionPassword >= 0 && row[columnIndex.transactionPassword] !== undefined) ? unescapeCsvFieldForImport(String(row[columnIndex.transactionPassword])) : '';
+            const rawEmail = (columnIndex.email >= 0 && row[columnIndex.email] !== undefined) ? unescapeCsvFieldForImport(String(row[columnIndex.email])) : '';
+            const rawPhone = (columnIndex.phone >= 0 && row[columnIndex.phone] !== undefined) ? unescapeCsvFieldForImport(String(row[columnIndex.phone])) : '';
+            const rawCategory = (columnIndex.category >= 0 && row[columnIndex.category] !== undefined) ? unescapeCsvFieldForImport(String(row[columnIndex.category])) : '';
+            const rawNote = (columnIndex.note >= 0 && row[columnIndex.note] !== undefined) ? unescapeCsvFieldForImport(String(row[columnIndex.note])) : '';
             const item = {
-                name: (columnIndex.name >= 0 ? row[columnIndex.name] : '') ? String(row[columnIndex.name]).trim() : '',
-                username: (columnIndex.username >= 0 ? row[columnIndex.username] : '') ? String(row[columnIndex.username]).trim() : '',
-                loginPassword: (columnIndex.loginPassword >= 0 && row[columnIndex.loginPassword] !== undefined && row[columnIndex.loginPassword] !== '') ? String(row[columnIndex.loginPassword]) : '',
-                transactionPassword: (columnIndex.transactionPassword >= 0 ? row[columnIndex.transactionPassword] : '') ? String(row[columnIndex.transactionPassword]).trim() : '',
-                email: (columnIndex.email >= 0 ? row[columnIndex.email] : '') ? String(row[columnIndex.email]).trim() : '',
-                phone: (columnIndex.phone >= 0 ? row[columnIndex.phone] : '') ? String(row[columnIndex.phone]).trim() : '',
-                category: (columnIndex.category >= 0 ? row[columnIndex.category] : '') ? String(row[columnIndex.category]).trim() : '',
-                note: (columnIndex.note >= 0 ? row[columnIndex.note] : '') ? String(row[columnIndex.note]).trim() : ''
+                name: rawName.trim(),
+                username: rawUsername.trim(),
+                // 登录密码本身不 trim；仅当列存在且字段非空时保留
+                loginPassword: rawLoginPassword,
+                transactionPassword: rawTransactionPassword.trim(),
+                email: rawEmail.trim(),
+                phone: rawPhone.trim(),
+                category: rawCategory.trim(),
+                note: rawNote.trim()
             };
             if (item.name && item.loginPassword) importedRaw.push(item);
         }
@@ -4304,10 +4394,11 @@
             return normalized;
         });
         try {
-            await applyImport(normalizedItems, [], false, false);
+            // v8.5.0：CSV 导入也走三态重名对话框（allowOverwrite=true），
+            // 与 JSON / 加密备份导入行为保持一致；日志由 applyImport 统一记录
+            await applyImport(normalizedItems, [], false, true);
             syncCategoriesFromPasswords();
             showToast('CSV导入完成');
-            addLog('导入CSV', `${normalizedItems.length}条`);
         } catch (error) {
             // applyImport 内部已处理回滚和提示
         }
@@ -4319,17 +4410,31 @@
         let parsed;
         try { parsed = JSON.parse(text); } catch (error) { showToast('无效JSON文件', true); return; }
         if (parsed && parsed.encrypted && parsed.salt && parsed.data) {
+            // v8.5.0：显式校验 salt 与 iv 长度，防止恶意备份造成 PBKDF2 / AES 异常
+            if (!Array.isArray(parsed.salt) || parsed.salt.length !== CONFIG.BACKUP_SALT_LENGTH) {
+                showToast('备份文件盐值格式无效', true);
+                return;
+            }
+            if (!parsed.data || !Array.isArray(parsed.data.iv) || parsed.data.iv.length !== CONFIG.BACKUP_IV_LENGTH) {
+                showToast('备份文件加密数据格式无效', true);
+                return;
+            }
+            if (!Array.isArray(parsed.data.ciphertext) || parsed.data.ciphertext.length === 0) {
+                showToast('备份文件密文格式无效', true);
+                return;
+            }
+            if (typeof parsed.data.checksum !== 'string' || !parsed.data.checksum) {
+                showToast('备份文件缺少完整性校验值', true);
+                return;
+            }
             const password = await promptPasswordModal('请输入备份文件的主密码');
             if (!password) return;
             try {
                 const key = await CryptoModule.deriveKey(password, new Uint8Array(parsed.salt));
+                // v8.5.0：仅依赖 CryptoModule.decrypt() 的 AES-GCM + additionalData
+                // 完整性校验；不再二次校验 plainChecksum，避免 JSON.parse/stringify
+                // 键序、空白差异导致的有效备份误判。
                 let decrypted = await CryptoModule.decrypt(key, parsed.data);
-                if (parsed.version >= 4 && parsed.plainChecksum) {
-                    const calculatedChecksum = await CryptoModule.computeStringChecksum(JSON.stringify(decrypted));
-                    if (calculatedChecksum !== parsed.plainChecksum) {
-                        throw new Error('校验和不匹配，文件可能已损坏，已中止导入');
-                    }
-                }
                 let importedPasswords = [], importedCategories = [];
                 if (Array.isArray(decrypted)) {
                     importedPasswords = sanitizePasswordList(decrypted);
@@ -4454,6 +4559,21 @@
         let truncatedCount = 0;
         try {
             if (overwrite) {
+                // v8.5.0：覆盖模式下也按名称去重，保证名称唯一性不被破坏
+                const seenNamesForOverwrite = new Set();
+                const deduplicatedImported = [];
+                let internalSkippedInOverwrite = 0;
+                for (let i = 0; i < importedPasswords.length; i++) {
+                    const candidate = importedPasswords[i];
+                    if (seenNamesForOverwrite.has(candidate.name)) {
+                        internalSkippedInOverwrite++;
+                        continue;
+                    }
+                    seenNamesForOverwrite.add(candidate.name);
+                    deduplicatedImported.push(candidate);
+                }
+                importedPasswords = deduplicatedImported;
+                skippedCount = internalSkippedInOverwrite;
                 if (importedPasswords.length > CONFIG.MAX_PASSWORDS) { showToast(`超过上限${CONFIG.MAX_PASSWORDS}`, true); return; }
                 State.passwords = importedPasswords;
                 State.visibleLoginPasswords.clear();
@@ -4573,6 +4693,33 @@
         renderListOnly();
         const batchBar = document.getElementById('batchBar');
         if (batchBar) batchBar.style.display = State.batchMode ? 'flex' : 'none';
+        const batchCount = document.getElementById('batchCount');
+        if (batchCount) batchCount.innerText = State.selectedIds.size;
+    }
+
+    // v8.5.0：批量全选 / 反选
+    function batchSelectAll() {
+        VirtualScroll.cachedItems.forEach(function(item) {
+            State.selectedIds.add(item.id);
+        });
+        VirtualScroll.reset();
+        renderListOnly();
+        const batchCount = document.getElementById('batchCount');
+        if (batchCount) batchCount.innerText = State.selectedIds.size;
+    }
+
+    function batchInvertSelection() {
+        const newSelectedIds = new Set();
+        VirtualScroll.cachedItems.forEach(function(item) {
+            if (!State.selectedIds.has(item.id)) {
+                newSelectedIds.add(item.id);
+            }
+        });
+        State.selectedIds = newSelectedIds;
+        VirtualScroll.reset();
+        renderListOnly();
+        const batchCount = document.getElementById('batchCount');
+        if (batchCount) batchCount.innerText = State.selectedIds.size;
     }
 
     async function batchDelete() {
@@ -5135,6 +5282,8 @@
         if (themeButton) themeButton.innerHTML = `<svg class="icon"><use href="#icon-palette"/></svg> ${theme.icon}`;
         const dropdown = document.getElementById('themeDropdown');
         if (dropdown) dropdown.classList.remove('show');
+        // v8.5.0：重建下拉菜单以更新当前主题的勾选与高亮标记
+        buildThemeDropdown();
         updateAllSelectColors();
         VirtualScroll.invalidateItemHeightCache();
         VirtualScroll.reset();
@@ -5146,9 +5295,11 @@
         dropdown.innerHTML = Object.entries(THEMES).map(function(entry) {
             const key = entry[0];
             const theme = entry[1];
-            return `<div class="theme-option" data-theme="${key}">
+            const isActive = key === State.currentTheme;
+            return `<div class="theme-option${isActive ? ' active' : ''}" data-theme="${key}">
                 <div class="theme-color-preview" style="background: ${theme.vars['--primary']};"></div>
                 <span>${theme.icon} ${theme.name}</span>
+                ${isActive ? '<span class="theme-check">✓</span>' : ''}
             </div>`;
         }).join('');
         dropdown.querySelectorAll('.theme-option').forEach(function(option) {
@@ -5182,8 +5333,6 @@
             if (index < level) {
                 segment.style.background = colors[level] || '#dc2626';
             } else {
-                // v8.3.4：空段移除内联样式，回退到 CSS 变量 var(--border)，
-                // 使深色模式下与卡片底色协调
                 segment.style.removeProperty('background');
             }
         });
@@ -5191,6 +5340,15 @@
             textElement.innerText = Util.strengthText(level);
             textElement.style.color = Util.strengthColor(level);
         }
+    }
+
+    // ===================== 排序方向指示器（v8.5.0） =====================
+    function updateSortDirectionIndicator() {
+        const sortBtn = document.getElementById('sortBtn');
+        if (!sortBtn) return;
+        const arrow = State.sortAscending ? '↑' : '↓';
+        sortBtn.innerHTML = `<svg class="icon"><use href="#icon-sort"/></svg> ${arrow}`;
+        sortBtn.setAttribute('aria-label', State.sortAscending ? '当前升序，点击切换为降序' : '当前降序，点击切换为升序');
     }
 
     // ===================== 主界面渲染 =====================
@@ -5262,10 +5420,19 @@
                     <div class="form-row">
                         <input id="inpName" placeholder="名称 (必填)" maxlength="50" aria-label="名称" autocomplete="off" autocapitalize="none">
                         <input id="inpUsername" placeholder="用户名" aria-label="用户名" autocomplete="off" autocapitalize="none">
-                        <div style="display:flex; flex:1; gap:8px; align-items:center;">
-                            <input type="password" id="inpLoginPw" placeholder="登录密码 (${CONFIG.LOGIN_PW_MIN}-${CONFIG.LOGIN_PW_MAX}位)" maxlength="${CONFIG.LOGIN_PW_MAX}" style="flex:1;" aria-label="登录密码" autocomplete="new-password" autocapitalize="none">
-                            <button class="pw-action" id="generateLoginPwBtn" type="button" title="生成强密码" aria-label="生成强密码"><svg class="icon"><use href="#icon-dice"/></svg></button>
-                            <button class="pw-action" id="toggleLoginPwVis" type="button" aria-label="显示登录密码"><svg class="icon"><use href="#icon-eye"/></svg></button>
+                        <div style="display:flex; flex-direction:column; flex:1; gap:6px; min-width:200px;">
+                            <div style="display:flex; gap:8px; align-items:center;">
+                                <input type="password" id="inpLoginPw" placeholder="登录密码 (${CONFIG.LOGIN_PW_MIN}-${CONFIG.LOGIN_PW_MAX}位)" maxlength="${CONFIG.LOGIN_PW_MAX}" style="flex:1;" aria-label="登录密码" autocomplete="new-password" autocapitalize="none">
+                                <button class="pw-action" id="generateLoginPwBtn" type="button" title="生成强密码" aria-label="生成强密码"><svg class="icon"><use href="#icon-dice"/></svg></button>
+                                <button class="pw-action" id="toggleLoginPwVis" type="button" aria-label="显示登录密码"><svg class="icon"><use href="#icon-eye"/></svg></button>
+                            </div>
+                            <div class="strength-indicator" id="addLoginPwStrengthIndicator">
+                                <div class="strength-segment" data-index="0"></div>
+                                <div class="strength-segment" data-index="1"></div>
+                                <div class="strength-segment" data-index="2"></div>
+                                <div class="strength-segment" data-index="3"></div>
+                            </div>
+                            <div class="strength-text" id="addLoginPwStrengthText">请输入登录密码</div>
                         </div>
                     </div>
                     <div class="optional-fields" id="optionalFields">
@@ -5300,7 +5467,7 @@
                         <option value="category">分类</option>
                         <option value="createdAt">创建时间</option>
                     </select>
-                    <button class="btn btn-outline btn-sm" id="sortBtn" aria-label="切换排序方向"><svg class="icon"><use href="#icon-sort"/></svg> 切换</button>
+                    <button class="btn btn-outline btn-sm" id="sortBtn" aria-label="切换排序方向"><svg class="icon"><use href="#icon-sort"/></svg> ${State.sortAscending ? '↑' : '↓'}</button>
                 </div>
                 <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;">
                     <div class="export-import-group" style="display:flex;gap:8px;flex-wrap:wrap;">
@@ -5323,6 +5490,8 @@
             <div class="password-list-scroll" id="listContainer"></div>
             <div id="batchBar" style="display:none;" class="batch-bar">
                 <span>已选 <strong id="batchCount">0</strong> 项</span>
+                <button class="btn btn-outline btn-sm" id="batchSelectAllBtn">全选</button>
+                <button class="btn btn-outline btn-sm" id="batchInvertBtn">反选</button>
                 <button class="btn btn-outline btn-sm" id="batchDeleteBtn" style="color:var(--danger);"><svg class="icon"><use href="#icon-trash"/></svg> 删除选中</button>
                 <select id="batchCategorySelect" aria-label="选择目标分类"><option value="">选择分类…</option></select>
                 <button class="btn btn-outline btn-sm" id="batchMoveBtn">移动</button>
@@ -5335,6 +5504,7 @@
         VirtualScroll.fullReset();
         VirtualScroll.lastContainerWidth = -1;
         renderListOnly();
+        updateSortDirectionIndicator();
 
         if (State.addSectionVisible) {
             const addSectionEl = document.getElementById('addSection');
@@ -5407,8 +5577,6 @@
         };
         window.addEventListener('resize', handleResize, { signal });
         window.addEventListener('orientationchange', function() {
-            // v8.3.4：iOS Safari 在横竖屏切换后视口尺寸约需 350-500ms 才稳定，
-            // 250ms 可能读到过渡中间值。改为 400ms，与 resize 事件形成双保险
             setTimeout(handleResize, 400);
         }, { signal });
 
@@ -5529,6 +5697,7 @@
             if (listContainer) listContainer.scrollTop = 0;
             VirtualScroll.reset();
             renderListOnly();
+            updateSortDirectionIndicator();
         };
 
         const addToggleBtn = document.getElementById('addToggleBtn');
@@ -5562,6 +5731,7 @@
             const loginPwInput = document.getElementById('inpLoginPw');
             loginPwInput.type = 'text';
             loginPwInput.value = generatedPassword;
+            updateStrengthIndicator('addLoginPwStrengthIndicator', 'addLoginPwStrengthText', generatedPassword);
             const toggleLoginButton = document.getElementById('toggleLoginPwVis');
             if (toggleLoginButton) {
                 toggleLoginButton.innerHTML = '<svg class="icon"><use href="#icon-eye-off"/></svg>';
@@ -5650,6 +5820,8 @@
             });
             resetPasswordVisibilityButtons();
             updateAllSelectColors();
+            // v8.5.0：清空时同步重置强度指示器
+            updateStrengthIndicator('addLoginPwStrengthIndicator', 'addLoginPwStrengthText', '');
             State.lastActivity = Date.now();
             scheduleIdleLock();
         };
@@ -5661,6 +5833,7 @@
             });
             resetPasswordVisibilityButtons();
             updateAllSelectColors();
+            updateStrengthIndicator('addLoginPwStrengthIndicator', 'addLoginPwStrengthText', '');
         };
 
         document.getElementById('toggleOptional').onclick = function() {
@@ -5701,6 +5874,14 @@
                 input.focus();
             }
         };
+
+        // v8.5.0：添加表单登录密码实时强度指示器
+        const addLoginPwInput = document.getElementById('inpLoginPw');
+        if (addLoginPwInput) {
+            addLoginPwInput.addEventListener('input', function() {
+                updateStrengthIndicator('addLoginPwStrengthIndicator', 'addLoginPwStrengthText', addLoginPwInput.value);
+            });
+        }
 
         document.getElementById('exportBtn').onclick = function() {
             const modal = document.createElement('div');
@@ -5814,6 +5995,9 @@
         document.getElementById('batchBtn').onclick = toggleBatchMode;
         document.getElementById('cancelBatchBtn').onclick = toggleBatchMode;
         document.getElementById('batchDeleteBtn').onclick = batchDelete;
+        // v8.5.0：批量全选 / 反选
+        document.getElementById('batchSelectAllBtn').onclick = batchSelectAll;
+        document.getElementById('batchInvertBtn').onclick = batchInvertSelection;
         document.getElementById('batchMoveBtn').onclick = function() {
             const category = document.getElementById('batchCategorySelect').value;
             if (category) batchMoveCategory(category);
@@ -5899,7 +6083,8 @@
     let showAuth = function() {
         const root = document.getElementById('root');
         if (!root) return;
-        cleanMigrationBackup();
+        // v8.5.0：不再在此处无条件清理迁移备份；如存在迁移备份，将在登录界面
+        // 提供显式的“恢复备份数据”入口，避免崩溃后旧数据被误删。
 
         let hasSalt = false, hasAuth = false, hasVault = false, initFlag = false;
         try {
@@ -5913,6 +6098,7 @@
         const anyStored = hasSalt || hasAuth || hasVault;
         const fullyInitialized = initFlag && hasSalt && hasAuth && hasVault;
         const partiallyInitialized = anyStored && !fullyInitialized;
+        const migrationBackupExists = hasMigrationBackup();
 
         if (partiallyInitialized) {
             root.innerHTML = `
@@ -5921,9 +6107,24 @@
                     <h2>⚠️ 数据状态异常</h2>
                     <p style="font-size:0.95rem;">检测到本地存储中的部分数据缺失或损坏。</p>
                     <p style="font-size:0.85rem;color:var(--text-secondary);">为避免覆盖您原有的密码数据，程序已暂停自动初始化。</p>
-                    <button class="btn btn-primary" id="partialResetBtn" style="width:100%;">重置保险库（危险）</button>
+                    ${migrationBackupExists ? '<div class="migration-backup-banner">检测到「修改主密码」过程中留下的备份数据，可尝试恢复。</div><button class="btn btn-primary" id="partialRestoreBtn" style="width:100%;margin-bottom:8px;">从备份恢复</button>' : ''}
+                    <button class="btn btn-danger" id="partialResetBtn" style="width:100%;">重置保险库（危险）</button>
                     <p style="font-size:0.72rem;color:var(--text-secondary);margin-top:12px;">重置将清除本地所有密码与设置，且不可恢复。如有备份请先在其他设备恢复。</p>
                 </div>`;
+            if (migrationBackupExists) {
+                const partialRestoreBtn = document.getElementById('partialRestoreBtn');
+                if (partialRestoreBtn) {
+                    partialRestoreBtn.onclick = async function() {
+                        try {
+                            await restoreFromMigrationBackup();
+                            showToast('✅ 已从备份恢复，请使用原主密码解锁');
+                            showAuth();
+                        } catch (error) {
+                            showToast('恢复失败：' + error.message, true, 5000);
+                        }
+                    };
+                }
+            }
             const partialResetBtn = document.getElementById('partialResetBtn');
             if (partialResetBtn) {
                 partialResetBtn.onclick = async function() {
@@ -6036,6 +6237,7 @@
                     <p>请输入主密码以解锁</p>
                     <input type="password" id="loginPw" placeholder="主密码" autocomplete="current-password" autocapitalize="none">
                     <div id="errorMsg" style="color:var(--danger);font-size:0.85rem;min-height:20px;margin:4px 0;"></div>
+                    ${migrationBackupExists ? '<div class="migration-backup-banner">⚠️ 检测到上次修改主密码时留下的备份数据。如果当前主密码无法解锁，您可以尝试恢复备份。</div><button class="btn btn-outline btn-sm" id="restoreBackupBtn" style="width:100%;margin-bottom:8px;">恢复备份数据</button>' : ''}
                     <button class="btn btn-primary" id="loginBtn" style="width:100%;"><svg class="icon"><use href="#icon-unlock"/></svg> 验证进入</button>
                     <p style="font-size:0.72rem;color:var(--text-secondary);margin-top:12px;">🔒 数据完全存储在本地浏览器，不会上传至任何服务器</p>
                 </div>`;
@@ -6045,6 +6247,29 @@
             requestAnimationFrame(function() {
                 try { loginPasswordInput.focus(); } catch (e) { /* iOS */ }
             });
+
+            const restoreBackupBtn = document.getElementById('restoreBackupBtn');
+            if (restoreBackupBtn) {
+                restoreBackupBtn.onclick = async function() {
+                    const confirmed = await showConfirmDialog({
+                        title: '恢复备份数据',
+                        message: '⚠️ 将使用备份中的 salt/auth/vault 覆盖当前主存储。当前无法解锁的数据将被替换。是否继续？',
+                        confirmText: '恢复',
+                        cancelText: '取消',
+                        isDanger: true,
+                        requireConfirmationText: '恢复'
+                    });
+                    if (!confirmed) return;
+                    try {
+                        await restoreFromMigrationBackup();
+                        showToast('✅ 已从备份恢复，请使用原主密码解锁');
+                        showAuth();
+                    } catch (error) {
+                        showToast('恢复失败：' + error.message, true, 5000);
+                    }
+                };
+            }
+
             const doLogin = async function() {
                 try {
                     await unlockVault(loginPasswordInput.value);
@@ -6094,10 +6319,12 @@
                 loginButton.disabled = true;
                 try { await doLogin(); } finally { loginButton.disabled = false; }
             };
+            // v8.5.0：Enter 走按钮 click()，复用 disabled 状态防止重复派生
             loginPasswordInput.addEventListener('keydown', function(event) {
+                if (event.isComposing || event.keyCode === 229) return;
                 if (event.key === 'Enter' && !loginButton.disabled) {
                     event.preventDefault();
-                    doLogin();
+                    loginButton.click();
                 }
             });
         }
@@ -6146,7 +6373,7 @@
             showAuth();
         }
     } else {
-        document.getElementById('root').innerHTML = `<div class="card auth-card"><h2>⚠️ 环境不安全</h2><p>Web Crypto API 需要 HTTPS 或 localhost 环境才能正常工作。</p><p style="color:var(--text-secondary);">当前协议：${location.protocol}</p></div>`;
+        document.getElementById('root').innerHTML = `<div class="card auth-card"><h2>⚠️ 环境不安全</h2><p>Web Crypto API 需要 HTTPS 或 localhost 环境才能正常工作。</p><p style="color:var(--text-secondary);">当前协议：${location.protocol}</p><p style="color:var(--text-secondary);font-size:0.82rem;margin-top:8px;">请通过 HTTPS 或 localhost 打开本页面；直接双击本地 HTML 文件（file://）将无法使用加密功能。</p></div>`;
     }
 })();
 </script>
